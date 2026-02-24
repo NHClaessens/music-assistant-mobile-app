@@ -53,25 +53,6 @@ The project is in an early stage of development. Any help (especially from desig
 2. Ask in the issue if you can work on it - this prevents multiple people from working on an issue at the same time
 3. Submit a PR with "Closes #<issue number>" at the top of the description
 
-### Building from source
-
-#### iOS
-
-See [ios_build_instructions.md](ios_build_instructions.md) for a full step-by-step guide covering:
-
-- Required tools and JDK version (JDK 21 LTS required — JDK 25 is not supported)
-- WebRTC framework setup
-- Signing and provisioning configuration
-- Build commands for simulator and physical device
-- Known limitations and troubleshooting
-
-#### Android
-
-```bash
-./gradlew :composeApp:assembleDebug
-./gradlew :composeApp:installDebug
-```
-
 ## Want to try it?
 
 Download and install debug APK from latest release on [releases page](https://github.com/music-assistant/kmp-client-app/releases).
