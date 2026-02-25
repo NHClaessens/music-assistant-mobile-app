@@ -2,7 +2,6 @@
 
 package io.music_assistant.client.ui.compose.item
 
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,52 +16,29 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.AddToQueue
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistAddCircle
-import androidx.compose.material.icons.filled.QueuePlayNext
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import compose.icons.TablerIcons
-import compose.icons.tablericons.FolderMinus
-import compose.icons.tablericons.FolderPlus
-import compose.icons.tablericons.Heart
-import compose.icons.tablericons.HeartBroken
 import io.music_assistant.client.data.model.client.AppMediaItem
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.server.MediaItemChapter
 import io.music_assistant.client.data.model.server.MediaType
 import io.music_assistant.client.data.model.server.QueueOption
 import io.music_assistant.client.ui.compose.common.DataState
-import io.music_assistant.client.ui.compose.common.OverflowMenu
-import io.music_assistant.client.ui.compose.common.OverflowMenuOption
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
@@ -72,8 +48,6 @@ import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.theme.AppTheme
-import io.music_assistant.client.utils.SessionState
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -135,7 +109,7 @@ fun ItemDetailsScreen(
 }
 
 @Composable
-private fun ItemDetails(
+fun ItemDetails(
     state: ItemDetailsViewModel.State,
     serverUrl: String? = null,
     onBack: () -> Unit = {},
@@ -156,7 +130,6 @@ private fun ItemDetails(
     onChildPlayClick: (AppMediaItem, QueueOption, Boolean) -> Unit = { _, _, _ -> }
 ) {
     Column {
-        val item = (state.itemState as? DataState.Data)?.data
         val playlistActions = ActionsViewModel.PlaylistActions(
             onLoadPlaylists = geEditablePlaylists,
             onAddToPlaylist = addToPlaylist
@@ -172,17 +145,7 @@ private fun ItemDetails(
             onMarkUnplayed = onMarkUnplayed
         )
 
-        ItemDetailsTopBar(
-            onBack = onBack,
-            onPlayClick = onPlayClick,
-            item = item,
-            playlistActions = playlistActions.takeIf { item is AppMediaItem.Track || item is AppMediaItem.Album },
-            libraryActions = libraryActions,
-            isRowMode = isRowMode,
-            onToggleViewMode = onToggleViewMode,
-        )
-
-        ItemDetailsContent(
+        ItemChildren(
             state = state,
             serverUrl = serverUrl,
             toastState = toastState,
@@ -200,227 +163,37 @@ private fun ItemDetails(
                     else -> Unit
                 }
             },
-            onPlayClick = onChildPlayClick,
+            onPlayItemClick = onPlayClick,
+            onPlayChildClick = onChildPlayClick,
             onChapterClick = onChapterClick,
             playlistActions = playlistActions,
             progressActions = progressActions,
             onRemoveFromPlaylist = onRemoveFromPlaylist,
             libraryActions = libraryActions,
-            providerIconFetcher = providerIconFetcher
+            providerIconFetcher = providerIconFetcher,
+            onBack = onBack,
+            onToggleViewMode = onToggleViewMode
         )
     }
 }
 
 @Composable
-private fun ItemDetailsTopBar(
-    item: AppMediaItem?,
-    onBack: () -> Unit,
-    onPlayClick: (QueueOption, Boolean) -> Unit,
-    libraryActions: ActionsViewModel.LibraryActions,
-    playlistActions: ActionsViewModel.PlaylistActions?,
-    isRowMode: Boolean,
-    onToggleViewMode: () -> Unit,
-) {
-    val coroutineScope = rememberCoroutineScope()
-    var showPlaylistDialog by rememberSaveable { mutableStateOf(false) }
-    var playlists by remember { mutableStateOf<List<AppMediaItem.Playlist>>(emptyList()) }
-    var isLoadingPlaylists by remember { mutableStateOf(false) }
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    modifier = Modifier.basicMarquee(),
-                    text = item?.name ?: "Loading...",
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                item?.subtitle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            item?.let {
-                if (it !is AppMediaItem.Audiobook) {
-                    IconButton(onClick = onToggleViewMode) {
-                        Icon(
-                            imageVector = if (isRowMode) Icons.Default.GridView else Icons.AutoMirrored.Filled.ViewList,
-                            contentDescription = "Toggle view mode"
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = { onPlayClick(QueueOption.REPLACE, false) },
-                ) {
-                    Icon(Icons.Default.PlayArrow, "Play now")
-                }
-
-                OverflowMenu(
-                    modifier = Modifier,
-                    buttonContent = { onClick ->
-                        Icon(
-                            modifier = Modifier.clickable { onClick() },
-                            imageVector = Icons.Default.ExpandMore,
-                            contentDescription = null
-                        )
-                    },
-                    options = buildList {
-                        add(
-                            OverflowMenuOption(
-                                title = "Insert next and play",
-                                icon = Icons.Default.PlaylistAddCircle
-                            ) { onPlayClick(QueueOption.PLAY, false) })
-                        add(
-                            OverflowMenuOption(
-                                title = "Insert next",
-                                icon = Icons.Default.QueuePlayNext
-                            ) {
-                                onPlayClick(QueueOption.NEXT, false)
-                            })
-                        add(
-                            OverflowMenuOption(
-                                title = "Add to bottom",
-                                icon = Icons.Default.AddToQueue
-                            ) {
-                                onPlayClick(
-                                    QueueOption.ADD, false
-                                )
-                            })
-                        if (item.canStartRadio) {
-                            add(
-                                OverflowMenuOption(
-                                    title = "Start radio",
-                                    icon = Icons.Default.Radio
-                                ) {
-                                    onPlayClick(QueueOption.REPLACE, true)
-                                })
-                        }
-                        add(
-                            OverflowMenuOption(
-                                title =
-                                    if (item.isInLibrary) "Remove from library"
-                                    else "Add to library",
-                                icon =
-                                    if (item.isInLibrary) TablerIcons.FolderMinus
-                                    else TablerIcons.FolderPlus
-                            ) { libraryActions.onLibraryClick(item) })
-                        if (item.isInLibrary) {
-                            add(
-                                OverflowMenuOption(
-                                    title =
-                                        if (item.favorite == true) "Unfavorite"
-                                        else "Favorite",
-                                    icon =
-                                        if (item.favorite == true) TablerIcons.HeartBroken
-                                        else TablerIcons.Heart
-                                ) { libraryActions.onFavoriteClick(item) })
-                        }
-                        playlistActions?.let {
-                            add(
-                                OverflowMenuOption(
-                                    title = "Add to Playlist",
-                                    icon = Icons.AutoMirrored.Filled.PlaylistAdd
-                                ) {
-                                    showPlaylistDialog = true
-                                    // Load playlists when dialog opens
-                                    coroutineScope.launch {
-                                        isLoadingPlaylists = true
-                                        playlists = it.onLoadPlaylists()
-                                        isLoadingPlaylists = false
-                                    }
-                                })
-                        }
-                    }
-                )
-            }
-        }
-    }
-    // Add to Playlist dialog
-    if (showPlaylistDialog) {
-        item?.let {
-            AlertDialog(
-                onDismissRequest = {
-                    showPlaylistDialog = false
-                    playlists = emptyList()
-                    isLoadingPlaylists = false
-                },
-                title = { Text("Add to Playlist") },
-                text = {
-                    if (isLoadingPlaylists) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    } else if (playlists.isEmpty()) {
-                        Text("No editable playlists available")
-                    } else {
-                        Column {
-                            playlists.forEach { playlist ->
-                                TextButton(
-                                    onClick = {
-                                        playlistActions?.onAddToPlaylist(item, playlist)
-                                        showPlaylistDialog = false
-                                        playlists = emptyList()
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = playlist.name,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {},
-                dismissButton = {
-                    TextButton(onClick = {
-                        showPlaylistDialog = false
-                        playlists = emptyList()
-                        isLoadingPlaylists = false
-                    }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun ItemDetailsContent(
+private fun ItemChildren(
     state: ItemDetailsViewModel.State,
     serverUrl: String?,
     toastState: ToastState,
     isRowMode: Boolean,
     onNavigateClick: (AppMediaItem) -> Unit,
-    onPlayClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
+    onPlayItemClick: (QueueOption, Boolean) -> Unit,
+    onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
     onChapterClick: (Int) -> Unit,
     playlistActions: ActionsViewModel.PlaylistActions,
     progressActions: ActionsViewModel.ProgressActions? = null,
     onRemoveFromPlaylist: (String, Int) -> Unit,
     libraryActions: ActionsViewModel.LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
+    onBack: () -> Unit,
+    onToggleViewMode: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val itemState = state.itemState) {
@@ -461,13 +234,28 @@ private fun ItemDetailsContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        ItemHeader(
+                            item = item,
+                            serverUrl = serverUrl,
+                            onBack = onBack,
+                            onPlayClick = onPlayItemClick,
+                            libraryAction = libraryActions,
+                            playlistActions = playlistActions
+                        )
+                    }
+
                     // For Artist: Albums section
                     if (item is AppMediaItem.Artist) {
                         when (val albumsState = state.albumsState) {
                             is DataState.Data -> {
                                 if (albumsState.data.isNotEmpty()) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
-                                        SectionHeader("Albums")
+                                        SectionHeader(
+                                            "Albums",
+                                            isRowMode = isRowMode,
+                                            onToggleViewMode = onToggleViewMode
+                                        )
                                     }
                                     items(
                                         albumsState.data,
@@ -481,7 +269,7 @@ private fun ItemDetailsContent(
                                             showSubtitle = true,
                                             serverUrl = serverUrl,
                                             onNavigateClick = onNavigateClick,
-                                            onPlayOption = onPlayClick,
+                                            onPlayOption = onPlayChildClick,
                                             libraryActions = libraryActions,
                                             providerIconFetcher = providerIconFetcher
                                         )
@@ -509,7 +297,11 @@ private fun ItemDetailsContent(
                         val chapters = item.chapters
                         if (!chapters.isNullOrEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                SectionHeader("Chapters")
+                                SectionHeader(
+                                    "Chapters",
+                                    isRowMode = isRowMode,
+                                    onToggleViewMode = null
+                                )
                             }
                             chapters.forEach { chapter ->
                                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -533,7 +325,9 @@ private fun ItemDetailsContent(
                                         when (item) {
                                             is AppMediaItem.Podcast -> "Episodes"
                                             else -> "Tracks"
-                                        }
+                                        },
+                                        isRowMode = isRowMode,
+                                        onToggleViewMode = onToggleViewMode
                                     )
                                 }
                                 tracksState.data.forEachIndexed { index, track ->
@@ -547,7 +341,7 @@ private fun ItemDetailsContent(
                                                 item = track,
                                                 serverUrl = serverUrl,
                                                 rowMode = isRowMode,
-                                                onPlayOption = onPlayClick,
+                                                onPlayOption = onPlayChildClick,
                                                 playlistActions = playlistActions,
                                                 // Show "remove from playlist" only for playlist items
                                                 onRemoveFromPlaylist = if (item is AppMediaItem.Playlist && item.isEditable == true) {
@@ -561,7 +355,7 @@ private fun ItemDetailsContent(
                                                 item = track,
                                                 serverUrl = serverUrl,
                                                 rowMode = isRowMode,
-                                                onPlayOption = onPlayClick,
+                                                onPlayOption = onPlayChildClick,
                                                 playlistActions = null, // No playlist actions for podcast episodes
                                                 libraryActions = libraryActions,
                                                 progressActions = progressActions,
@@ -610,12 +404,24 @@ private fun ItemDetailsContent(
 }
 
 @Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(16.dp, 8.dp)
-    )
+private fun SectionHeader(title: String, isRowMode: Boolean, onToggleViewMode: (() -> Unit)? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+        )
+
+        if (onToggleViewMode != null) {
+            IconButton(onClick = onToggleViewMode) {
+                Icon(
+                    imageVector = if (isRowMode) Icons.Default.GridView else Icons.AutoMirrored.Filled.ViewList,
+                    contentDescription = "Toggle view mode"
+                )
+            }
+        }
+    }
+
 }
 
 @Composable
@@ -652,17 +458,34 @@ private fun ChapterRow(
 
 @Preview
 @Composable
-private fun PreviewArtist(isRowMode: Boolean = true) {
+private fun PreviewLoading() {
     AppTheme(darkTheme = false) {
         Scaffold {
             ItemDetails(
                 state = ItemDetailsViewModel.State(
-                    SessionState.Disconnected.NoServerData,
-                    DataState.Data(AppMediaItemFixtures.artist("Artist")),
+                    DataState.Loading(),
+                    DataState.Loading(),
+                    DataState.Loading()
+                )
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun PreviewArtist(isRowMode: Boolean = true) {
+    val artist = AppMediaItemFixtures.artist("Artist")
+
+    AppTheme(darkTheme = false) {
+        Scaffold {
+            ItemDetails(
+                state = ItemDetailsViewModel.State(
+                    DataState.Data(artist),
                     DataState.Data(
                         listOf(
-                            AppMediaItemFixtures.album("Album 1", "Artist"),
-                            AppMediaItemFixtures.album("Album 2", "Artist")
+                            AppMediaItemFixtures.album("Album 1", artist),
+                            AppMediaItemFixtures.album("Album 2", artist)
                         )
                     ),
                     DataState.NoData()
@@ -682,14 +505,21 @@ private fun PreviewArtistGrid() {
 @Preview
 @Composable
 private fun PreviewAlbum(isRowMode: Boolean = true) {
+    val artist = AppMediaItemFixtures.artist("Artist")
+    val album = AppMediaItemFixtures.album("Title", artist)
+
     AppTheme(darkTheme = false) {
         Scaffold {
             ItemDetails(
                 state = ItemDetailsViewModel.State(
-                    SessionState.Disconnected.NoServerData,
-                    DataState.Data(AppMediaItemFixtures.album("Title", "Artist")),
+                    DataState.Data(album),
                     DataState.NoData(),
-                    DataState.Data(AppMediaItemFixtures.tracks(listOf("Track 1", "Track 2")))
+                    DataState.Data(
+                        AppMediaItemFixtures.tracks(
+                            listOf("Track 1", "Track 2"),
+                            album = album
+                        )
+                    )
                 ),
                 isRowMode = isRowMode
             )
@@ -710,7 +540,6 @@ private fun PreviewPlaylist(isRowMode: Boolean = true) {
         Scaffold {
             ItemDetails(
                 state = ItemDetailsViewModel.State(
-                    SessionState.Disconnected.NoServerData,
                     DataState.Data(AppMediaItemFixtures.playlist("Title")),
                     DataState.NoData(),
                     DataState.Data(AppMediaItemFixtures.tracks(listOf("Track 1", "Track 2")))
@@ -730,14 +559,19 @@ private fun PreviewPlaylistGrid() {
 @Preview
 @Composable
 private fun PreviewPodcast(isRowMode: Boolean = true) {
+    val podcast = AppMediaItemFixtures.podcast()
     AppTheme(darkTheme = false) {
         Scaffold {
             ItemDetails(
                 state = ItemDetailsViewModel.State(
-                    SessionState.Disconnected.NoServerData,
-                    DataState.Data(AppMediaItemFixtures.podcast("Title")),
+                    DataState.Data(podcast),
                     DataState.NoData(),
-                    DataState.Data(AppMediaItemFixtures.episodes(listOf("Episode 1", "Episode 2")))
+                    DataState.Data(
+                        AppMediaItemFixtures.episodes(
+                            listOf("Episode 1", "Episode 2"),
+                            podcast = podcast
+                        )
+                    )
                 ),
                 isRowMode = isRowMode
             )
@@ -753,20 +587,28 @@ private fun PreviewPodcastGrid() {
 
 @Preview
 @Composable
-private fun PreviewAudiobook() {
+private fun PreviewAudiobook(isRowMode: Boolean = true) {
     AppTheme(darkTheme = false) {
         Scaffold {
             ItemDetails(
                 state = ItemDetailsViewModel.State(
-                    SessionState.Disconnected.NoServerData,
-                    DataState.Data(AppMediaItemFixtures.audiobook(
-                        "Title",
-                        listOf("Chapter 1", "Chapter 2")
-                    )),
+                    DataState.Data(
+                        AppMediaItemFixtures.audiobook(
+                            "Title",
+                            listOf("Chapter 1", "Chapter 2")
+                        )
+                    ),
                     DataState.NoData(),
                     DataState.NoData()
-                )
+                ),
+                isRowMode = isRowMode
             )
         }
     }
+}
+
+@Preview
+@Composable
+private fun PreviewAudiobookGrid() {
+    PreviewAudiobook(isRowMode = false)
 }
