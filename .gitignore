@@ -49,4 +49,4 @@ output.json
 obj/
 .externalNativeBuild
 composeApp/keystore.properties
-upload-keystore.jks
+composeApp/upload-keystore.jks

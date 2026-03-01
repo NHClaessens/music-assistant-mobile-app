@@ -1,7 +1,17 @@
 package io.music_assistant.client.webrtc.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.listSerialDescriptor
+import kotlinx.serialization.descriptors.serialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Messages exchanged with the WebRTC signaling server.
@@ -148,10 +158,35 @@ sealed interface SignalingMessage {
 }
 
 /**
+ * Deserializes `urls` from either a JSON array or a single string.
+ * The public signaling server sends a single string, while Nabu Casa sends an array.
+ */
+private object FlexibleUrlListSerializer : KSerializer<List<String>> {
+    override val descriptor: SerialDescriptor = listSerialDescriptor(serialDescriptor<String>())
+
+    override fun deserialize(decoder: Decoder): List<String> {
+        val jsonDecoder = decoder as JsonDecoder
+        return when (val element = jsonDecoder.decodeJsonElement()) {
+            is JsonArray -> element.map { it.jsonPrimitive.content }
+            is JsonPrimitive -> listOf(element.content)
+            else -> emptyList()
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<String>) {
+        encoder.beginCollection(descriptor, value.size).apply {
+            value.forEachIndexed { index, s -> encodeStringElement(descriptor, index, s) }
+            endStructure(descriptor)
+        }
+    }
+}
+
+/**
  * ICE server configuration for STUN/TURN.
  */
 @Serializable
 data class IceServer(
+    @Serializable(with = FlexibleUrlListSerializer::class)
     @SerialName("urls") val urls: List<String>,
     @SerialName("username") val username: String? = null,
     @SerialName("credential") val credential: String? = null

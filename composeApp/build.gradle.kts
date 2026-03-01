@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -110,17 +111,35 @@ android {
         applicationId = "io.music_assistant.client"
         minSdk { version = release(libs.versions.android.minSdk.get().toInt()) }
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 2
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.2.0"
     }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    signingConfigs {
+        create("release") {
+            val props = Properties().apply {
+                val file = project.file("keystore.properties")
+                if (file.exists()) load(file.inputStream())
+            }
+            storeFile = file(props["storeFile"] as String)
+            storePassword = props["storePassword"] as String
+            keyAlias = props["keyAlias"] as String
+            keyPassword = props["keyPassword"] as String
+        }
+    }
+
     buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
+        release {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false // Set to true to enable code shrinking and obfuscation
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 

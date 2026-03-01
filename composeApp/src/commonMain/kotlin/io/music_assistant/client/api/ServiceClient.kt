@@ -81,10 +81,8 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
     private var lastWebRTCConnection: WebRTCConnectionCache? = null
 
     // --- Lifecycle / background state ---
-    var isAnythingPlayingFlow: StateFlow<Boolean>? = null
     private var isInBackground = false
     private var hasActiveExternalConsumer = false
-    private var backgroundPlaybackMonitorJob: Job? = null
 
     private sealed class BackgroundedConnectionInfo {
         data class Direct(val connectionInfo: ConnectionInfo) : BackgroundedConnectionInfo()
@@ -163,14 +161,11 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
 
     /**
      * Called when the app moves to the background.
-     * If nothing is playing, disconnect to save resources. If something is playing,
-     * keep the connection alive but monitor — if playback stops while still backgrounded,
-     * disconnect at that point.
+     * Connection stays alive — if the system kills it, we save info and reconnect on foreground.
      */
     fun onAppBackground() {
         isInBackground = true
         logger.i { "App backgrounded" }
-        evaluateBackgroundDisconnect()
     }
 
     /**
@@ -201,73 +196,10 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
 
     /**
      * Called when an external consumer (Android Auto / CarPlay) becomes inactive.
-     * Re-evaluates whether a background disconnect is needed.
      */
     fun onExternalConsumerInactive() {
         hasActiveExternalConsumer = false
         logger.i { "External consumer inactive" }
-
-        if (isInBackground) {
-            evaluateBackgroundDisconnect()
-        }
-    }
-
-    /**
-     * Evaluates whether to disconnect due to backgrounding.
-     * Skipped when an external consumer (Android Auto / CarPlay) is active.
-     */
-    private fun evaluateBackgroundDisconnect() {
-
-        if (hasActiveExternalConsumer) {
-            logger.i { "External consumer active — skipping background disconnect" }
-            return
-        }
-
-        val currentState = _sessionState.value
-
-        // Only act if connected or reconnecting
-        if (currentState !is SessionState.Connected && currentState !is SessionState.Reconnecting) {
-            logger.d { "Not connected, nothing to do on background" }
-            return
-        }
-
-        if (isAnythingPlayingFlow?.value == true) {
-            logger.i { "Audio is playing — keeping connection alive, monitoring playback" }
-            backgroundPlaybackMonitorJob?.cancel()
-            backgroundPlaybackMonitorJob = launch {
-                isAnythingPlayingFlow?.collect { isPlaying ->
-                    if (!isPlaying && isInBackground && !hasActiveExternalConsumer) {
-                        logger.i { "Playback stopped while backgrounded — disconnecting now" }
-                        performBackgroundDisconnect()
-                        // Stop monitoring after disconnect (coroutine is still alive until next suspension)
-                        return@collect
-                    }
-                }
-            }
-            return
-        }
-
-        performBackgroundDisconnect()
-    }
-
-    private fun performBackgroundDisconnect() {
-        val currentState = _sessionState.value
-
-        // Save connection info for foreground reconnect
-        backgroundedConnectionInfo = when (currentState) {
-            is SessionState.Connected.Direct ->
-                BackgroundedConnectionInfo.Direct(currentState.connectionInfo)
-            is SessionState.Reconnecting.Direct ->
-                BackgroundedConnectionInfo.Direct(currentState.connectionInfo)
-            is SessionState.Connected.WebRTC ->
-                BackgroundedConnectionInfo.WebRTC(currentState.remoteId)
-            is SessionState.Reconnecting.WebRTC ->
-                BackgroundedConnectionInfo.WebRTC(currentState.remoteId)
-            else -> null
-        }
-
-        logger.i { "Disconnecting (Backgrounded), saved=${backgroundedConnectionInfo != null}" }
-        disconnect(SessionState.Disconnected.Backgrounded)
     }
 
     /**
@@ -276,8 +208,6 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
      */
     fun onAppForeground() {
         isInBackground = false
-        backgroundPlaybackMonitorJob?.cancel()
-        backgroundPlaybackMonitorJob = null
         logger.i { "App foregrounded" }
 
         val savedInfo = backgroundedConnectionInfo ?: return
@@ -703,6 +633,14 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
                                 return@collect
                             }
 
+                            // If backgrounded without external consumer, save info and stop
+                            if (isInBackground && !hasActiveExternalConsumer) {
+                                logger.i { "App is backgrounded — saving WebRTC connection info instead of reconnecting" }
+                                backgroundedConnectionInfo = BackgroundedConnectionInfo.WebRTC(info.remoteId)
+                                disconnect(SessionState.Disconnected.Backgrounded)
+                                return@collect
+                            }
+
                             val source =
                                 if (currentState is SessionState.Connected.WebRTC) "current state" else "cache"
                             logger
@@ -1016,6 +954,14 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
             }
         )
 
+        // If backgrounded during reconnection, save info and disconnect instead of re-auth
+        if (isInBackground && !hasActiveExternalConsumer && _sessionState.value is SessionState.Reconnecting.WebRTC) {
+            logger.i { "App backgrounded during WebRTC reconnection — saving info and disconnecting" }
+            backgroundedConnectionInfo = BackgroundedConnectionInfo.WebRTC(remoteId)
+            disconnect(SessionState.Disconnected.Backgrounded)
+            return
+        }
+
         // WebRTC-specific: re-authenticate with saved token after successful reconnection
         if (_sessionState.value is SessionState.Connected.WebRTC) {
             logger
@@ -1111,6 +1057,14 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
         val authProcessState = state.authProcessState
         val wasAutoLogin = state.wasAutoLogin
 
+        // If backgrounded without external consumer, save info and disconnect
+        if (isInBackground && !hasActiveExternalConsumer) {
+            logger.i { "App is backgrounded — saving Direct connection info instead of reconnecting" }
+            backgroundedConnectionInfo = BackgroundedConnectionInfo.Direct(connectionInfo)
+            disconnect(SessionState.Disconnected.Backgrounded)
+            return
+        }
+
         // Enter Reconnecting state (preserves server/user/auth state - no UI reload!)
         _sessionState.update {
             SessionState.Reconnecting.Direct(
@@ -1152,6 +1106,13 @@ class ServiceClient(private val settings: SettingsRepository) : CoroutineScope, 
                 disconnect(SessionState.Disconnected.Error(Exception("Failed to reconnect after max attempts")))
             }
         )
+
+        // If backgrounded during reconnection, save info and disconnect
+        if (isInBackground && !hasActiveExternalConsumer && _sessionState.value is SessionState.Reconnecting.Direct) {
+            logger.i { "App backgrounded during Direct reconnection — saving info and disconnecting" }
+            backgroundedConnectionInfo = BackgroundedConnectionInfo.Direct(connectionInfo)
+            disconnect(SessionState.Disconnected.Backgrounded)
+        }
     }
 
     suspend fun sendRequest(request: Request): Result<Answer> = suspendCoroutine { continuation ->

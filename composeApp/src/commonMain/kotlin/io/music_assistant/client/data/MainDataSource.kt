@@ -182,9 +182,6 @@ class MainDataSource(
     private var updateJob: Job? = null
 
     init {
-        // Wire isAnythingPlayingFlow so ServiceClient can check playback state on background
-        apiClient.isAnythingPlayingFlow = isAnythingPlaying
-
         // Position calculation loop - runs independently to provide smooth position updates
         launch {
             while (isActive) {
