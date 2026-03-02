@@ -15,7 +15,7 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
-    
+
     listOf(
         iosX64(),
         iosArm64(),
@@ -27,7 +27,7 @@ kotlin {
             binaryOption("bundleId", "io.music_assistant.client.composeapp")
         }
     }
-    
+
     sourceSets {
         androidMain.dependencies {
             implementation(compose.preview)
@@ -120,15 +120,21 @@ android {
         }
     }
     signingConfigs {
+        getByName("debug") {
+            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             val props = Properties().apply {
                 val file = project.file("keystore.properties")
                 if (file.exists()) load(file.inputStream())
             }
-            storeFile = file(props["storeFile"] as String)
-            storePassword = props["storePassword"] as String
-            keyAlias = props["keyAlias"] as String
-            keyPassword = props["keyPassword"] as String
+            storeFile = props["storeFile"]?.let { file(it as String) }
+            storePassword = props["storePassword"] as? String
+            keyAlias = props["keyAlias"] as? String
+            keyPassword = props["keyPassword"] as? String
         }
     }
 
