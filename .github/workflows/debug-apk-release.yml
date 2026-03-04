@@ -3,7 +3,7 @@ name: Debug APK Release
 on:
   push:
     branches:
-      - main
+      - dev
   workflow_dispatch:
 
 permissions:
