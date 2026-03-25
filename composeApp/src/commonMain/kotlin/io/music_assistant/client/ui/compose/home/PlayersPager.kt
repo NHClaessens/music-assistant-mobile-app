@@ -65,7 +65,6 @@ internal fun PlayersPager(
     serverUrl: String?,
     simplePlayerAction: (String, PlayerAction) -> Unit,
     playerAction: (PlayerData, PlayerAction) -> Unit,
-    onPlayersRefreshClick: () -> Unit,
     onFavoriteClick: (AppMediaItem) -> Unit,
     showQueue: Boolean,
     isQueueExpanded: Boolean,
@@ -83,7 +82,6 @@ internal fun PlayersPager(
     Column(modifier = modifier) {
         if (playerDataList.size > 1) {
             HorizontalPagerIndicator(
-                modifier = Modifier.padding(top = 8.dp),
                 pagerState = playerPagerState,
                 onItemMoved = onItemMoved,
             )
@@ -129,8 +127,8 @@ internal fun PlayersPager(
                     }
                 )
             ) {
-                val isAtLeaseExpanded = WindowClass.isAtLeastExpanded()
-                if (!isAtLeaseExpanded || showQueue) {
+                val isAtLeastExpanded = WindowClass.isAtLeastExpanded()
+                if (!isAtLeastExpanded || showQueue) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
@@ -151,7 +149,7 @@ internal fun PlayersPager(
 
                     Box(
                         modifier = Modifier
-                            .padding(top = 8.dp)
+                            .padding(top = 2.dp)
                             .fillMaxWidth()
                             .wrapContentSize()
                             .conditional(
@@ -164,8 +162,8 @@ internal fun PlayersPager(
                             playersState = playersState,
                             serverUrl = serverUrl,
                             playerAction = playerAction,
-                            onSelectPlayer = if (isAtLeaseExpanded && !isQueueExpanded) onSelectPlayer else null,
-                            showAdditionalControls = isAtLeaseExpanded,
+                            onSelectPlayer = if (isAtLeastExpanded && !isQueueExpanded) onSelectPlayer else null,
+                            showAdditionalControls = isAtLeastExpanded,
                         )
                     }
                 }
