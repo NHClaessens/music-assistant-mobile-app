@@ -52,6 +52,7 @@ class SearchViewModel(
                     MediaTypeSelect(MediaType.AUDIOBOOK, false),
                     MediaTypeSelect(MediaType.PODCAST, false),
                     MediaTypeSelect(MediaType.RADIO, false),
+                    MediaTypeSelect(MediaType.GENRE, false),
                 ),
                 libraryOnly = false
             ),
@@ -119,13 +120,13 @@ class SearchViewModel(
     fun onPlayClick(track: AppMediaItem, option: QueueOption, radio: Boolean) {
         viewModelScope.launch {
             mainDataSource.selectedPlayer?.queueOrPlayerId?.let { queueId ->
-                track.uri?.let { uri ->
+                track.mediaUri?.let { mediaUri ->
                     apiClient.sendRequest(
                         Request.Library.play(
-                            media = listOf(uri),
+                            media = listOf(mediaUri),
                             queueOrPlayerId = queueId,
                             option = option,
-                            radioMode = radio
+                            radioMode = radio && track !is AppMediaItem.Genre
                         )
                     )
                 }
@@ -172,7 +173,8 @@ class SearchViewModel(
                                 playlists = items.filterIsInstance<AppMediaItem.Playlist>(),
                                 audiobooks = items.filterIsInstance<AppMediaItem.Audiobook>(),
                                 podcasts = items.filterIsInstance<AppMediaItem.Podcast>(),
-                                radios = items.filterIsInstance<AppMediaItem.RadioStation>()
+                                radios = items.filterIsInstance<AppMediaItem.RadioStation>(),
+                                genres = items.filterIsInstance<AppMediaItem.Genre>()
                             )
                             if (isActive) {
                                 _state.update { it.copy(resultsState = DataState.Data(results)) }
@@ -210,6 +212,7 @@ class SearchViewModel(
         val playlists: List<AppMediaItem.Playlist>,
         val audiobooks: List<AppMediaItem.Audiobook>,
         val podcasts: List<AppMediaItem.Podcast>,
-        val radios: List<AppMediaItem.RadioStation>
+        val radios: List<AppMediaItem.RadioStation>,
+        val genres: List<AppMediaItem.Genre> = emptyList()
     )
 }
