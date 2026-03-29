@@ -109,7 +109,7 @@ fun CompactPlayerItem(
             }
 
             // Track info
-            Column(modifier = Modifier.padding(start = 16.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Text(
                     text = track?.name ?: "--idle--",
                     style = MaterialTheme.typography.bodyLarge,
