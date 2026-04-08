@@ -28,8 +28,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,7 +57,9 @@ import io.music_assistant.client.ui.compose.home.nav.HomeNavScreen
 import io.music_assistant.client.ui.compose.home.nav.rememberHomeNavBackStack
 import io.music_assistant.client.ui.compose.item.ItemDetailsScreen
 import io.music_assistant.client.ui.compose.library.LibraryScreen
+import io.music_assistant.client.ui.compose.nav.AdaptiveNavigationScaffold
 import io.music_assistant.client.ui.compose.nav.BackHandler
+import io.music_assistant.client.ui.compose.nav.NavigationItem
 import io.music_assistant.client.ui.compose.search.SearchScreen
 import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.WindowClass
@@ -140,36 +140,62 @@ fun HomeScreen(
         },
         label = "player_transition"
     ) { isPlayersViewShown ->
-        Scaffold(
-            bottomBar = {
-                if (!isPlayersViewShown) {
-                    NavigationBar(modifier = Modifier.height(88.dp)) {
-                        NavigationBarItem(
-                            selected = true,
-                            onClick = { },
-                            icon = {
-                                Icon(Icons.Default.Home, contentDescription = null)
-                            }
-                        )
+        val isExpandedScreen = WindowClass.isAtLeastExpanded()
 
-                        NavigationBarItem(
-                            selected = false,
-                            onClick = {
-                                goToSettings()
-                            },
-                            icon = {
-                                Icon(Icons.Default.Settings, contentDescription = null)
-                            }
+        if (isPlayersViewShown) {
+            Scaffold { contentPadding ->
+                Column(
+                    modifier = Modifier
+                        .padding(contentPadding)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                ) {
+                    // Close button
+                    IconButton(
+                        onClick = { showPlayersView = false },
+                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                            .align(Alignment.CenterHorizontally)
+                    ) {
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            "Collapse",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Players(
+                            playerPagerState = playerPagerState,
+                            state = playersState,
+                            serverUrl = serverUrl,
+                            homeScreenViewModel = viewModel,
+                            actionsViewModel = actionsViewModel,
+                            expanded = true,
+                            onClose = { showPlayersView = false },
+                            isExpandedScreen = isExpandedScreen
                         )
                     }
                 }
             }
-        ) { contentPadding ->
-            val bottomPadding = contentPadding.calculateBottomPadding()
-            val isExpandedScreen = WindowClass.isAtLeastExpanded()
-            val floatingBarHeight = collapsedPlayerHeight(isExpandedScreen)
+        } else {
+            val navigationItems = listOf(
+                NavigationItem(
+                    selected = true,
+                    onClick = { },
+                    Icons.Default.Home
+                ),
+                NavigationItem(
+                    selected = false,
+                    onClick = { goToSettings() },
+                    Icons.Default.Settings
+                )
+            )
 
-            if (!isPlayersViewShown) {
+            AdaptiveNavigationScaffold(navigationItems = navigationItems) { contentPadding ->
+                val bottomPadding = contentPadding.calculateBottomPadding()
+                val floatingBarHeight = collapsedPlayerHeight(isExpandedScreen)
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -215,39 +241,6 @@ fun HomeScreen(
                             homeScreenViewModel = viewModel,
                             actionsViewModel = actionsViewModel,
                             expanded = false,
-                            onClose = { showPlayersView = false },
-                            isExpandedScreen = isExpandedScreen
-                        )
-                    }
-                }
-            } else {
-                Column(modifier = Modifier
-                    .padding(contentPadding)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                ) {
-                    // Close button
-                    IconButton(
-                        onClick = { showPlayersView = false },
-                        modifier = Modifier.fillMaxWidth().height(36.dp)
-                            .align(Alignment.CenterHorizontally)
-                    ) {
-                        Icon(
-                            Icons.Default.ExpandMore,
-                            "Collapse",
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Players(
-                            playerPagerState = playerPagerState,
-                            state = playersState,
-                            serverUrl = serverUrl,
-                            homeScreenViewModel = viewModel,
-                            actionsViewModel = actionsViewModel,
-                            expanded = true,
                             onClose = { showPlayersView = false },
                             isExpandedScreen = isExpandedScreen
                         )
