@@ -137,7 +137,8 @@ class LocalPlayerRepository(
                 PlayerData(
                     player = player,
                     queue = DataState.NoData(),
-                    groupChildren = emptyList(),
+                    parentBind = null,
+                    childrenBinds = emptyList(),
                     isLocal = true,
                 )
             }
@@ -195,9 +196,12 @@ class LocalPlayerRepository(
                         groupMembers = null,
                         staticGroupMembers = null,
                         groupVolume = null,
+                        activeGroup = null,
+                        syncedTo = null,
                     ),
                     queue = DataState.NoData(),
-                    groupChildren = emptyList(),
+                    parentBind = null,
+                    childrenBinds = emptyList(),
                     isLocal = true,
                 )
             }
@@ -256,6 +260,7 @@ class LocalPlayerRepository(
                 }
 
                 is PlayerAction.SeekTo -> {
+                    Logger.e("SeekTo: ${action.position}")
                     commandQueue.removeAll { it.action is PlayerAction.SeekTo }
                     commandQueue.add(entry)
                 }
