@@ -81,6 +81,19 @@ data class NavigationItem(
     val label: String? = null
 )
 
+fun MultiBackStack.createNavigationItem(
+    backStack: Int,
+    icon: ImageVector,
+    label: String? = null
+): NavigationItem {
+    return NavigationItem(
+        selected = this.currentBackStack == backStack,
+        onClick = { this.currentBackStack = backStack },
+        icon = icon,
+        label = label
+    )
+}
+
 @Preview
 @Composable
 fun PreviewAdaptiveNavigationScaffold() {

@@ -7,6 +7,7 @@ import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.support.Qualifiers
 import io.music_assistant.client.support.TestApplication
 import io.music_assistant.client.support.pages.ConnectPage
+import io.music_assistant.client.support.pages.clickOnMedia
 import io.music_assistant.client.ui.compose.App
 import org.junit.Rule
 import org.junit.Test
@@ -25,8 +26,9 @@ class SmokeTest {
 
     @Test
     fun `can connect and login to server`() {
-        val album = AppMediaItemFixtures.album()
-        serviceClient.addToLibrary(album)
+        val album1 = AppMediaItemFixtures.album()
+        val album2 = AppMediaItemFixtures.album()
+        serviceClient.addToLibrary(album1, album2)
 
         composeTestRule.setContent {
             App()
@@ -35,6 +37,8 @@ class SmokeTest {
         ConnectPage(composeTestRule)
             .connect()
             .login(serviceClient.username, serviceClient.password)
-            .assertMediaDisplayed(album.name)
+            .assertMediaDisplayed(album1.name)
+            .assertMediaDisplayed(album2.name)
+            .clickOnMedia(album1.name)
     }
 }

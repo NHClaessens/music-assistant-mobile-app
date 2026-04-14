@@ -4,15 +4,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextInput
-import io.music_assistant.client.support.assertNavBar
 
-class SearchPage(private val composeTestRule: ComposeTestRule) : Page {
+class SearchPage(composeTestRule: ComposeTestRule) : ComposePage(composeTestRule) {
     override fun assert() {
         composeTestRule.onNodeWithText("Start searching...").assertIsDisplayed()
-        composeTestRule.assertNavBar(
-            items = listOf("Home", "Settings"),
-            selected = "Home"
-        )
+        assertNavBar(items = listOf("Home", "Search", "Settings"), selected = "Search")
     }
 
     fun search(query: String): SearchPage {
@@ -23,7 +19,12 @@ class SearchPage(private val composeTestRule: ComposeTestRule) : Page {
         return this
     }
 
-    fun assertResult(result: String) {
+    fun assertResult(result: String): SearchPage {
         composeTestRule.onNodeWithText(result).assertIsDisplayed()
+        return this
+    }
+
+    fun clickOnMedia(name: String): MedaItemPage {
+        return clickOnMedia(name, "Search")
     }
 }

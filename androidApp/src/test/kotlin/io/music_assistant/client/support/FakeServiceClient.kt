@@ -88,21 +88,18 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
+            Request.Album.get("", "").command -> {
+                Result.success(
+                    answer(
+                        request = request,
+                        result = findItem(request, albums).toServerMediaItem()
+                    )
+                )
+            }
+
             else -> {
                 Result.failure(UnsupportedOperationException())
             }
-        }
-    }
-
-    private fun searchItems(
-        request: Request,
-        items: MutableList<AppMediaItem.Album>
-    ): List<AppMediaItem> {
-        return items.filter {
-            it.name.contains(
-                (request.args!!["search_query"]!! as JsonPrimitive).content,
-                ignoreCase = true
-            )
         }
     }
 
@@ -192,8 +189,29 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         TODO("Not yet implemented")
     }
 
-    fun addToLibrary(album: AppMediaItem.Album) {
-        albums.add(album)
+    fun addToLibrary(vararg albums: AppMediaItem.Album) {
+        this.albums.addAll(albums)
+    }
+
+    private fun findItem(
+        request: Request,
+        items: List<AppMediaItem>
+    ): AppMediaItem {
+        return items.find {
+            it.itemId == (request.args!!["item_id"]!! as JsonPrimitive).content
+        }!!
+    }
+
+    private fun searchItems(
+        request: Request,
+        items: List<AppMediaItem>
+    ): List<AppMediaItem> {
+        return items.filter {
+            it.name.contains(
+                (request.args!!["search_query"]!! as JsonPrimitive).content,
+                ignoreCase = true
+            )
+        }
     }
 }
 

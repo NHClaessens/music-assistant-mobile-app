@@ -9,42 +9,42 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 
-sealed interface HomeNavScreen : NavKey {
+sealed interface MainNav : NavKey {
 
     @Serializable
-    data object Landing : HomeNavScreen
+    data object Landing : MainNav
 
     @Serializable
-    data class Library(val type: MediaType?) : HomeNavScreen
+    data class Library(val type: MediaType?) : MainNav
 
     @Serializable
     data class ItemDetails(
         val itemId: String,
         val mediaType: MediaType,
         val providerId: String
-    ) : HomeNavScreen
+    ) : MainNav
 
     @Serializable
-    data object Search : HomeNavScreen
+    data object Search : MainNav
 }
 
 @Composable
-fun rememberHomeNavBackStack() = rememberNavBackStack(
+fun rememberMainNavBackStack(bottom: MainNav) = rememberNavBackStack(
     SavedStateConfiguration(
         from = SavedStateConfiguration.DEFAULT,
         builderAction = {
             serializersModule = SerializersModule {
                 polymorphic(NavKey::class) {
-                    subclass(HomeNavScreen.Landing::class, HomeNavScreen.Landing.serializer())
-                    subclass(HomeNavScreen.Library::class, HomeNavScreen.Library.serializer())
+                    subclass(MainNav.Landing::class, MainNav.Landing.serializer())
+                    subclass(MainNav.Library::class, MainNav.Library.serializer())
                     subclass(
-                        HomeNavScreen.ItemDetails::class,
-                        HomeNavScreen.ItemDetails.serializer()
+                        MainNav.ItemDetails::class,
+                        MainNav.ItemDetails.serializer()
                     )
-                    subclass(HomeNavScreen.Search::class, HomeNavScreen.Search.serializer())
+                    subclass(MainNav.Search::class, MainNav.Search.serializer())
                 }
             }
         }
     ),
-    HomeNavScreen.Landing
+    bottom
 )
