@@ -2,9 +2,11 @@
 
 package io.music_assistant.client.ui.compose.library
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,9 +51,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Plus
 import io.music_assistant.client.data.model.client.AppMediaItem
+import io.music_assistant.client.data.model.client.SortConfig
+import io.music_assistant.client.data.model.client.SortField
+import io.music_assistant.client.data.model.client.SortOption
 import io.music_assistant.client.data.model.server.MediaType
 import io.music_assistant.client.data.model.server.QueueOption
 import io.music_assistant.client.ui.compose.common.DataState
+import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.rememberToastState
@@ -123,6 +129,7 @@ fun LibraryScreen(
             onLoadMore = viewModel::loadMore,
             onSearchQueryChanged = viewModel::onSearchQueryChanged,
             onOnlyFavoritesClicked = viewModel::onOnlyFavoritesClicked,
+            onSortChanged = viewModel::onSortChanged,
             onDismissCreatePlaylistDialog = viewModel::onDismissCreatePlaylistDialog,
             onCreatePlaylist = viewModel::createPlaylist,
             playlistActions = ActionsViewModel.PlaylistActions(
@@ -212,6 +219,7 @@ private fun Library(
     onLoadMore: (LibraryViewModel.Tab) -> Unit,
     onSearchQueryChanged: (LibraryViewModel.Tab, String) -> Unit,
     onOnlyFavoritesClicked: (LibraryViewModel.Tab) -> Unit,
+    onSortChanged: (LibraryViewModel.Tab, SortOption) -> Unit,
     onDismissCreatePlaylistDialog: () -> Unit,
     onCreatePlaylist: (String) -> Unit,
     playlistActions: ActionsViewModel.PlaylistActions,
@@ -248,14 +256,21 @@ private fun Library(
                 } else null,
                 singleLine = true
             )
-            FilterChip(
+            Row(
                 modifier = Modifier.padding(horizontal = 16.dp),
-                selected = selectedTab.onlyFavorites,
-                onClick = { onOnlyFavoritesClicked(selectedTab.tab) },
-                label = {
-                    Text("Favorites")
-                }
-            )
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = selectedTab.onlyFavorites,
+                    onClick = { onOnlyFavoritesClicked(selectedTab.tab) },
+                    label = { Text("Favorites") }
+                )
+                SortChip(
+                    currentSort = selectedTab.sortOption,
+                    availableFields = SortConfig.fieldsFor(selectedTab.tab.mediaType),
+                    onSortChanged = { onSortChanged(selectedTab.tab, it) },
+                )
+            }
 
             // Content area
             Box(modifier = Modifier.fillMaxSize()) {
@@ -476,3 +491,4 @@ private fun EmptyState() {
         )
     }
 }
+
