@@ -4,7 +4,6 @@ import io.music_assistant.client.api.Answer
 import io.music_assistant.client.api.ConnectionInfo
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
-import io.music_assistant.client.data.model.client.AppMediaItem
 import io.music_assistant.client.data.model.server.AuthProvider
 import io.music_assistant.client.data.model.server.MediaType
 import io.music_assistant.client.data.model.server.SearchResult
@@ -31,7 +30,17 @@ import kotlinx.serialization.json.encodeToJsonElement
 
 class FakeServiceClient(private val settingsRepository: SettingsRepository) : ServiceClient {
 
-    private val albums = mutableListOf<AppMediaItem.Album>()
+    private val items = mutableListOf<ServerMediaItem>()
+    private val albums: List<ServerMediaItem>
+        get() {
+            return items.filter { it.mediaType == MediaType.ALBUM }
+        }
+
+    private val artists: List<ServerMediaItem>
+        get() {
+            return items.filter { it.mediaType == MediaType.ARTIST }
+        }
+
     val username = "user"
     val password = "password"
 
@@ -66,7 +75,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                                 provider = "library",
                                 name = "Recently added albums",
                                 mediaType = MediaType.FOLDER,
-                                items = albums.toServerMediaItems()
+                                items = albums
                             )
                         )
                     )
@@ -79,7 +88,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                         request = request,
                         result = SearchResult(
                             artists = emptyList(),
-                            albums = searchItems(request, albums).toServerMediaItems(),
+                            albums = searchItems(request, items),
                             tracks = emptyList(),
                             playlists = emptyList(),
                             podcasts = emptyList()
@@ -92,7 +101,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 Result.success(
                     answer(
                         request = request,
-                        result = findItem(request, albums).toServerMediaItem()
+                        result = findItem(request, albums)
                     )
                 )
             }
@@ -101,7 +110,25 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 Result.success(
                     answer(
                         request = request,
-                        result = albums.toServerMediaItems()
+                        result = albums
+                    )
+                )
+            }
+
+            Request.Artist.get("", "").command -> {
+                Result.success(
+                    answer(
+                        request = request,
+                        result = findItem(request, artists)
+                    )
+                )
+            }
+
+            Request.Artist.listLibrary().command -> {
+                Result.success(
+                    answer(
+                        request = request,
+                        result = artists
                     )
                 )
             }
@@ -198,14 +225,19 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         TODO("Not yet implemented")
     }
 
-    fun addToLibrary(vararg albums: AppMediaItem.Album) {
-        this.albums.addAll(albums)
+    fun addToLibrary(vararg items: ServerMediaItem) {
+        this.items.addAll(items)
+        items.forEach { item ->
+            item.artists?.let {
+                this.items.addAll(it)
+            }
+        }
     }
 
     private fun findItem(
         request: Request,
-        items: List<AppMediaItem>
-    ): AppMediaItem {
+        items: List<ServerMediaItem>
+    ): ServerMediaItem {
         return items.find {
             it.itemId == (request.args!!["item_id"]!! as JsonPrimitive).content
         }!!
@@ -213,8 +245,8 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
 
     private fun searchItems(
         request: Request,
-        items: List<AppMediaItem>
-    ): List<AppMediaItem> {
+        items: List<ServerMediaItem>
+    ): List<ServerMediaItem> {
         return items.filter {
             it.name.contains(
                 (request.args!!["search_query"]!! as JsonPrimitive).content,
@@ -237,17 +269,4 @@ private fun answer(request: Request, result: JsonElement): Answer {
 
 private inline fun <reified T> answer(request: Request, result: T): Answer {
     return answer(request, myJson.encodeToJsonElement(result))
-}
-
-private fun AppMediaItem.toServerMediaItem(): ServerMediaItem {
-    return ServerMediaItem(
-        itemId = this.itemId,
-        provider = this.provider,
-        name = this.name,
-        mediaType = this.mediaType,
-    )
-}
-
-private fun List<AppMediaItem>.toServerMediaItems(): List<ServerMediaItem> {
-    return this.map { it.toServerMediaItem() }
 }

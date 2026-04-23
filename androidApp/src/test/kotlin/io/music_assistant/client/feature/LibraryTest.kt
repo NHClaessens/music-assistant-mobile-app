@@ -3,11 +3,11 @@ package io.music_assistant.client.feature
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.music_assistant.client.api.ServiceClient
-import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.support.FakeServiceClient
 import io.music_assistant.client.support.Qualifiers
+import io.music_assistant.client.support.ServerMediaItemFixtures
 import io.music_assistant.client.support.launchLoggedInApp
-import io.music_assistant.client.support.pages.MedaItemPage
+import io.music_assistant.client.support.pages.MediaItemPage
 import io.music_assistant.client.support.pages.assertMediaDisplayed
 import io.music_assistant.client.support.pages.clickHome
 import io.music_assistant.client.support.pages.clickLibrary
@@ -32,8 +32,8 @@ class LibraryTest {
 
     @Test
     fun `can browse albums`() {
-        val album1 = AppMediaItemFixtures.album()
-        val album2 = AppMediaItemFixtures.album()
+        val album1 = ServerMediaItemFixtures.album()
+        val album2 = ServerMediaItemFixtures.album()
         serviceClient.addToLibrary(album1, album2)
 
         launchLoggedInApp(composeTestRule, serviceClient)
@@ -44,31 +44,53 @@ class LibraryTest {
     }
 
     @Test
+    fun `can browse artists`() {
+        val artist1 = ServerMediaItemFixtures.artist()
+        val artist2 = ServerMediaItemFixtures.artist()
+        serviceClient.addToLibrary(artist1, artist2)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickLibrary()
+            .clickArtists()
+            .assertMediaDisplayed(artist1.name)
+            .assertMediaDisplayed(artist2.name)
+            .clickOnMedia(artist1)
+    }
+
+    @Test
     fun `library has its own backstack`() {
-        val album1 = AppMediaItemFixtures.album()
-        val album2 = AppMediaItemFixtures.album()
+        val album1 = ServerMediaItemFixtures.album()
+        val album2 = ServerMediaItemFixtures.album()
         serviceClient.addToLibrary(album1, album2)
 
         launchLoggedInApp(composeTestRule, serviceClient)
-            .clickOnMedia(album1.name)
+            .clickOnMedia(album1)
 
             .clickLibrary()
             .clickAlbums()
-            .clickOnMedia(album2.name)
+            .clickOnMedia(album2)
 
-            .clickHome(MedaItemPage(album1.name, "Home", composeTestRule))
-            .clickLibrary(MedaItemPage(album2.name, "Library", composeTestRule))
+            .clickHome(MediaItemPage(
+                album1,
+                navigationItem = "Home",
+                composeTestRule = composeTestRule
+            ))
+            .clickLibrary(MediaItemPage(
+                album2,
+                navigationItem = "Library",
+                composeTestRule = composeTestRule
+            ))
     }
 
     @Test
     fun `clicking library while on it clears backstack`() {
-        val album = AppMediaItemFixtures.album()
+        val album = ServerMediaItemFixtures.album()
         serviceClient.addToLibrary(album)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickAlbums()
-            .clickOnMedia(album.name)
+            .clickOnMedia(album)
 
             .clickLibrary()
     }

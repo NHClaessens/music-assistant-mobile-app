@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -119,7 +120,8 @@ internal fun ItemTopBar(
     onToggleViewMode: () -> Unit,
     libraryActions: ActionsViewModel.LibraryActions?,
     playlistActions: ActionsViewModel.PlaylistActions?,
-    scrollBehavior: TopAppBarScrollBehavior? = null
+    scrollBehavior: TopAppBarScrollBehavior? = null,
+    goToArtist: (() -> Unit)?
 ) {
     TopAppBar(
         title = {},
@@ -134,7 +136,8 @@ internal fun ItemTopBar(
                 isRowMode = isRowMode,
                 onToggleViewMode = onToggleViewMode,
                 libraryActions = libraryActions,
-                playlistActions = playlistActions
+                playlistActions = playlistActions,
+                goToArtist = goToArtist
             )
         },
         scrollBehavior = scrollBehavior
@@ -148,6 +151,7 @@ private fun ItemOverflow(
     onToggleViewMode: () -> Unit,
     libraryActions: ActionsViewModel.LibraryActions?,
     playlistActions: ActionsViewModel.PlaylistActions?,
+    goToArtist: (() -> Unit)?
 ) {
     val coroutineScope = rememberCoroutineScope()
     var showPlaylistDialog by rememberSaveable { mutableStateOf(false) }
@@ -204,10 +208,20 @@ private fun ItemOverflow(
                     onClick = onToggleViewMode
                 )
             )
+
+            if (goToArtist != null) {
+                add(
+                    OverflowMenuOption(
+                        title = "Go to artist",
+                        icon = Icons.Default.Person,
+                        onClick = goToArtist
+                    )
+                )
+            }
         }
     ) { onClick ->
         IconButton(onClick = onClick) {
-            Icon(imageVector = Icons.Default.MoreVert, null)
+            Icon(imageVector = Icons.Default.MoreVert, contentDescription = "More")
         }
     }
 
@@ -361,9 +375,11 @@ private fun Preview(item: AppMediaItem.Album = AppMediaItemFixtures.album()) {
 @Preview
 @Composable
 private fun PreviewLongTitle() {
-    Preview(AppMediaItemFixtures.album(
-        name = "A very long title that is very long oh no it's so long"
-    ))
+    Preview(
+        AppMediaItemFixtures.album(
+            name = "A very long title that is very long oh no it's so long"
+        )
+    )
 }
 
 @Preview
