@@ -1,8 +1,12 @@
-name: Check PR
+name: Check PR (Android)
 
 on:
   pull_request:
     branches: [ dev ]
+    # Skip Android PR checks when a PR only touches iOS-exclusive files.
+    # Shared code (composeApp, gradle, etc.) still triggers a build.
+    paths-ignore:
+      - 'iosApp/**'
 
 jobs:
   build:

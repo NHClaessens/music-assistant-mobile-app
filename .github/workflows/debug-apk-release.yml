@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - dev
+    # Skip when a push to dev only touches iOS-exclusive files — the Android
+    # APK can't be affected by them. Shared code (composeApp, gradle, etc.)
+    # still triggers a build.
+    paths-ignore:
+      - 'iosApp/**'
   workflow_dispatch:
 
 permissions:

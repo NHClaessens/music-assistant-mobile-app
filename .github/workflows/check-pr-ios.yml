@@ -1,0 +1,77 @@
+name: Check PR (iOS)
+
+# Sanity-check that iOS still compiles on PRs that could affect it. Pure
+# Android-only PRs are skipped. This is NOT a release — it does no signing,
+# no archive, no upload. Only goal: catch compile-time breakage early.
+
+on:
+  pull_request:
+    branches: [ dev ]
+    paths-ignore:
+      - 'androidApp/**'
+
+jobs:
+  compile:
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.konan
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # WebRTC.xcframework is gitignored (~99MB). Cache keyed to the pinned
+      # version string so version bumps trigger a redownload automatically.
+      # Keep in sync with ios-release.yml and ios_build_instructions.md.
+      - name: Cache WebRTC.xcframework
+        id: cache-webrtc
+        uses: actions/cache@v4
+        with:
+          path: iosApp/Frameworks/WebRTC.xcframework
+          key: webrtc-xcframework-125.6422.02
+
+      - name: Download WebRTC.xcframework
+        if: steps.cache-webrtc.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -L --fail \
+            "https://github.com/webrtc-sdk/Specs/releases/download/125.6422.02/WebRTC.xcframework.zip" \
+            -o /tmp/WebRTC.xcframework.zip
+          mkdir -p iosApp/Frameworks
+          unzip -q /tmp/WebRTC.xcframework.zip -d iosApp/Frameworks/
+          rm /tmp/WebRTC.xcframework.zip
+          test -d iosApp/Frameworks/WebRTC.xcframework/ios-arm64/WebRTC.framework
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # Simulator destination + signing disabled gives us a compile-only pass:
+      # Kotlin framework compilation runs via the Xcode build phase script, and
+      # Swift compiles against the real iOS 26 SDK. No provisioning profile or
+      # distribution cert required.
+      - name: Build (no signing, simulator target)
+        run: |
+          xcodebuild \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_IDENTITY='' \
+            build
