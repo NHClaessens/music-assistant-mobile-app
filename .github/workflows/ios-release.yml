@@ -1,0 +1,243 @@
+name: iOS Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # macos-26 ships Xcode 26.2 by default, which builds against the iOS 26 SDK.
+    # Apple requires iOS 26 SDK for all App Store Connect uploads starting
+    # April 28, 2026 (ITMS-90725). macos-15 only has Xcode 16.x / iOS 18.5 SDK
+    # and would get rejected after that date.
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v6
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.konan
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # WebRTC.xcframework is gitignored (99MB) and downloaded per
+      # ios_build_instructions.md. If the version ever bumps, update both
+      # places — it's only referenced here and in that doc.
+      - name: Cache WebRTC.xcframework
+        id: cache-webrtc
+        uses: actions/cache@v4
+        with:
+          path: iosApp/Frameworks/WebRTC.xcframework
+          key: webrtc-xcframework-125.6422.02
+
+      - name: Download WebRTC.xcframework
+        if: steps.cache-webrtc.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -L --fail \
+            "https://github.com/webrtc-sdk/Specs/releases/download/125.6422.02/WebRTC.xcframework.zip" \
+            -o /tmp/WebRTC.xcframework.zip
+          mkdir -p iosApp/Frameworks
+          unzip -q /tmp/WebRTC.xcframework.zip -d iosApp/Frameworks/
+          rm /tmp/WebRTC.xcframework.zip
+          # Fail loudly if the zip didn't contain what we expect — catches
+          # upstream release-format changes before they turn into opaque
+          # archive failures.
+          test -d iosApp/Frameworks/WebRTC.xcframework/ios-arm64/WebRTC.framework
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Extract current version
+        id: version
+        run: |
+          VERSION_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" iosApp/iosApp/Info.plist)
+          BUILD_NUM=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" iosApp/iosApp/Info.plist)
+          echo "Shipping iOS $VERSION_NAME ($BUILD_NUM)"
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD_NUM" >> "$GITHUB_OUTPUT"
+          echo "tag=ios-v${VERSION_NAME}-build-${BUILD_NUM}" >> "$GITHUB_OUTPUT"
+
+      - name: Guard against duplicate tag
+        run: |
+          git fetch --tags
+          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::Tag ${{ steps.version.outputs.tag }} already exists. Bump CFBundleVersion in iosApp/iosApp/Info.plist before releasing."
+            exit 1
+          fi
+
+      - name: Import signing cert and provisioning profile
+        env:
+          CERT_B64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          CERT_PASS: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          PROFILE_B64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          KC_PASS: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          # Decode secrets into files
+          echo "$CERT_B64" | base64 -d > /tmp/dist.p12
+          echo "$PROFILE_B64" | base64 -d > /tmp/profile.mobileprovision
+
+          # Create & unlock an ephemeral keychain. Put it at the front of the
+          # user search list so xcodebuild/codesign find our identity before
+          # the default login keychain.
+          KEYCHAIN=/tmp/build.keychain-db
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN"
+
+          # Import the .p12 (cert + private key in one blob)
+          security import /tmp/dist.p12 \
+            -k "$KEYCHAIN" \
+            -P "$CERT_PASS" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productsign
+
+          # Authorize codesign to use the private key without a GUI prompt —
+          # required because security import alone leaves the key unusable.
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KC_PASS" \
+            "$KEYCHAIN"
+
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+          # Install the provisioning profile where xcodebuild looks for it.
+          # We use the traditional ~/Library/MobileDevice path; xcodebuild CLI
+          # reads from here regardless of Xcode version.
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp /tmp/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+          # Sanity check — we should see our Apple Distribution identity
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Archive
+        run: |
+          xcodebuild \
+            -project iosApp/iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/iosApp.xcarchive" \
+            archive
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/iosApp.xcarchive" \
+            -exportOptionsPlist iosApp/ExportOptions.plist \
+            -exportPath "$PWD/build/ipa"
+          ls -la build/ipa/
+
+      - name: Upload to App Store Connect
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/private_keys
+          # altool looks for the key at ~/private_keys/AuthKey_<KEY_ID>.p8
+          printf '%s' "$KEY_P8" > ~/private_keys/AuthKey_${KEY_ID}.p8
+          IPA=$(ls build/ipa/*.ipa | head -1)
+          echo "Uploading $IPA"
+          xcrun altool --upload-app \
+            -f "$IPA" \
+            -t ios \
+            --apiKey "$KEY_ID" \
+            --apiIssuer "$ISSUER_ID"
+
+      - name: Create and push tag
+        run: |
+          git tag -a "${{ steps.version.outputs.tag }}" \
+            -m "iOS v${{ steps.version.outputs.name }} build ${{ steps.version.outputs.build }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          PREV_TAG=$(git tag -l 'ios-v*' --sort=-v:refname | grep -v "^${{ steps.version.outputs.tag }}$" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            # Only commits that touched iOS-relevant paths since the last iOS tag
+            NOTES=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD -- iosApp composeApp ':!.github' ':!androidApp' || true)
+          else
+            NOTES="Initial iOS release"
+          fi
+          # Fallback if the path filter produced nothing
+          if [ -z "$NOTES" ]; then
+            NOTES="No iOS-specific changes since $PREV_TAG"
+          fi
+          # Write to a file so multi-line content survives the GITHUB_OUTPUT delimiter
+          printf '%s' "$NOTES" > /tmp/release-notes.md
+          echo "file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "iOS ${{ steps.version.outputs.name }} (${{ steps.version.outputs.build }})"
+          body_path: ${{ steps.notes.outputs.file }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute next build number
+        id: next
+        run: |
+          NEXT_BUILD=$(( ${{ steps.version.outputs.build }} + 1 ))
+          echo "build=$NEXT_BUILD" >> "$GITHUB_OUTPUT"
+          echo "branch=chore/bump-ios-build-${NEXT_BUILD}" >> "$GITHUB_OUTPUT"
+
+      - name: Push version bump branch
+        run: |
+          git fetch origin dev
+          git checkout -b "${{ steps.next.outputs.branch }}" origin/dev
+          plutil -replace CFBundleVersion -string "${{ steps.next.outputs.build }}" iosApp/iosApp/Info.plist
+          git add iosApp/iosApp/Info.plist
+          git commit -m "chore: bump iOS build to ${{ steps.next.outputs.build }}"
+          git push origin "${{ steps.next.outputs.branch }}"
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "## iOS Release — success"
+            echo ""
+            echo "- **Version**: ${{ steps.version.outputs.name }} (${{ steps.version.outputs.build }})"
+            echo "- **Tag**: [\`${{ steps.version.outputs.tag }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }})"
+            echo "- **Next build bump branch**: [\`${{ steps.next.outputs.branch }}\`](https://github.com/${{ github.repository }}/compare/dev...${{ steps.next.outputs.branch }}?expand=1) — open a PR to prepare the next release"
+            echo "- Build should appear in App Store Connect → TestFlight → Builds within a few minutes."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security delete-keychain /tmp/build.keychain-db 2>/dev/null || true
+          rm -f /tmp/dist.p12 /tmp/profile.mobileprovision
+          rm -rf ~/private_keys
