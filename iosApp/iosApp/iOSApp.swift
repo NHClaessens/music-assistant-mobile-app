@@ -73,6 +73,12 @@ struct iOSApp: App {
         // Initialize NowPlayingManager early to configure AudioSession
         _ = NowPlayingManager.shared
 
+        // Subscribe to scene background/foreground notifications before any scene connects,
+        // so we can halt Compose's Metal render loop while backgrounded. UIBackgroundModes:
+        // audio keeps our run loop alive, which would otherwise let CMP keep submitting GPU
+        // work that iOS rejects.
+        _ = ComposeRenderingGuard.shared
+
         // Required for apps to appear in Control Center
         // Must be called for remote control events to work
         UIApplication.shared.beginReceivingRemoteControlEvents()
