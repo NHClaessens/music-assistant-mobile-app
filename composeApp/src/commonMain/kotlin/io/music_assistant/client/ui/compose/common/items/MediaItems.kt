@@ -793,7 +793,8 @@ private fun AudiobookImage(
 private fun GridPlayableItemLabels(item: PlayableItem) {
     Spacer(Modifier.height(4.dp))
     Text(
-        text = item.name,
+        text = "${item.name}${item.version
+            ?.trim()?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}",
         style = MaterialTheme.typography.bodyMedium,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -878,6 +879,7 @@ fun BoxScope.ProgressBadge(
                 tint = MaterialTheme.colorScheme.primary,
             )
         }
+
         resumePositionMs != null && resumePositionMs > 0 -> {
             Icon(
                 modifier = Modifier
@@ -911,7 +913,8 @@ internal fun TrackRowItem(
 ) {
     RowItem(
         modifier = modifier,
-        name = item.name,
+        name = "${item.name}${item.version
+            ?.trim()?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}",
         subtitle = item.subtitle,
         imageContent = {
             TrackImage(item, serverUrl)
