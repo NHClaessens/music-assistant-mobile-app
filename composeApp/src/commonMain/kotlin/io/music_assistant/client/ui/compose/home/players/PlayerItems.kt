@@ -34,6 +34,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
@@ -50,6 +52,9 @@ import io.music_assistant.client.ui.compose.common.icons.AlbumIcon
 import io.music_assistant.client.ui.compose.common.icons.TrackIcon
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.utils.formatDuration
+import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.cd_playing
+import org.jetbrains.compose.resources.stringResource
 import kotlin.time.DurationUnit
 
 @Composable
@@ -111,10 +116,18 @@ fun CompactPlayerItem(
             }
 
             // Track info
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            val trackName = track?.title ?: "nothing playing"
+            val playingContentDescription = stringResource(Res.string.cd_playing, trackName)
+            Column(
+                modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .clearAndSetSemantics {
+                    contentDescription = playingContentDescription
+                },
+            ) {
                 Text(
                     modifier = Modifier.basicMarquee().alpha(if (track != null) 1f else DISABLED_ALPHA),
-                    text = track?.title ?: "nothing playing",
+                    text = trackName,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,

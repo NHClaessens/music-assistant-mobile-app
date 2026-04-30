@@ -1,16 +1,24 @@
 package io.music_assistant.client.support
 
+import io.music_assistant.client.api.APICommands
 import io.music_assistant.client.api.Answer
 import io.music_assistant.client.api.ConnectionInfo
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.data.model.server.AuthProvider
+import io.music_assistant.client.data.model.server.EventType
 import io.music_assistant.client.data.model.server.MediaType
+import io.music_assistant.client.data.model.server.PlayerState
 import io.music_assistant.client.data.model.server.SearchResult
 import io.music_assistant.client.data.model.server.ServerInfo
 import io.music_assistant.client.data.model.server.ServerMediaItem
+import io.music_assistant.client.data.model.server.ServerPlayer
+import io.music_assistant.client.data.model.server.ServerQueue
+import io.music_assistant.client.data.model.server.ServerQueueItem
 import io.music_assistant.client.data.model.server.User
 import io.music_assistant.client.data.model.server.events.Event
+import io.music_assistant.client.data.model.server.events.PlayerUpdatedEvent
+import io.music_assistant.client.data.model.server.events.QueueUpdatedEvent
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.utils.AuthProcessState
 import io.music_assistant.client.utils.ConnectionData
@@ -23,13 +31,16 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
 
 class FakeServiceClient(private val settingsRepository: SettingsRepository) : ServiceClient {
-    private val items = mutableListOf<ServerMediaItem>()
+    private val players = mutableListOf<ServerPlayer>()
+    private val queues = mutableListOf<ServerQueue>()
+    private val items = mutableSetOf<ServerMediaItem>()
     private val albums: List<ServerMediaItem>
         get() {
             return items.filter { it.mediaType == MediaType.ALBUM }
@@ -40,6 +51,11 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
             return items.filter { it.mediaType == MediaType.ARTIST }
         }
 
+    private val tracks: List<ServerMediaItem>
+        get() {
+            return items.filter { it.mediaType == MediaType.TRACK }
+        }
+
     val username = "user"
     val password = "password"
 
@@ -47,9 +63,12 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         MutableStateFlow(SessionState.Disconnected.Initial)
     override val sessionState: StateFlow<SessionState> = _sessionState
 
+    private val _isReadyForCommands = MutableStateFlow(false)
+    override val isReadyForCommands: StateFlow<Boolean> = _isReadyForCommands
+
     override suspend fun sendRequest(request: Request): Result<Answer> {
         return when (request.command) {
-            Request.Auth.providers().command -> {
+            APICommands.AUTH_PROVIDERS -> {
                 Result.success(
                     answer(
                         request = request,
@@ -64,7 +83,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
-            Request.Library.recommendations().command -> {
+            APICommands.MUSIC_RECOMMENDATIONS -> {
                 Result.success(
                     answer(
                         request = request,
@@ -76,12 +95,19 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                                 mediaType = MediaType.FOLDER,
                                 items = albums,
                             ),
+                            ServerMediaItem(
+                                itemId = "recently_added_tracks",
+                                provider = "library",
+                                name = "Recently added tracks",
+                                mediaType = MediaType.FOLDER,
+                                items = tracks,
+                            ),
                         ),
                     ),
                 )
             }
 
-            Request.Library.search("", emptyList(), libraryOnly = false).command -> {
+            APICommands.MUSIC_SEARCH -> {
                 Result.success(
                     answer(
                         request = request,
@@ -96,7 +122,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
-            Request.Album.get("", "").command -> {
+            APICommands.musicGet(APICommands.KIND_ALBUMS) -> {
                 Result.success(
                     answer(
                         request = request,
@@ -105,7 +131,18 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
-            Request.Album.listLibrary().command -> {
+            APICommands.MUSIC_ALBUMS_ALBUM_TRACKS -> {
+                val album = findItem(request, albums)
+
+                Result.success(
+                    answer(
+                        request = request,
+                        result = tracks.filter { it.album == album },
+                    ),
+                )
+            }
+
+            APICommands.MUSIC_ALBUMS_LIBRARY_ITEMS -> {
                 Result.success(
                     answer(
                         request = request,
@@ -114,7 +151,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
-            Request.Artist.get("", "").command -> {
+            APICommands.musicGet(APICommands.KIND_ARTISTS) -> {
                 Result.success(
                     answer(
                         request = request,
@@ -123,7 +160,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
-            Request.Artist.listLibrary().command -> {
+            APICommands.MUSIC_ARTISTS_LIBRARY_ITEMS -> {
                 Result.success(
                     answer(
                         request = request,
@@ -132,14 +169,107 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
+            APICommands.PLAYERS_ALL -> {
+                Result.success(
+                    answer(
+                        request = request,
+                        result = players,
+                    ),
+                )
+            }
+
+            APICommands.PLAYER_QUEUES_PLAY_MEDIA -> {
+                val mediaUri = ((request.args!!["media"] as JsonArray)[0] as JsonPrimitive).content
+                val mediaTrack = items.find { it.uri == mediaUri }?.let { item ->
+                    when (item.mediaType) {
+                        MediaType.ARTIST -> TODO()
+                        MediaType.ALBUM -> tracks.first { it.album == item }
+                        MediaType.TRACK -> item
+                        MediaType.PLAYLIST -> TODO()
+                        MediaType.RADIO -> TODO()
+                        MediaType.AUDIOBOOK -> TODO()
+                        MediaType.PODCAST -> TODO()
+                        MediaType.PODCAST_EPISODE -> TODO()
+                        MediaType.GENRE -> TODO()
+                        MediaType.FOLDER -> TODO()
+                        MediaType.FLOW_STREAM -> TODO()
+                        MediaType.ANNOUNCEMENT -> TODO()
+                        MediaType.UNKNOWN -> TODO()
+                    }
+                }
+
+                val queueId = (request.args!!["queue_id"] as JsonPrimitive).content
+                updateQueue(queueId, mediaTrack)
+                updatePlayer({ it.activeSource == queueId }) {
+                    it.copy(state = PlayerState.PLAYING)
+                }
+
+                Result.success(Answer(JsonObject(emptyMap())))
+            }
+
+            APICommands.PLAYER_QUEUES_ALL -> {
+                Result.success(
+                    answer(
+                        request = request,
+                        result = queues,
+                    ),
+                )
+            }
+
+            APICommands.playersCmd("play_pause") -> {
+                val playerId = (request.args!!["player_id"] as JsonPrimitive).content
+                updatePlayer({ it.playerId == playerId }) {
+                    it.copy(state = PlayerState.PAUSED)
+                }
+
+                Result.success(Answer(JsonObject(emptyMap())))
+            }
+
             else -> {
                 Result.failure(UnsupportedOperationException())
             }
         }
     }
 
+    private suspend fun updateQueue(
+        queueId: String,
+        currentItem: ServerMediaItem?,
+    ) {
+        val queueIndex = queues.indexOfFirst { it.queueId == queueId }
+        queues[queueIndex] =
+            queues[queueIndex].copy(currentItem = ServerQueueItem("blah", currentItem))
+        val queue = queues[queueIndex]
+
+        _events.emit(
+            QueueUpdatedEvent(
+                event = EventType.QUEUE_UPDATED,
+                objectId = queue.queueId,
+                data = queue.copy(
+                    currentItem = ServerQueueItem("blah", currentItem),
+                ),
+            ),
+        )
+    }
+
+    private suspend fun updatePlayer(
+        search: (ServerPlayer) -> Boolean,
+        update: (ServerPlayer) -> ServerPlayer,
+    ) {
+        val playerIndex = players.indexOfFirst(search)
+        val player = update(players[playerIndex])
+        players[playerIndex] = player
+        _events.emit(
+            PlayerUpdatedEvent(
+                event = EventType.PLAYER_UPDATED,
+                objectId = player.playerId,
+                data = player,
+            ),
+        )
+    }
+
     override suspend fun login(username: String, password: String) {
         authorize("token", true)
+        _isReadyForCommands.value = true
     }
 
     override suspend fun authorize(token: String, isAutoLogin: Boolean) {
@@ -165,9 +295,6 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         TODO("Not yet implemented")
     }
 
-    override val isReadyForCommands: StateFlow<Boolean>
-        get() = TODO("Not yet implemented")
-
     private val _serverBaseUrl = MutableStateFlow<String?>(null)
     override val serverBaseUrl: StateFlow<String?> = _serverBaseUrl
 
@@ -175,7 +302,8 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         TODO("Not yet implemented")
     }
 
-    override val events: Flow<Event<out Any>> = MutableSharedFlow()
+    private val _events = MutableSharedFlow<Event<out Any>>()
+    override val events: Flow<Event<out Any>> = _events
     override val webrtcSendspinChannel: DataChannelWrapper?
         get() = TODO("Not yet implemented")
 
@@ -229,6 +357,32 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 this.items.addAll(it)
             }
         }
+        items.forEach { item ->
+            item.album?.let {
+                this.items.add(it)
+            }
+        }
+    }
+
+    fun addPlayer(player: ServerPlayer) {
+        this.players.add(player)
+        player.activeSource?.let {
+            this.queues.add(ServerQueue(queueId = it, available = true))
+        }
+    }
+
+    fun getState(playerId: String): PlayerState? {
+        val player = players.find { it.playerId == playerId }
+        return player?.state
+    }
+
+    fun getCurrentlyPlaying(playerId: String): ServerMediaItem? {
+        val player = players.find { it.playerId == playerId }
+        return if (player != null) {
+            queues.find { it.queueId == player.activeSource }?.currentItem?.mediaItem
+        } else {
+            null
+        }
     }
 
     private fun findItem(
@@ -242,7 +396,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
 
     private fun searchItems(
         request: Request,
-        items: List<ServerMediaItem>,
+        items: Collection<ServerMediaItem>,
     ): List<ServerMediaItem> {
         return items.filter {
             it.name.contains(

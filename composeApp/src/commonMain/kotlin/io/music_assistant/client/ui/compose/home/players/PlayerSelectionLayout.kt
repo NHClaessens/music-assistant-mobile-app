@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,8 +35,9 @@ import androidx.compose.ui.unit.sp
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.player.sendspin.SendspinState
 import io.music_assistant.client.ui.compose.common.icons.SpeakerMultipleIcon
-import musicassistantclient.composeapp.generated.resources.*
 import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.cd_current_player
+import musicassistantclient.composeapp.generated.resources.cd_dsp_settings
 import org.jetbrains.compose.resources.stringResource
 
 private val GROUP_BUTTON_SIZE = 36.dp
@@ -52,7 +55,12 @@ fun PlayerSelectionLayout(
     val hasGroupChildren = player.childrenBinds.isNotEmpty()
     val hasBoundChildren = player.childrenBinds.any { it.isBound }
 
+    val currentPlayerContentDescription =
+        stringResource(Res.string.cd_current_player, player.player.name)
     Row(
+        modifier = Modifier.clearAndSetSemantics {
+            contentDescription = currentPlayerContentDescription
+        },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {

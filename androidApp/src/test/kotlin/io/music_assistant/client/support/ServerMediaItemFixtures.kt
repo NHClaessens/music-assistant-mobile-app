@@ -18,6 +18,7 @@ object ServerMediaItemFixtures {
             name = name,
             mediaType = MediaType.ALBUM,
             artists = listOf(artist),
+            uri = "http://example.com/album/$itemId",
         )
     }
 
@@ -30,6 +31,23 @@ object ServerMediaItemFixtures {
             provider = "blah",
             name = name,
             mediaType = MediaType.ARTIST,
+        )
+    }
+
+    fun track(
+        itemId: String = uniqueIdGenerator.nextInt().toString(),
+        name: String = "Track $itemId",
+        album: ServerMediaItem? = album(),
+        artists: List<ServerMediaItem>? = album?.artists ?: listOf(artist()),
+    ): ServerMediaItem {
+        return ServerMediaItem(
+            itemId = itemId,
+            provider = "blah",
+            name = name,
+            mediaType = MediaType.TRACK,
+            artists = artists,
+            album = album,
+            uri = "http://example.com/track/$itemId",
         )
     }
 }
