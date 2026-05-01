@@ -228,6 +228,7 @@ fun MainNavigationRoot(
                 onClose = { playerExpanded = false },
                 isExpandedScreen = isExpandedScreen,
                 contentPadding = contentPadding,
+                backStack = multiBackStack,
             )
         }
     }
@@ -374,6 +375,7 @@ private fun Players(
     onClose: () -> Unit,
     isExpandedScreen: Boolean,
     contentPadding: PaddingValues,
+    backStack: MultiBackStack,
 ) {
     if (state is HomeScreenViewModel.PlayersState.Data && state.playerData.isNotEmpty()) {
         val simplePlayerAction = remember(homeScreenViewModel) {
@@ -440,6 +442,15 @@ private fun Players(
             localPlayerId = homeScreenViewModel.localPlayerId,
             onAdjustPlaybackDelay = homeScreenViewModel::adjustSendspinStaticDelayMs,
             fetchColors = fetchColors,
+            navigateToItem = { item ->
+                backStack.add(
+                    MainNav.ItemDetails(
+                        itemId = item.itemId,
+                        mediaType = item.mediaType,
+                        providerId = item.provider,
+                    ),
+                )
+            },
         )
     } else {
         Box(Modifier.fillMaxWidth().height(collapsedPlayerHeight(isExpandedScreen))) {

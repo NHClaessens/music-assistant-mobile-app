@@ -29,8 +29,11 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -42,23 +45,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.music_assistant.client.data.model.client.AppMediaItem
+import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.client.PlayerData
+import io.music_assistant.client.data.model.client.PlayerDataFixtures
+import io.music_assistant.client.data.model.client.Queue
+import io.music_assistant.client.data.model.client.QueueInfo
+import io.music_assistant.client.data.model.client.QueueTrack
+import io.music_assistant.client.data.model.server.RepeatMode
 import io.music_assistant.client.player.sendspin.SendspinState
 import io.music_assistant.client.ui.alphaOn
+import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.ExtractedColorsFetcher
+import io.music_assistant.client.ui.compose.common.OverflowMenuButton
 import io.music_assistant.client.ui.compose.common.PlayerColors
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import io.music_assistant.client.ui.compose.common.icons.VolumeIcon
 import io.music_assistant.client.ui.compose.common.icons.VolumeMutedIcon
+import io.music_assistant.client.ui.compose.common.items.navigationOptions
 import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
 import io.music_assistant.client.ui.compose.home.CollapsibleQueue
 import io.music_assistant.client.ui.compose.home.HomeScreenViewModel
@@ -66,6 +78,7 @@ import io.music_assistant.client.ui.compose.home.HorizontalPagerIndicator
 import io.music_assistant.client.ui.inactive
 import io.music_assistant.client.utils.conditional
 import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.cd_more
 import musicassistantclient.composeapp.generated.resources.cd_mute
 import musicassistantclient.composeapp.generated.resources.cd_unmute
 import org.jetbrains.compose.resources.stringResource
@@ -83,6 +96,7 @@ internal fun PlayersPager(
     onFavoriteClick: (AppMediaItem) -> Unit,
     expanded: Boolean,
     onClose: () -> Unit,
+    navigateToItem: (AppMediaItem) -> Unit,
     onPlayersReorder: (List<String>) -> Unit,
     queueAction: (QueueAction) -> Unit,
     moveToPlayer: (String) -> Unit,
@@ -200,13 +214,13 @@ internal fun PlayersPager(
                             queueAction = queueAction,
                             allPlayers = playerDataList,
                             moveToPlayer = moveToPlayer,
-                            page = page,
-                            playerPagerState = playerPagerState,
                             isExpandedScreen = isExpandedScreen,
                             sendspinState = playersState.sendspinState,
                             isQueueExpanded = isQueueExpanded,
                             onExpandQueue = { isQueueExpanded = it },
                             contentPadding = contentPadding,
+                            isCurrentPage = page == playerPagerState.currentPage,
+                            navigateToItem = navigateToItem,
                         )
                     } else {
                         CollapsedPlayerPage(
@@ -276,26 +290,51 @@ private fun ExpandedPlayerPage(
     queueAction: (QueueAction) -> Unit,
     allPlayers: List<PlayerData>,
     moveToPlayer: (String) -> Unit,
-    page: Int,
-    playerPagerState: PagerState,
     isExpandedScreen: Boolean,
     sendspinState: SendspinState?,
     isQueueExpanded: Boolean,
     onExpandQueue: (Boolean) -> Unit,
     contentPadding: PaddingValues,
+    isCurrentPage: Boolean,
+    navigateToItem: (AppMediaItem) -> Unit = {},
 ) {
-    Column {
-        Row(
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Box(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            contentAlignment = Alignment.CenterEnd,
         ) {
-            PlayerSelectionLayout(
-                player = player,
-                sendSpinState = sendspinState,
-                onSelectPlayer = onSelectPlayer,
-                onGroupButton = onGroupButton,
-                onDspButton = onDspButton,
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                PlayerSelectionLayout(
+                    player = player,
+                    sendSpinState = sendspinState,
+                    onSelectPlayer = onSelectPlayer,
+                    onGroupButton = onGroupButton,
+                    onDspButton = onDspButton,
+                )
+            }
+
+            val navigationOptions =
+                (player.queueInfo?.currentItem?.track as? AppMediaItem)?.navigationOptions {
+                    onClose()
+                    navigateToItem(it)
+                }
+
+            if (navigationOptions != null) {
+                OverflowMenuButton(
+                    modifier = Modifier,
+                    options = navigationOptions,
+                ) { onClick ->
+                    IconButton(onClick = onClick) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(Res.string.cd_more),
+                        )
+                    }
+                }
+            }
         }
 
         AnimatedVisibility(
@@ -461,7 +500,7 @@ private fun ExpandedPlayerPage(
             tint = colors.controlTint,
             players = allPlayers,
             onPlayerSelected = { moveToPlayer(it) },
-            isCurrentPage = page == playerPagerState.currentPage,
+            isCurrentPage = isCurrentPage,
             contentPadding = contentPadding,
         )
     }
@@ -508,5 +547,61 @@ fun collapsedPlayerHeight(isExpandedScreen: Boolean): Dp {
         84.dp
     } else {
         130.dp
+    }
+}
+
+@Preview
+@Composable
+fun ExpandedPlayerPagePreview() {
+    MaterialTheme {
+        val track = AppMediaItemFixtures.tracks(listOf("Test Track")).first()
+        val queueInfo = QueueInfo(
+            id = "queue1",
+            available = true,
+            shuffleEnabled = false,
+            repeatMode = RepeatMode.OFF,
+            elapsedTime = 100.0,
+            elapsedTimeLastUpdated = null,
+            currentItem = QueueTrack(
+                track = track,
+                id = "",
+                isPlayable = true,
+                format = null,
+                dsp = null,
+            ),
+        )
+
+        val playerData = PlayerDataFixtures.playerData().copy(
+            queue = DataState.Data(
+                Queue(
+                    info = queueInfo,
+                    items = DataState.NoData(),
+                ),
+            ),
+        )
+
+        ExpandedPlayerPage(
+            player = playerData,
+            colors = PlayerColors(
+                MaterialTheme.colorScheme.primary,
+                MaterialTheme.colorScheme.onPrimary,
+            ),
+            onSelectPlayer = {},
+            onGroupButton = {},
+            onDspButton = null,
+            serverUrl = null,
+            playerAction = { _, _ -> },
+            onFavoriteClick = {},
+            onClose = {},
+            queueAction = {},
+            allPlayers = listOf(playerData),
+            moveToPlayer = {},
+            isExpandedScreen = true,
+            sendspinState = null,
+            isQueueExpanded = false,
+            onExpandQueue = {},
+            contentPadding = PaddingValues(),
+            isCurrentPage = true,
+        )
     }
 }

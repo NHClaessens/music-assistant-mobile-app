@@ -20,7 +20,6 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,16 +55,26 @@ import compose.icons.tablericons.HeartBroken
 import io.music_assistant.client.data.model.client.AppMediaItem
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.server.QueueOption
-import io.music_assistant.client.ui.compose.common.OverflowMenu
+import io.music_assistant.client.ui.compose.common.OverflowMenuButton
 import io.music_assistant.client.ui.compose.common.OverflowMenuOption
 import io.music_assistant.client.ui.compose.common.icons.TrackIcon
 import io.music_assistant.client.ui.compose.common.items.Badges
+import io.music_assistant.client.ui.compose.common.items.navigationOptions
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.utils.WindowClass
 import kotlinx.coroutines.launch
-import musicassistantclient.composeapp.generated.resources.*
 import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.action_add_to_library
+import musicassistantclient.composeapp.generated.resources.action_favorite
+import musicassistantclient.composeapp.generated.resources.action_remove_from_library
+import musicassistantclient.composeapp.generated.resources.action_toggle_view_mode
+import musicassistantclient.composeapp.generated.resources.action_unfavorite
+import musicassistantclient.composeapp.generated.resources.cd_more
+import musicassistantclient.composeapp.generated.resources.common_back
+import musicassistantclient.composeapp.generated.resources.common_cancel
+import musicassistantclient.composeapp.generated.resources.playlist_add_to_title
+import musicassistantclient.composeapp.generated.resources.playlist_no_editable
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -125,7 +134,7 @@ internal fun ItemTopBar(
     libraryActions: ActionsViewModel.LibraryActions?,
     playlistActions: ActionsViewModel.PlaylistActions?,
     scrollBehavior: TopAppBarScrollBehavior? = null,
-    goToArtist: (() -> Unit)?,
+    navigateToItem: (AppMediaItem) -> Unit,
 ) {
     TopAppBar(
         title = {},
@@ -141,7 +150,7 @@ internal fun ItemTopBar(
                 onToggleViewMode = onToggleViewMode,
                 libraryActions = libraryActions,
                 playlistActions = playlistActions,
-                goToArtist = goToArtist,
+                navigateToItem = navigateToItem,
             )
         },
         scrollBehavior = scrollBehavior,
@@ -155,14 +164,14 @@ private fun ItemOverflow(
     onToggleViewMode: () -> Unit,
     libraryActions: ActionsViewModel.LibraryActions?,
     playlistActions: ActionsViewModel.PlaylistActions?,
-    goToArtist: (() -> Unit)?,
+    navigateToItem: (AppMediaItem) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
     var showPlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var playlists by remember { mutableStateOf<List<AppMediaItem.Playlist>>(emptyList()) }
     var isLoadingPlaylists by remember { mutableStateOf(false) }
 
-    OverflowMenu(
+    OverflowMenuButton(
         options = buildList {
             libraryActions?.let { actions ->
                 if (item !is AppMediaItem.Genre) {
@@ -228,15 +237,7 @@ private fun ItemOverflow(
                 ),
             )
 
-            if (goToArtist != null) {
-                add(
-                    OverflowMenuOption(
-                        title = stringResource(Res.string.action_go_to_artist),
-                        icon = Icons.Default.Person,
-                        onClick = goToArtist,
-                    ),
-                )
-            }
+            addAll(item.navigationOptions(navigateToItem))
         },
     ) { onClick ->
         IconButton(onClick = onClick) {
