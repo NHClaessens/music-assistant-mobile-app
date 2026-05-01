@@ -22,7 +22,12 @@ data class ServerQueue(
     // @SerialName("current_index") val currentIndex: Int? = null,
     // @SerialName("index_in_buffer") val indexInBuffer: Int? = null,
     @SerialName("elapsed_time") val elapsedTime: Double? = null,
-    // @SerialName("elapsed_time_last_updated") val elapsedTimeLastUpdated: Double,
+    /**
+     * Unix epoch seconds (UTC) when [elapsedTime] was last recomputed.
+     * Drives the staleness gate. Nullable so a missing field can't silently
+     * drop subsequent legitimate events.
+     */
+    @SerialName("elapsed_time_last_updated") val elapsedTimeLastUpdated: Double? = null,
     // @SerialName("state") val state: PlayerState,
     @SerialName("current_item") val currentItem: ServerQueueItem? = null,
     // @SerialName("next_item") val nextItem: QueueItem? = null,

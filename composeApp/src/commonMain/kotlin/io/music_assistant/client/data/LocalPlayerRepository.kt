@@ -18,11 +18,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,6 +44,10 @@ class LocalPlayerRepository(
 
     private val _localPlayerData = MutableStateFlow<PlayerData?>(null)
     val localPlayerData: StateFlow<PlayerData?> = _localPlayerData.asStateFlow()
+
+    /** Optimistic local-queue mutations; mirrored into `_queueInfos` by `MainDataSource`. */
+    private val _optimisticQueueChanges = Channel<QueueInfo>(Channel.BUFFERED)
+    val optimisticQueueChanges: Flow<QueueInfo> = _optimisticQueueChanges.receiveAsFlow()
 
     private val commandQueueMutex = Mutex()
     private val commandQueue = mutableListOf<QueuedEntry>()
@@ -145,6 +153,8 @@ class LocalPlayerRepository(
     }
 
     fun onServerQueueUpdate(queueInfo: QueueInfo) {
+        // Staleness gating happens upstream in [MainDataSource.gateOrSkip]
+        // before we're called, so this just absorbs the admitted event.
         _localPlayerData.update { current ->
             current?.copy(
                 queue = DataState.Data(
@@ -217,16 +227,19 @@ class LocalPlayerRepository(
     // --- Private helpers ---
 
     private fun updateOptimisticQueueInfo(transform: (QueueInfo) -> QueueInfo) {
-        _localPlayerData.update { current ->
+        // Bump elapsedTimeLastUpdated above the last known server stamp so
+        // stale replays drop while real confirmations (RTT >> epsilon) override.
+        val newState = _localPlayerData.updateAndGet { current ->
             current?.let { pd ->
-                val queueData = pd.queue as? DataState.Data ?: return@update pd
-                pd.copy(
-                    queue = DataState.Data(
-                        queueData.data.copy(info = transform(queueData.data.info)),
-                    ),
+                val queueData = pd.queue as? DataState.Data ?: return@updateAndGet pd
+                val existingStamp = queueData.data.info.elapsedTimeLastUpdated ?: 0.0
+                val transformed = transform(queueData.data.info).copy(
+                    elapsedTimeLastUpdated = existingStamp + OPTIMISTIC_BUMP_EPSILON_S,
                 )
+                pd.copy(queue = DataState.Data(queueData.data.copy(info = transformed)))
             }
         }
+        (newState?.queue as? DataState.Data)?.data?.info?.let { _optimisticQueueChanges.trySend(it) }
     }
 
     private suspend fun enqueue(action: PlayerAction, request: Request) {
@@ -267,5 +280,10 @@ class LocalPlayerRepository(
                 else -> commandQueue.add(entry)
             }
         }
+    }
+
+    private companion object {
+        /** Optimistic-bump offset; safely below any realistic server-confirmation RTT. */
+        const val OPTIMISTIC_BUMP_EPSILON_S = 0.0001
     }
 }

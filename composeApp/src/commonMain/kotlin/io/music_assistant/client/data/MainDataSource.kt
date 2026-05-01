@@ -16,6 +16,7 @@ import io.music_assistant.client.data.model.client.Queue
 import io.music_assistant.client.data.model.client.QueueInfo
 import io.music_assistant.client.data.model.client.QueueInfo.Companion.toQueue
 import io.music_assistant.client.data.model.client.QueueTrack.Companion.toQueueTrack
+import io.music_assistant.client.data.model.client.isBefore
 import io.music_assistant.client.data.model.server.DspConfig
 import io.music_assistant.client.data.model.server.DspConfigPreset
 import io.music_assistant.client.data.model.server.ProviderManifest
@@ -30,6 +31,7 @@ import io.music_assistant.client.data.model.server.events.MediaItemUpdatedEvent
 import io.music_assistant.client.data.model.server.events.PlayerAddedEvent
 import io.music_assistant.client.data.model.server.events.PlayerRemovedEvent
 import io.music_assistant.client.data.model.server.events.PlayerUpdatedEvent
+import io.music_assistant.client.data.model.server.events.QueueAddedEvent
 import io.music_assistant.client.data.model.server.events.QueueItemsUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueTimeUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueUpdatedEvent
@@ -227,6 +229,19 @@ class MainDataSource(
     private var updateJob: Job? = null
 
     init {
+        // Mirror optimistic-bump stamps into `_queueInfos` so the gate sees them.
+        launch {
+            localPlayerRepository.optimisticQueueChanges.collect { queueInfo ->
+                _queueInfos.update { value ->
+                    if (value.any { it.id == queueInfo.id }) {
+                        value.map { if (it.id == queueInfo.id) queueInfo else it }
+                    } else {
+                        value + queueInfo
+                    }
+                }
+            }
+        }
+
         // Position calculation loop - runs independently to provide smooth position updates
         launch {
             while (isActive) {
@@ -1030,6 +1045,18 @@ class MainDataSource(
         _userSelectedPlayerId.update { player.id }
     }
 
+    /** `null` if this event is older than what `_queueInfos` already holds for the same id. */
+    private fun QueueInfo.takeIfNotStale(label: String): QueueInfo? {
+        val existing = _queueInfos.value.find { it.id == id } ?: return this
+        if (isBefore(existing)) {
+            log.d {
+                "Dropping stale $label for $id: $elapsedTimeLastUpdated < ${existing.elapsedTimeLastUpdated}"
+            }
+            return null
+        }
+        return this
+    }
+
     fun playerAction(playerId: String, action: PlayerAction) {
         // Delegate to data-based overload for local player (handles optimistic + routing)
         if (playerId == settings.sendspinClientId.value) {
@@ -1426,8 +1453,48 @@ class MainDataSource(
                             }
                         }
 
+                        is QueueAddedEvent -> {
+                            // Server announces a queue (typically when a new
+                            // player connects and MA registers its queue).
+                            val data = event.queue().takeIfNotStale("QueueAdded") ?: return@collect
+                            Logger.i("Queue added $data")
+
+                            val localPlayerId = settings.sendspinClientId.value
+                            if (data.id == localPlayerId ||
+                                (_serverPlayers.value as? DataState.Data)?.data
+                                    ?.find { it.id == localPlayerId }?.queueId == data.id
+                            ) {
+                                localPlayerRepository.onServerQueueUpdate(data)
+                            }
+
+                            data.elapsedTime?.let { elapsed ->
+                                val player =
+                                    (_serverPlayers.value as? DataState.Data)?.data?.find { it.queueId == data.id }
+                                _positionTrackers.update { trackers ->
+                                    trackers + (
+                                        data.id to PositionTracker(
+                                        queueId = data.id,
+                                        basePosition = elapsed,
+                                        baseTimestamp = currentTimeMillis(),
+                                        isPlaying = player?.isPlaying ?: false,
+                                        duration = data.currentItem?.track?.duration,
+                                    )
+                                    )
+                                }
+                            }
+
+                            // Upsert: replace if present, append if new.
+                            _queueInfos.update { value ->
+                                if (value.any { it.id == data.id }) {
+                                    value.map { if (it.id == data.id) data else it }
+                                } else {
+                                    value + data
+                                }
+                            }
+                        }
+
                         is QueueUpdatedEvent -> {
-                            val data = event.queue()
+                            val data = event.queue().takeIfNotStale("QueueUpdated") ?: return@collect
                             Logger.i("Queue updated $data")
 
                             // Forward to local player repository if this is the local player's queue
@@ -1464,7 +1531,7 @@ class MainDataSource(
                         }
 
                         is QueueItemsUpdatedEvent -> {
-                            val data = event.queue()
+                            val data = event.queue().takeIfNotStale("QueueItemsUpdated") ?: return@collect
                             _queueInfos.update { value ->
                                 value.map {
                                     if (it.id == data.id) data else it
@@ -1476,6 +1543,9 @@ class MainDataSource(
                         }
 
                         is QueueTimeUpdatedEvent -> {
+                            // Not staleness-gated: payload has no server-side
+                            // `last_updated` to compare against. Relies on
+                            // in-order WebSocket delivery instead.
                             val oldQueue = _queueInfos.value.find { it.id == event.objectId }
                             // Update position tracker
                             event.objectId?.let { queueId ->
