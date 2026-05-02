@@ -38,67 +38,105 @@ class CarPlayContentManager {
     static let shared = CarPlayContentManager()
 
     // MARK: - API Calls
+    // Fetchers return `[CPListItem]?`: nil = timeout, [] = empty result.
 
-    func fetchRecommendations(completion: @escaping ([CPListItem]) -> Void) {
+    private func mapItems(_ items: [AppMediaItem]?) -> [CPListItem]? {
+        guard let items = items else { return nil }
+        return items.compactMap { self.mapToCPListItem($0) }
+    }
+
+    func fetchRecommendations(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchRecommendations { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
-    
-    func fetchPlaylists(completion: @escaping ([CPListItem]) -> Void) {
+
+    func fetchPlaylists(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchPlaylists { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
-    
-    func fetchAlbums(completion: @escaping ([CPListItem]) -> Void) {
+
+    func fetchAlbums(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchAlbums { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
-    
-    func fetchArtists(completion: @escaping ([CPListItem]) -> Void) {
+
+    func fetchArtists(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchArtists { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
 
-    func fetchAudiobooks(completion: @escaping ([CPListItem]) -> Void) {
+    func fetchAudiobooks(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchAudiobooks { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
 
-    func fetchTracks(completion: @escaping ([CPListItem]) -> Void) {
+    func fetchTracks(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchTracks { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
 
-    func fetchPodcasts(completion: @escaping ([CPListItem]) -> Void) {
+    func fetchPodcasts(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchPodcasts { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
 
-    func fetchRadioStations(completion: @escaping ([CPListItem]) -> Void) {
+    func fetchRadioStations(completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.fetchRadioStations { items in
-            completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
 
-    func fetchRecommendationFolders(completion: @escaping ([AppMediaItem.RecommendationFolder]) -> Void) {
+    /// Returns nil on timeout. Empty array means "server answered, no folders."
+    func fetchRecommendationFolders(completion: @escaping ([AppMediaItem.RecommendationFolder]?) -> Void) {
         KmpHelper.shared.fetchRecommendationFolders { folders in
+            guard let folders = folders else { completion(nil); return }
             completion(Array(folders))
         }
     }
 
-    func search(query: String, completion: @escaping ([CPListItem]) -> Void) {
+    func search(query: String, completion: @escaping ([CPListItem]?) -> Void) {
         KmpHelper.shared.search(query: query) { items in
-             completion(items.compactMap { self.mapToCPListItem($0) })
+            completion(self.mapItems(items))
         }
     }
-    
+
+    // MARK: - Drilldown fetchers
+    // Same nil-on-timeout contract as the library fetchers above.
+
+    func fetchAlbumsForArtist(
+        _ artist: AppMediaItem.Artist,
+        completion: @escaping ([CPListItem]?) -> Void
+    ) {
+        KmpHelper.shared.fetchAlbumsByArtist(artist: artist) { items in
+            completion(self.mapItems(items))
+        }
+    }
+
+    func fetchTracksForAlbum(
+        _ album: AppMediaItem.Album,
+        completion: @escaping ([CPListItem]?) -> Void
+    ) {
+        KmpHelper.shared.fetchTracksByAlbum(album: album) { items in
+            completion(self.mapItems(items))
+        }
+    }
+
+    func fetchTracksForPlaylist(
+        _ playlist: AppMediaItem.Playlist,
+        completion: @escaping ([CPListItem]?) -> Void
+    ) {
+        KmpHelper.shared.fetchTracksByPlaylist(playlist: playlist) { items in
+            completion(self.mapItems(items))
+        }
+    }
+
     // MARK: - Action Handling
 
     func playItem(_ item: AppMediaItem) {
