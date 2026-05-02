@@ -429,10 +429,8 @@ extension SiriIntentHandler: INPlayMediaIntentHandling {
         // came from Siri's catalog (different identifier namespace).
         if let identifier = selected.identifier,
            let cached = Self.cached(forIdentifier: identifier) {
-            os_log("PlayMedia.handle: cache hit for id=%{public}@ — playing", log: log, type: .info, identifier)
-            KmpHelper.shared.playMediaItem(item: cached)
-            Self.donatePlayed(cached)
-            completion(INPlayMediaIntentResponse(code: .success, userActivity: nil))
+            os_log("PlayMedia.handle: cache hit for id=%{public}@", log: log, type: .info, identifier)
+            Self.dispatchPlay(cached, completion: completion)
             return
         }
 
@@ -467,11 +465,28 @@ extension SiriIntentHandler: INPlayMediaIntentHandling {
                 completion(INPlayMediaIntentResponse(code: .failure, userActivity: nil))
                 return
             }
-            os_log("PlayMedia.handle: playing match name=%{public}@ kind=%{public}@",
+            os_log("PlayMedia.handle: matched name=%{public}@ kind=%{public}@",
                    log: log, type: .info, match.title, String(describing: type(of: match)))
-            KmpHelper.shared.playMediaItem(item: match)
-            Self.donatePlayed(match)
+            Self.dispatchPlay(match, completion: completion)
+        }
+    }
+
+    /// Don't lie to Siri: complete `.failure` (not `.success`) when dispatch
+    /// fails, and skip donation so phantom plays don't pollute the model.
+    fileprivate static func dispatchPlay(
+        _ item: AppMediaItem,
+        completion: @escaping (INPlayMediaIntentResponse) -> Void
+    ) {
+        let dispatched = KmpHelper.shared.playOnLocalPlayer(item: item)
+        os_log("PlayMedia.dispatchPlay: name=%{public}@ dispatched=%{public}@",
+               log: log, type: .info,
+               item.title,
+               dispatched ? "true" : "false")
+        if dispatched {
+            donatePlayed(item)
             completion(INPlayMediaIntentResponse(code: .success, userActivity: nil))
+        } else {
+            completion(INPlayMediaIntentResponse(code: .failure, userActivity: nil))
         }
     }
 }

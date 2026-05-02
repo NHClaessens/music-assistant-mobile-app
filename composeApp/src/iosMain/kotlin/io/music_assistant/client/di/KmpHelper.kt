@@ -279,28 +279,40 @@ object KmpHelper : KoinComponent {
 
     // MARK: - Playback
 
-    fun playMediaItem(item: AppMediaItem) {
-        // Use selected player from MainDataSource
-        val playerId = mainDataSource.selectedPlayerIndex.value?.let { index ->
-             (mainDataSource.playersData.value as? io.music_assistant.client.ui.compose.common.DataState.Data)?.data?.get(index)?.playerId
-        } ?: return
-
-        playItem(item, playerId, QueueOption.PLAY)
-    }
-
-    private fun playItem(item: AppMediaItem, queueOrPlayerId: String, option: QueueOption) {
-        item.mediaUri?.let { mediaUri ->
-            mainScope.launch {
+    /**
+     * Play [item] on the iOS local Sendspin player only — never the group
+     * it may be synced to. Detaches from any sync group first; MA promotes
+     * `play(queueOrPlayerId = childId)` to the group queue otherwise.
+     *
+     * Returns false on no-local-player or no-URI; callers use this to skip
+     * Siri donation and respond with `.failure`.
+     */
+    fun playOnLocalPlayer(item: AppMediaItem): Boolean {
+        val localPlayerData = mainDataSource.localPlayer.value ?: return false
+        val playerId = localPlayerData.player.id
+        val mediaUri = item.mediaUri ?: return false
+        val syncedToId = localPlayerData.player.syncedTo
+        mainScope.launch {
+            if (syncedToId != null) {
+                log.i { "playOnLocalPlayer: detaching $playerId from $syncedToId" }
                 serviceClient.sendRequest(
-                    Request.Library.play(
-                        media = listOf(mediaUri),
-                        queueOrPlayerId = queueOrPlayerId,
-                        option = option,
-                        radioMode = false,
+                    Request.Player.setGroupMembers(
+                        playerId = syncedToId,
+                        playersToAdd = null,
+                        playersToRemove = listOf(playerId),
                     ),
                 )
             }
+            serviceClient.sendRequest(
+                Request.Library.play(
+                    media = listOf(mediaUri),
+                    queueOrPlayerId = playerId,
+                    option = QueueOption.PLAY,
+                    radioMode = false,
+                ),
+            )
         }
+        return true
     }
 
     // MARK: - Library Actions (Siri)

@@ -140,7 +140,7 @@ class CarPlayContentManager {
     // MARK: - Action Handling
 
     func playItem(_ item: AppMediaItem) {
-        KmpHelper.shared.playMediaItem(item: item)
+        guard KmpHelper.shared.playOnLocalPlayer(item: item) else { return }
         // Donate the play so Siri learns Music Assistant is a media destination.
         // Without donations, "Hey Siri, play X" never lists this app as a candidate.
         SiriIntentHandler.donatePlayed(item)
