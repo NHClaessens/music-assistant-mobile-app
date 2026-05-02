@@ -379,7 +379,8 @@ extension SiriIntentHandler: INPlayMediaIntentHandling {
         let preferredType = Self.preferredType(from: intent)
         os_log("PlayMedia.resolveMediaItems: searching MA for query=%{public}@ preferredType=%{public}d",
                log: log, type: .info, query, preferredType.rawValue)
-        KmpHelper.shared.search(query: query) { items in
+        KmpHelper.shared.search(query: query) { maybeItems in
+            let items = maybeItems ?? []
             os_log("PlayMedia.resolveMediaItems: search returned %d items",
                    log: log, type: .info, items.count)
             // Cache everything so handle() can find any MA item by id, but
@@ -448,7 +449,8 @@ extension SiriIntentHandler: INPlayMediaIntentHandling {
         let preferredType = Self.preferredType(from: intent)
         os_log("PlayMedia.handle: cache miss; re-searching for query=%{public}@ preferredType=%{public}d",
                log: log, type: .info, query, preferredType.rawValue)
-        KmpHelper.shared.search(query: query) { items in
+        KmpHelper.shared.search(query: query) { maybeItems in
+            let items = maybeItems ?? []
             // Prefer an exact identifier match (defensive — Siri *could*
             // round-trip our id from a prior `.success(with:)`); otherwise
             // type-aware best match.
@@ -520,7 +522,8 @@ extension SiriIntentHandler: INUpdateMediaAffinityIntentHandling {
         //   - PlayMedia is the cycle that loops. Each tap re-enters resolve
         //     against MA's catalog (Siri's identifiers don't match ours)
         //     and would re-disambig forever, hence its no-disambig policy.
-        KmpHelper.shared.search(query: query) { items in
+        KmpHelper.shared.search(query: query) { maybeItems in
+            let items = maybeItems ?? []
             let mediaItems = Self.resolveAndCache(items)
             if mediaItems.isEmpty {
                 completion([.unsupported()])
@@ -644,7 +647,8 @@ extension SiriIntentHandler: INUpdateMediaAffinityIntentHandling {
 
         os_log("Affinity.handle: searching MA for query=%{public}@ preferredType=%{public}d",
                log: log, type: .info, query, preferredType.rawValue)
-        KmpHelper.shared.search(query: query) { items in
+        KmpHelper.shared.search(query: query) { maybeItems in
+            let items = maybeItems ?? []
             let match: AppMediaItem? = {
                 if let id = target?.identifier,
                    let exact = items.first(where: { $0.itemId == id }) {
@@ -702,7 +706,8 @@ extension SiriIntentHandler: INSearchForMediaIntentHandling {
             return
         }
 
-        KmpHelper.shared.search(query: query) { items in
+        KmpHelper.shared.search(query: query) { maybeItems in
+            let items = maybeItems ?? []
             let mediaItems = Self.resolveAndCache(items)
             if mediaItems.isEmpty {
                 completion([INSearchForMediaMediaItemResolutionResult(

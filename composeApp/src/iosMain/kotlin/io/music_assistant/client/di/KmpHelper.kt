@@ -1,5 +1,6 @@
 package io.music_assistant.client.di
 
+import co.touchlab.kermit.Logger
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.auth.AuthenticationManager
@@ -9,13 +10,25 @@ import io.music_assistant.client.data.model.client.AppMediaItem.Companion.toAppM
 import io.music_assistant.client.data.model.server.QueueOption
 import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.utils.HasConnectionData
+import io.music_assistant.client.utils.currentTimeMillis
 import io.music_assistant.client.utils.resultAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+
+private val log = Logger.withTag("KmpHelper")
+
+/** Swift-callable cancellation handle for coroutine subscriptions. */
+fun interface Cancellable { fun cancel() }
+
+/** CarPlay round-trip budget before a fetch surfaces a disconnected affordance. */
+private const val FETCH_TIMEOUT_MS = 5_000L
 
 /**
  * KmpHelper - Bridge for accessing Koin dependencies from Swift
@@ -36,10 +49,6 @@ object KmpHelper : KoinComponent {
      * The connected MA server's stable identifier (UUID-style, e.g.
      * "70e548..."). Available once the server has sent its handshake;
      * null while the connection is still being established.
-     *
-     * Stable across the server's lifetime regardless of how the client
-     * reaches it (mDNS, IP, port forward, network change), which makes it
-     * the right key for namespacing donations and other per-server state.
      */
     fun getServerId(): String? {
         return (serviceClient.sessionState.value as? HasConnectionData)
@@ -53,84 +62,144 @@ object KmpHelper : KoinComponent {
     fun onExternalConsumerActive() = serviceClient.onExternalConsumerActive()
     fun onExternalConsumerInactive() = serviceClient.onExternalConsumerInactive()
 
+    // MARK: - Readiness observation
+
+    /**
+     * Subscribe to transport command-readiness. Fires with the current value
+     * on subscribe and on every change. Caller must `cancel()` on teardown.
+     */
+    fun observeReadiness(onChanged: (Boolean) -> Unit): Cancellable {
+        val job = mainScope.launch {
+            serviceClient.isReadyForCommands.collect { onChanged(it) }
+        }
+        return Cancellable { job.cancel() }
+    }
+
+    /**
+     * Subscribe to "local player has a current track" transitions. Fires
+     * with the current value on subscribe, then on every distinct change.
+     */
+    fun observeLocalPlayerPresence(onChanged: (Boolean) -> Unit): Cancellable {
+        val job = mainScope.launch {
+            mainDataSource.localPlayer
+                .map { it?.queueInfo?.currentItem != null }
+                .distinctUntilChanged()
+                .collect { onChanged(it) }
+        }
+        return Cancellable { job.cancel() }
+    }
+
     // MARK: - Swift Helpers for Data Fetching
+    //
+    // Every fetcher returns a nullable list. `null` means the round trip
+    // exceeded FETCH_TIMEOUT_MS — Swift renders a disconnected affordance.
+    // An empty list means the server answered with nothing.
 
-    fun fetchRecommendations(completion: (List<AppMediaItem>) -> Unit) {
+    private inline fun <T> launchFetch(
+        label: String,
+        crossinline completion: (List<T>?) -> Unit,
+        crossinline fetch: suspend () -> List<T>,
+    ) {
+        val startMs = currentTimeMillis()
+        log.i { "fetch[$label] start" }
         mainScope.launch {
-            val result = serviceClient.sendRequest(Request.Library.recommendations())
-            val serverItems = result.resultAs<List<ServerMediaItem>>() ?: emptyList()
-            val appItems = serverItems.toAppMediaItemList()
-            completion(appItems)
-        }
-    }
-
-    fun fetchRecommendationFolders(completion: (List<AppMediaItem.RecommendationFolder>) -> Unit) {
-        mainScope.launch {
-            val result = serviceClient.sendRequest(Request.Library.recommendations())
-            val serverItems = result.resultAs<List<ServerMediaItem>>() ?: emptyList()
-            val folders = serverItems.toAppMediaItemList().filterIsInstance<AppMediaItem.RecommendationFolder>()
-            completion(folders)
-        }
-    }
-
-    fun fetchPlaylists(completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
-             val result = serviceClient.sendRequest(Request.Playlist.listLibrary())
-             val items = result.resultAs<List<ServerMediaItem>>()?.toAppMediaItemList() ?: emptyList()
-             completion(items)
-        }
-    }
-
-    fun fetchAlbums(completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
-            val result = serviceClient.sendRequest(Request.Album.listLibrary())
-            val items = result.resultAs<List<ServerMediaItem>>()?.toAppMediaItemList() ?: emptyList()
+            val items: List<T>? = withTimeoutOrNull(FETCH_TIMEOUT_MS) { fetch() }
+            val elapsed = currentTimeMillis() - startMs
+            if (items == null) {
+                log.i { "fetch[$label] timeout after ${elapsed}ms" }
+            } else {
+                log.i { "fetch[$label] returned ${items.size} items in ${elapsed}ms" }
+            }
             completion(items)
         }
     }
 
-    fun fetchArtists(completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
-            val result = serviceClient.sendRequest(Request.Artist.listLibrary())
-            val items = result.resultAs<List<ServerMediaItem>>()?.toAppMediaItemList() ?: emptyList()
-            completion(items)
+    fun fetchRecommendations(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("recommendations", completion) {
+            serviceClient.sendRequest(Request.Library.recommendations())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
         }
     }
 
-    fun fetchAudiobooks(completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
-            val result = serviceClient.sendRequest(Request.Audiobook.listLibrary())
-            val items = result.resultAs<List<ServerMediaItem>>()?.toAppMediaItemList() ?: emptyList()
-            completion(items)
+    fun fetchRecommendationFolders(
+        completion: (List<AppMediaItem.RecommendationFolder>?) -> Unit,
+    ) {
+        launchFetch("recommendationFolders", completion) {
+            serviceClient.sendRequest(Request.Library.recommendations())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?.filterIsInstance<AppMediaItem.RecommendationFolder>()
+                ?: emptyList()
         }
     }
 
-    fun fetchTracks(completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
-            val result = serviceClient.sendRequest(Request.Track.list())
-            val items = result.resultAs<List<ServerMediaItem>>()?.toAppMediaItemList() ?: emptyList()
-            completion(items)
+    fun fetchPlaylists(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("playlists", completion) {
+            serviceClient.sendRequest(Request.Playlist.listLibrary())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
         }
     }
 
-    fun fetchPodcasts(completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
-            val result = serviceClient.sendRequest(Request.Podcast.listLibrary())
-            val items = result.resultAs<List<ServerMediaItem>>()?.toAppMediaItemList() ?: emptyList()
-            completion(items)
+    fun fetchAlbums(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("albums", completion) {
+            serviceClient.sendRequest(Request.Album.listLibrary())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
         }
     }
 
-    fun fetchRadioStations(completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
-            val result = serviceClient.sendRequest(Request.RadioStation.listLibrary())
-            val items = result.resultAs<List<ServerMediaItem>>()?.toAppMediaItemList() ?: emptyList()
-            completion(items)
+    fun fetchArtists(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("artists", completion) {
+            serviceClient.sendRequest(Request.Artist.listLibrary())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
         }
     }
 
-    fun search(query: String, completion: (List<AppMediaItem>) -> Unit) {
-        mainScope.launch {
+    fun fetchAudiobooks(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("audiobooks", completion) {
+            serviceClient.sendRequest(Request.Audiobook.listLibrary())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
+        }
+    }
+
+    fun fetchTracks(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("tracks", completion) {
+            serviceClient.sendRequest(Request.Track.list())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
+        }
+    }
+
+    fun fetchPodcasts(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("podcasts", completion) {
+            serviceClient.sendRequest(Request.Podcast.listLibrary())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
+        }
+    }
+
+    fun fetchRadioStations(completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("radioStations", completion) {
+            serviceClient.sendRequest(Request.RadioStation.listLibrary())
+                .resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
+        }
+    }
+
+    fun search(query: String, completion: (List<AppMediaItem>?) -> Unit) {
+        launchFetch("search:$query", completion) {
             val result = serviceClient.sendRequest(
                 Request.Library.search(
                     query = query,
@@ -146,9 +215,65 @@ object KmpHelper : KoinComponent {
                     libraryOnly = false,
                 ),
             )
-            val searchResult = result.resultAs<io.music_assistant.client.data.model.server.SearchResult>()
-            val items = searchResult?.toAppMediaItemList() ?: emptyList()
-            completion(items)
+            result.resultAs<io.music_assistant.client.data.model.server.SearchResult>()
+                ?.toAppMediaItemList()
+                ?: emptyList()
+        }
+    }
+
+    // MARK: - Drilldown fetchers (same nullable-on-timeout contract)
+
+    fun fetchAlbumsByArtist(
+        artist: AppMediaItem.Artist,
+        completion: (List<AppMediaItem>?) -> Unit,
+    ) {
+        launchFetch("albumsByArtist:${artist.itemId}", completion) {
+            serviceClient.sendRequest(
+                Request.Artist.getAlbums(
+                    itemId = artist.itemId,
+                    providerInstanceIdOrDomain = artist.provider,
+                    inLibraryOnly = false,
+                ),
+            ).resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?.filterIsInstance<AppMediaItem.Album>()
+                ?: emptyList()
+        }
+    }
+
+    fun fetchTracksByAlbum(
+        album: AppMediaItem.Album,
+        completion: (List<AppMediaItem>?) -> Unit,
+    ) {
+        launchFetch("tracksByAlbum:${album.itemId}", completion) {
+            serviceClient.sendRequest(
+                Request.Album.getTracks(
+                    itemId = album.itemId,
+                    providerInstanceIdOrDomain = album.provider,
+                    inLibraryOnly = false,
+                ),
+            ).resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?.filterIsInstance<AppMediaItem.Track>()
+                ?: emptyList()
+        }
+    }
+
+    fun fetchTracksByPlaylist(
+        playlist: AppMediaItem.Playlist,
+        completion: (List<AppMediaItem>?) -> Unit,
+    ) {
+        launchFetch("tracksByPlaylist:${playlist.itemId}", completion) {
+            serviceClient.sendRequest(
+                Request.Playlist.getTracks(
+                    itemId = playlist.itemId,
+                    providerInstanceIdOrDomain = playlist.provider,
+                    forceRefresh = null,
+                ),
+            ).resultAs<List<ServerMediaItem>>()
+                ?.toAppMediaItemList()
+                ?.filterIsInstance<AppMediaItem.Track>()
+                ?: emptyList()
         }
     }
 
