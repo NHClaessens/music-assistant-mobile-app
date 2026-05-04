@@ -56,7 +56,7 @@ fun PlayerControls(
     Row(
         modifier = modifier
             .wrapContentSize(),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showAdditionalButtons) {
@@ -79,7 +79,7 @@ fun PlayerControls(
             }
         }
 
-        if (showSkip) {
+        if (showAdditionalButtons) {
             ActionButton(
                 icon = SkipBackIcon,
                 tint = tint,

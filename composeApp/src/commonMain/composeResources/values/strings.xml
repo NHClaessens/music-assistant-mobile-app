@@ -36,7 +36,6 @@
     <string name="common_delete">Delete</string>
     <string name="common_create">Create</string>
     <string name="common_done">Done</string>
-    <string name="common_transfer">Transfer</string>
 
     <!-- Content descriptions -->
     <string name="cd_play_now">Play now</string>
@@ -60,7 +59,6 @@
     <string name="cd_fully_played">Fully played</string>
     <string name="cd_in_progress">In progress</string>
     <string name="cd_provider_icon">Provider Icon</string>
-    <string name="cd_dsp_settings">DSP Settings</string>
     <string name="cd_playing">Playing %1$s</string>
     <string name="cd_current_player">Current player: %1$s</string>
 
@@ -145,12 +143,15 @@
     <string name="queue_no_items">No items</string>
     <string name="queue_not_loaded">Not loaded</string>
     <string name="queue_cannot_play">Cannot play this item</string>
+    <string name="queue_clear">Clear queue</string>
+    <string name="queue_transfer">Transfer queue</string>
 
     <!-- Players -->
     <string name="players_title">Players</string>
     <string name="players_group_settings">Group settings</string>
     <string name="players_group_volume">%1$s group volume</string>
     <string name="players_nothing">Nothing playing</string>
+    <string name="players_dsp_settings">DSP settings</string>
 
     <!-- DSP -->
     <string name="dsp_title">DSP settings</string>
