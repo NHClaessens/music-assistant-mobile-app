@@ -1,7 +1,6 @@
 package io.music_assistant.client.ui.compose.search
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -19,7 +18,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
 import musicassistantclient.composeapp.generated.resources.*
 import musicassistantclient.composeapp.generated.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -28,6 +26,7 @@ private const val MIN_SEARCH_QUERY_LENGTH = 3
 
 @Composable
 fun SearchInput(
+    modifier: Modifier = Modifier,
     query: String,
     onQueryChanged: (String) -> Unit,
     focusManager: FocusManager = LocalFocusManager.current,
@@ -40,8 +39,7 @@ fun SearchInput(
     }
 
     OutlinedTextField(
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
+        modifier = modifier
             .fillMaxWidth()
             .focusRequester(focusRequester),
         value = query,

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,7 +38,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.music_assistant.client.data.model.client.AppMediaItem
 import io.music_assistant.client.data.model.client.AppMediaItem.Companion.description
@@ -199,7 +197,6 @@ private fun trackNameAndContentDescription(title: String?): Pair<String, String>
 fun FullPlayerItem(
     modifier: Modifier,
     item: PlayerData,
-    isLocal: Boolean,
     colors: PlayerColors,
     playerAction: (PlayerData, PlayerAction) -> Unit,
     @Suppress("UnusedParameter") onFavoriteClick: (AppMediaItem) -> Unit, // FIXME inconsistent stuff happening
@@ -213,10 +210,6 @@ fun FullPlayerItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = item.player.providerType.takeIf { !isLocal } ?: "",
-            fontSize = 12.sp,
-        )
         Box(
             modifier = Modifier
                 .weight(1f, fill = false)
@@ -322,7 +315,7 @@ fun FullPlayerItem(
         )
         Column(
             modifier = Modifier.fillMaxWidth(),
-        ) { // Progress bar
+        ) {
             Slider(
                 value = sliderPosition,
                 valueRange = duration?.let { 0f..it } ?: 0f..1f,
@@ -379,27 +372,27 @@ fun FullPlayerItem(
                     }
                 },
             )
-        }
 
-        // Duration labels
-        Row(
-            modifier = Modifier.fillMaxWidth().offset(y = (-16).dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = sliderPosition.takeIf { currentMedia != null }
-                    .formatDuration(DurationUnit.SECONDS)
-                    .takeIf { duration != null } ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = currentMedia
-                    ?.let { duration?.formatDuration(DurationUnit.SECONDS) ?: "\u221E" }
-                    ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Duration labels
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = sliderPosition.takeIf { currentMedia != null }
+                        .formatDuration(DurationUnit.SECONDS)
+                        .takeIf { duration != null } ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = currentMedia
+                        ?.let { duration?.formatDuration(DurationUnit.SECONDS) ?: "\u221E" }
+                        ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         PlayerControls(

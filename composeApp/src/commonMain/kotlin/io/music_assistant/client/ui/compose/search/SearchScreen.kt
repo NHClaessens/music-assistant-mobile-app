@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,6 +23,7 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -40,6 +42,7 @@ import io.music_assistant.client.data.model.server.QueueOption
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.ToastState
+import io.music_assistant.client.ui.compose.common.clearFocusOnScroll
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.AudiobookWithMenu
@@ -85,16 +88,19 @@ fun SearchScreen(
                 scrollBehaviour.state.heightOffset = 0f
             }
 
-            SearchTopBar(scrollBehavior = scrollBehaviour)
+            SearchTopBar(
+                state.searchState,
+                scrollBehavior = scrollBehaviour,
+                onQueryChanged = viewModel::onQueryChanged,
+                onMediaTypeToggled = viewModel::onMediaTypeToggled,
+                onLibraryOnlyToggled = viewModel::onLibraryOnlyToggled,
+            )
         },
     ) {
         SearchContent(
             state = state,
             serverUrl = serverUrl,
             toastState = toastState,
-            onQueryChanged = viewModel::onQueryChanged,
-            onMediaTypeToggled = viewModel::onMediaTypeToggled,
-            onLibraryOnlyToggled = viewModel::onLibraryOnlyToggled,
             onItemClick = { item ->
                 when (item) {
                     is AppMediaItem.Artist,
@@ -133,12 +139,41 @@ fun SearchScreen(
 
 @Composable
 private fun SearchTopBar(
+    searchState: SearchViewModel.SearchState,
     scrollBehavior: TopAppBarScrollBehavior? = null,
+    onQueryChanged: (String) -> Unit,
+    onMediaTypeToggled: (MediaType, Boolean) -> Unit,
+    onLibraryOnlyToggled: (Boolean) -> Unit,
 ) {
     TopAppBar(
         title = {
-            Text(text = stringResource(Res.string.search_title))
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Text(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically),
+                    text = stringResource(Res.string.search_title),
+                )
+                val modifier = Modifier.padding(end = 16.dp)
+                SearchInput(
+                    modifier = modifier,
+                    query = searchState.query,
+                    onQueryChanged = onQueryChanged,
+                )
+
+                // Search filters (always visible)
+                SearchFilters(
+                    modifier = modifier,
+                    searchState = searchState,
+                    onMediaTypeToggled = onMediaTypeToggled,
+                    onLibraryOnlyToggled = onLibraryOnlyToggled,
+                )
+            }
         },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
         scrollBehavior = scrollBehavior,
     )
 }
@@ -148,9 +183,7 @@ private fun SearchContent(
     state: SearchViewModel.State,
     serverUrl: String?,
     toastState: ToastState,
-    onQueryChanged: (String) -> Unit,
-    onMediaTypeToggled: (MediaType, Boolean) -> Unit,
-    onLibraryOnlyToggled: (Boolean) -> Unit,
+
     onItemClick: (AppMediaItem) -> Unit,
     onPlayClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
     playlistActions: ActionsViewModel.PlaylistActions,
@@ -161,16 +194,6 @@ private fun SearchContent(
 ) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            SearchInput(state.searchState.query, onQueryChanged)
-
-            // Search filters (always visible)
-            SearchFilters(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                searchState = state.searchState,
-                onMediaTypeToggled = onMediaTypeToggled,
-                onLibraryOnlyToggled = onLibraryOnlyToggled,
-            )
-
             // Results
             when (val resultsState = state.resultsState) {
                 is DataState.Loading -> {
@@ -212,7 +235,10 @@ private fun SearchContent(
                         }
 
                         1 -> LazyColumn(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp)
+                                .clearFocusOnScroll(),
                             contentPadding = contentPadding,
                         ) {
                             val (title, items) = results.nonEmptyLists.first()
@@ -225,7 +251,10 @@ private fun SearchContent(
                             item {
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
-                            items(items = items, key = { it.itemId }) { item ->
+                            items(
+                                items = items,
+                                key = { "${it.mediaType}_${it.provider}_${it.itemId}" },
+                            ) { item ->
                                 when (item) {
                                     is AppMediaItem.Track -> TrackWithMenu(
                                         serverUrl = serverUrl,
@@ -314,7 +343,9 @@ private fun SearchContent(
                             val preparedItems = results.nonEmptyLists
                                 .map { (title, items) -> Pair(stringResource(title), items) }
                             LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clearFocusOnScroll(),
                                 contentPadding = contentPadding,
                             ) {
                                 preparedItems.forEach { (stringTitle, items) ->
