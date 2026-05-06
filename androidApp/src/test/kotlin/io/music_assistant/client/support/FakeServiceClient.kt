@@ -9,6 +9,7 @@ import io.music_assistant.client.data.model.server.AuthProvider
 import io.music_assistant.client.data.model.server.EventType
 import io.music_assistant.client.data.model.server.MediaType
 import io.music_assistant.client.data.model.server.PlayerState
+import io.music_assistant.client.data.model.server.ProviderManifest
 import io.music_assistant.client.data.model.server.SearchResult
 import io.music_assistant.client.data.model.server.ServerInfo
 import io.music_assistant.client.data.model.server.ServerMediaItem
@@ -19,6 +20,7 @@ import io.music_assistant.client.data.model.server.ServerQueueItem
 import io.music_assistant.client.data.model.server.User
 import io.music_assistant.client.data.model.server.events.Event
 import io.music_assistant.client.data.model.server.events.PlayerUpdatedEvent
+import io.music_assistant.client.data.model.server.events.QueueItemsUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueUpdatedEvent
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.utils.AuthProcessState
@@ -41,6 +43,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 class FakeServiceClient(private val settingsRepository: SettingsRepository) : ServiceClient {
     private val players = mutableListOf<ServerPlayer>()
     private val queues = mutableListOf<ServerQueue>()
+    private val queueItems = mutableMapOf<String, List<ServerQueueItem>>()
     private val items = mutableSetOf<ServerMediaItem>()
     private val albums: List<ServerMediaItem>
         get() {
@@ -69,6 +72,15 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
 
     override suspend fun sendRequest(request: Request): Result<Answer> {
         return when (request.command) {
+            APICommands.PROVIDERS_MANIFESTS -> {
+                Result.success(
+                    answer(
+                        request = request,
+                        result = emptyList<ProviderManifest>(),
+                    ),
+                )
+            }
+
             APICommands.AUTH_PROVIDERS -> {
                 Result.success(
                     answer(
@@ -181,11 +193,11 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
 
             APICommands.PLAYER_QUEUES_PLAY_MEDIA -> {
                 val mediaUri = ((request.args!!["media"] as JsonArray)[0] as JsonPrimitive).content
-                val mediaTrack = items.find { it.uri == mediaUri }?.let { item ->
+                val mediaTracks = items.find { it.uri == mediaUri }?.let { item ->
                     when (item.mediaType) {
                         MediaType.ARTIST -> TODO()
-                        MediaType.ALBUM -> tracks.first { it.album == item }
-                        MediaType.TRACK -> item
+                        MediaType.ALBUM -> tracks.filter { it.album == item }
+                        MediaType.TRACK -> listOf(item)
                         MediaType.PLAYLIST -> TODO()
                         MediaType.RADIO -> TODO()
                         MediaType.AUDIOBOOK -> TODO()
@@ -197,14 +209,14 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                         MediaType.ANNOUNCEMENT -> TODO()
                         MediaType.UNKNOWN -> TODO()
                     }
-                }
+                } ?: emptyList()
 
                 val queueId = (request.args!!["queue_id"] as JsonPrimitive).content
-                updateQueue(queueId, mediaTrack)
+                updateQueue(queueId, mediaTracks.map { ServerQueueItem("blah", it) })
                 updatePlayer({ it.activeSource == queueId }) {
                     it.copy(
                         state = PlayerState.PLAYING,
-                        currentMedia = mediaTrack?.let { track ->
+                        currentMedia = mediaTracks.firstOrNull()?.let { track ->
                             ServerPlayerMedia(
                                 uri = track.uri,
                                 mediaType = track.mediaType,
@@ -227,10 +239,66 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
+            APICommands.PLAYER_QUEUES_ITEMS -> {
+                val queueId = (request.args!!["queue_id"] as JsonPrimitive).content
+
+                Result.success(
+                    answer(
+                        request = request,
+                        result = queueItems[queueId],
+                    ),
+                )
+            }
+
+            APICommands.PLAYER_QUEUES_CLEAR -> {
+                val queueId = (request.args!!["queue_id"] as JsonPrimitive).content
+                updateQueue(queueId, emptyList<ServerQueueItem>())
+                updatePlayer({ it.activeSource == queueId }) {
+                    it.copy(
+                        state = PlayerState.IDLE,
+                        currentMedia = null,
+                    )
+                }
+
+                Result.success(Answer(JsonObject(emptyMap())))
+            }
+
             APICommands.playersCmd("play_pause") -> {
                 val playerId = (request.args!!["player_id"] as JsonPrimitive).content
                 updatePlayer({ it.playerId == playerId }) {
                     it.copy(state = PlayerState.PAUSED)
+                }
+
+                Result.success(Answer(JsonObject(emptyMap())))
+            }
+
+            APICommands.PLAYER_QUEUES_TRANSFER -> {
+                val queueId = request.getArg("source_queue_id")
+                val targetQueueId = request.getArg("target_queue_id")
+                val autoPlay = request.getArg("auto_play").toBoolean()
+
+                val queueItems = queueItems[queueId] ?: emptyList()
+                updateQueue(queueId, emptyList())
+                updatePlayer({ it.activeSource == queueId }) {
+                    it.copy(
+                        state = PlayerState.IDLE,
+                        currentMedia = null,
+                    )
+                }
+
+                updateQueue(targetQueueId, queueItems)
+                updatePlayer({ it.activeSource == targetQueueId }) {
+                    it.copy(
+                        state = if (autoPlay) PlayerState.PLAYING else PlayerState.PAUSED,
+                        currentMedia = queueItems.firstOrNull()?.mediaItem?.let { track ->
+                            ServerPlayerMedia(
+                                uri = track.uri,
+                                mediaType = track.mediaType,
+                                title = track.name,
+                                queueId = queueId,
+                            )
+                        },
+                    )
                 }
 
                 Result.success(Answer(JsonObject(emptyMap())))
@@ -244,20 +312,29 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
 
     private suspend fun updateQueue(
         queueId: String,
-        currentItem: ServerMediaItem?,
+        items: List<ServerQueueItem>,
     ) {
         val queueIndex = queues.indexOfFirst { it.queueId == queueId }
-        queues[queueIndex] =
-            queues[queueIndex].copy(currentItem = ServerQueueItem("blah", currentItem))
-        val queue = queues[queueIndex]
 
+        val currentItem = items.firstOrNull()
+        queues[queueIndex] =
+            queues[queueIndex].copy(currentItem = currentItem)
+        queueItems[queueId] = items
+
+        val queue = queues[queueIndex]
         _events.emit(
             QueueUpdatedEvent(
                 event = EventType.QUEUE_UPDATED,
                 objectId = queue.queueId,
-                data = queue.copy(
-                    currentItem = ServerQueueItem("blah", currentItem),
-                ),
+                data = queue,
+            ),
+        )
+
+        _events.emit(
+            QueueItemsUpdatedEvent(
+                event = EventType.QUEUE_ITEMS_UPDATED,
+                objectId = queue.queueId,
+                data = queue,
             ),
         )
     }
@@ -375,11 +452,14 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         }
     }
 
-    fun addPlayer(player: ServerPlayer) {
-        this.players.add(player)
-        player.activeSource?.let {
-            this.queues.add(ServerQueue(queueId = it, available = true))
+    fun addPlayers(vararg players: ServerPlayer) {
+        players.forEach { player ->
+            player.activeSource?.let {
+                this.queues.add(ServerQueue(queueId = it, available = true))
+            }
         }
+
+        this.players.addAll(players)
     }
 
     fun getState(playerId: String): PlayerState? {
@@ -431,4 +511,8 @@ private fun answer(request: Request, result: JsonElement): Answer {
 
 private inline fun <reified T> answer(request: Request, result: T): Answer {
     return answer(request, myJson.encodeToJsonElement(result))
+}
+
+private fun Request.getArg(arg: String): String {
+    return (args!![arg] as JsonPrimitive).content
 }

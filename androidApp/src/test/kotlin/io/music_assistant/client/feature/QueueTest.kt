@@ -9,53 +9,27 @@ import io.music_assistant.client.support.ServerMediaItemFixtures
 import io.music_assistant.client.support.ServerPlayerFixtures
 import io.music_assistant.client.support.launchLoggedInApp
 import io.music_assistant.client.support.pages.expandPlayer
-import io.music_assistant.client.support.pages.playMedia
 import io.music_assistant.client.support.rules.createTestRuleChain
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.java.KoinJavaComponent.inject
 import org.robolectric.annotation.Config
+import kotlin.getValue
 
 @RunWith(AndroidJUnit4::class)
 @Config(qualifiers = Qualifiers.MEDIUM_PHONE)
-class ItemNavigationTest {
+class QueueTest {
     @get:Rule
     val testRuleChain = createTestRuleChain()
 
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    val serviceClient: FakeServiceClient by inject(ServiceClient::class.java)
+    private val serviceClient: FakeServiceClient by inject(ServiceClient::class.java)
 
     @Test
-    fun `can navigate from album to artist`() {
-        val artist = ServerMediaItemFixtures.artist()
-        val album = ServerMediaItemFixtures.album(artist = artist)
-        serviceClient.addToLibrary(album)
-
-        launchLoggedInApp(composeTestRule, serviceClient)
-            .clickOnMedia(album)
-            .clickGoToArtist(artist.name)
-    }
-
-    @Test
-    fun `can navigate to artist from expanded player`() {
-        val artist = ServerMediaItemFixtures.artist()
-        val track = ServerMediaItemFixtures.track(artists = listOf(artist))
-        serviceClient.addToLibrary(track)
-
-        val player = ServerPlayerFixtures.player()
-        serviceClient.addPlayers(player)
-
-        launchLoggedInApp(composeTestRule, serviceClient)
-            .playMedia(track)
-            .expandPlayer(player.displayName, playing = true, item = track.name)
-            .goToArtist(artist.name, navigationItem = "Home")
-    }
-
-    @Test
-    fun `can navigate to album from expanded player`() {
+    fun `can clear current player queue`() {
         val album = ServerMediaItemFixtures.album()
         val track = ServerMediaItemFixtures.track(album = album)
         serviceClient.addToLibrary(track)
@@ -64,8 +38,26 @@ class ItemNavigationTest {
         serviceClient.addPlayers(player)
 
         launchLoggedInApp(composeTestRule, serviceClient)
-            .playMedia(track)
+            .clickOnMedia(album)
+            .clickPlay()
             .expandPlayer(player.displayName, playing = true, item = track.name)
-            .goToAlbum(album.name, navigationItem = "Home")
+            .clearQueue()
+    }
+
+    @Test
+    fun `can transfer queue to another player`() {
+        val album = ServerMediaItemFixtures.album()
+        val track = ServerMediaItemFixtures.track(album = album)
+        serviceClient.addToLibrary(track)
+
+        val player1 = ServerPlayerFixtures.player()
+        val player2 = ServerPlayerFixtures.player()
+        serviceClient.addPlayers(player1, player2)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickOnMedia(album)
+            .clickPlay()
+            .expandPlayer(player1.displayName, playing = true, item = track.name)
+            .transferQueue(player2.displayName)
     }
 }
