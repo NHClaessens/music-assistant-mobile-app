@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import io.music_assistant.client.data.model.client.AppMediaItem
 import io.music_assistant.client.data.model.client.AppMediaItem.Companion.description
@@ -51,6 +52,7 @@ import io.music_assistant.client.ui.compose.common.icons.TrackIcon
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.ui.inactive
 import io.music_assistant.client.utils.formatDuration
+import kotlinx.coroutines.flow.Flow
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.cd_playing
 import musicassistantclient.composeapp.generated.resources.players_nothing
@@ -200,6 +202,7 @@ fun FullPlayerItem(
     colors: PlayerColors,
     playerAction: (PlayerData, PlayerAction) -> Unit,
     @Suppress("UnusedParameter") onFavoriteClick: (AppMediaItem) -> Unit, // FIXME inconsistent stuff happening
+    livePositionFlow: Flow<Double>?,
 ) {
     val currentMedia = item.player.currentMedia
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
@@ -299,8 +302,14 @@ fun FullPlayerItem(
 
         val duration = currentMedia?.duration?.takeIf { it > 0 }?.toFloat()
 
-        // Position is calculated in MainDataSource and updated twice per second
-        val displayPosition = item.queueInfo?.elapsedTime?.toFloat() ?: 0f
+        // Live position from PlayerPositionTracker — single source of truth shared
+        // with notification + Android Auto. Recomposition scope is limited to this
+        // slider; the marquee/art/controls only recompose on real state changes.
+        val displayPosition = livePositionFlow
+            ?.collectAsStateWithLifecycle(initialValue = item.queueInfo?.elapsedTime ?: 0.0)
+            ?.value?.toFloat()
+            ?: item.queueInfo?.elapsedTime?.toFloat()
+            ?: 0f
 
         // Track user drag state separately
         var userDragPosition by remember { mutableStateOf<Float?>(null) }

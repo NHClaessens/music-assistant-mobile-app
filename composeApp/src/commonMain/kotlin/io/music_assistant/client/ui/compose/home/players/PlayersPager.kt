@@ -85,6 +85,7 @@ import io.music_assistant.client.ui.compose.home.HomeScreenViewModel
 import io.music_assistant.client.ui.compose.home.HorizontalPagerIndicator
 import io.music_assistant.client.ui.inactive
 import io.music_assistant.client.utils.conditional
+import kotlinx.coroutines.flow.Flow
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.cd_more
 import musicassistantclient.composeapp.generated.resources.cd_mute
@@ -117,6 +118,7 @@ internal fun PlayersPager(
     localPlayerId: String,
     onAdjustPlaybackDelay: (Int) -> Unit,
     fetchColors: ExtractedColorsFetcher,
+    observePosition: (queueId: String) -> Flow<Double>,
 ) {
     val modifier = if (expanded) {
         modifier
@@ -233,6 +235,7 @@ internal fun PlayersPager(
                             contentPadding = contentPadding,
                             isCurrentPage = page == playerPagerState.currentPage,
                             navigateToItem = navigateToItem,
+                            livePositionFlow = player.queueInfo?.id?.let(observePosition),
                         )
                     } else {
                         CollapsedPlayerPage(
@@ -308,6 +311,7 @@ private fun ExpandedPlayerPage(
     contentPadding: PaddingValues,
     isCurrentPage: Boolean,
     navigateToItem: (AppMediaItem) -> Unit = {},
+    livePositionFlow: Flow<Double>?,
 ) {
     Column(
         modifier = Modifier.padding(top = 8.dp),
@@ -385,6 +389,7 @@ private fun ExpandedPlayerPage(
                     colors = colors,
                     playerAction = playerAction,
                     onFavoriteClick = onFavoriteClick,
+                    livePositionFlow = livePositionFlow,
                 )
             }
         }
@@ -697,6 +702,7 @@ fun ExpandedPlayerPagePreview() {
             onExpandQueue = {},
             contentPadding = PaddingValues(),
             isCurrentPage = true,
+            livePositionFlow = null,
         )
     }
 }

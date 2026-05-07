@@ -76,7 +76,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -107,23 +106,15 @@ class MainDataSource(
     private val _queueInfos = MutableStateFlow<List<QueueInfo>>(emptyList())
     private val _providersIcons = MutableStateFlow<Map<String, ProviderIconModel>>(emptyMap())
 
-    // Position tracking for smooth local playback position calculation
-    private data class PositionTracker(
-        val queueId: String,
-        val basePosition: Double,  // Last known server position in seconds
-        val baseTimestamp: Long,   // System time when basePosition was captured
-        val isPlaying: Boolean,
-        val duration: Double?,      // Track duration for clamping
-    ) {
-        fun calculateCurrentPosition(): Double {
-            if (!isPlaying) return basePosition
-            val elapsedSinceBase = (currentTimeMillis() - baseTimestamp) / 1000.0
-            val calculated = basePosition + elapsedSinceBase
-            return duration?.let { calculated.coerceAtMost(it) } ?: calculated
-        }
-    }
-
-    private val _positionTrackers = MutableStateFlow<Map<String, PositionTracker>>(emptyMap())
+    /**
+     * Single source of truth for live elapsed-time per queue. Server events
+     * write anchors here, play/pause transitions snapshot the interpolated
+     * position. All consumers (in-app slider, MediaSession writes for AA +
+     * notification, iOS NowPlaying, audiobook chapter logic) read from this
+     * tracker — synchronously via [PlayerPositionTracker.effectiveSec] or as
+     * a smoothly-ticking flow via [PlayerPositionTracker.observe].
+     */
+    val positionTracker: PlayerPositionTracker = PlayerPositionTracker()
 
     private val _players =
         combine(_serverPlayers, settings.playersSorting) { playersState, sortedIds ->
@@ -241,35 +232,29 @@ class MainDataSource(
                         value + queueInfo
                     }
                 }
+                queueInfo.elapsedTime?.let {
+                    positionTracker.setAnchor(
+                        queueId = queueInfo.id,
+                        elapsedSec = it,
+                        durationSec = queueInfo.currentItem?.track?.duration,
+                    )
+                }
             }
         }
 
-        // Position calculation loop - runs independently to provide smooth position updates
+        // Mirror play state into the tracker. setPlaying snapshots the
+        // interpolated position on transitions so pause/resume don't fold
+        // pause-duration into the next forward step. Cheap dedup inside.
         launch {
-            while (isActive) {
-                // Only update positions if we have live or recovering data
-                val shouldUpdatePositions = when (val playersState = _serverPlayers.value) {
-                    is DataState.Data -> true
-                    is DataState.Stale -> playersState.reason == StaleReason.RECONNECTING
-                    else -> false
-                }
-
-                if (shouldUpdatePositions) {
-                    // Update QueueInfo with latest calculated positions
-                    _queueInfos.update { queues ->
-                        queues.map { queue ->
-                            val tracker = _positionTrackers.value[queue.id]
-                            if (tracker != null) {
-                                val calculatedPos = tracker.calculateCurrentPosition()
-                                queue.copy(elapsedTime = calculatedPos)
-                            } else {
-                                queue
-                            }
+            playersData
+                .mapNotNull { (it as? DataState.Data)?.data }
+                .collect { list ->
+                    list.forEach { pd ->
+                        pd.queueInfo?.id?.let { queueId ->
+                            positionTracker.setPlaying(queueId, pd.player.isPlaying)
                         }
                     }
                 }
-                delay(500L) // Update position twice per second for smooth progress
-            }
         }
 
         launch {
@@ -655,7 +640,12 @@ class MainDataSource(
                             album = track.parentName,
                             artworkUrl = track.imageInfo?.url(apiClient.serverBaseUrl.value),
                             duration = track.duration,
-                            elapsedTime = pd.queueInfo.elapsedTime,
+                            // Read live position from the tracker rather than the stale
+                            // anchor on `pd.queueInfo` (which is only updated by
+                            // QueueAdded/UpdatedEvent, not by QueueTimeUpdatedEvent).
+                            elapsedTime = pd.queueInfo.id.let {
+                                positionTracker.effectiveSec(it)
+                            } ?: pd.queueInfo.elapsedTime,
                             isPlaying = pd.player.isPlaying,
                         )
                     }
@@ -766,8 +756,11 @@ class MainDataSource(
                         allPlayers.mapNotNull { it.asChildBindFor(player) }
                     }
                 if (isLocal && localData != null) {
-                    // Repository is source of truth. Overlay interpolated position from tracker
-                    // (repository has raw server position; queues has smooth 500ms interpolation).
+                    // Repository is source of truth for the local player; surface the
+                    // latest server-anchored `elapsedTime` from `_queueInfos` so the slider
+                    // re-anchors on `QueueTimeUpdatedEvent` (which writes only to
+                    // `_queueInfos`, not the repository). The slider does its own
+                    // sub-second interpolation locally — see `rememberInterpolatedPosition`.
                     val trackedElapsed = queues.find {
                         it.id == player.queueId || it.id == localPlayerId
                     }?.elapsedTime
@@ -819,7 +812,7 @@ class MainDataSource(
         log.i { "Clearing all cached data" }
         _serverPlayers.update { DataState.NoData() }
         _queueInfos.update { emptyList() }
-        _positionTrackers.update { emptyMap() }
+        positionTracker.clear()
         localPlayerRepository.clearState()
         // Note: _providersIcons deliberately NOT cleared (static data)
     }
@@ -1199,23 +1192,6 @@ class MainDataSource(
         // Apply optimistic update for local player (immediate, before async command)
         if (data.isLocal) {
             localPlayerRepository.applyOptimisticUpdate(data, action)
-            // Optimistic seek: update position tracker immediately
-            if (action is PlayerAction.SeekTo) {
-                Logger.e("SeekTo: ${action.position}")
-                data.queueInfo?.id?.let { queueId ->
-                    _positionTrackers.update { trackers ->
-                        trackers + (
-                                queueId to PositionTracker(
-                                    queueId = queueId,
-                                    basePosition = action.position.toDouble(),
-                                    baseTimestamp = currentTimeMillis(),
-                                    isPlaying = data.player.isPlaying,
-                                    duration = data.queueInfo.currentItem?.track?.duration,
-                                )
-                                )
-                    }
-                }
-            }
         }
         launch {
             val request = buildPlayerRequest(data, action) ?: return@launch
@@ -1239,7 +1215,9 @@ class MainDataSource(
                 Request.Player.simpleCommand(playerId = data.playerId, command = "pause")
 
             PlayerAction.Next -> {
-                val currentPos = data.queueInfo?.elapsedTime ?: 0.0
+                val currentPos = data.queueInfo?.id
+                    ?.let(positionTracker::effectiveSec)
+                    ?: data.queueInfo?.elapsedTime ?: 0.0
                 (data.queueInfo?.currentItem?.track as? AppMediaItem.Audiobook)
                     ?.chapters?.firstOrNull { it.start > currentPos }?.start
                     ?.let { Request.Player.seek(queueId = data.playerId, position = it.toLong()) }
@@ -1247,7 +1225,9 @@ class MainDataSource(
             }
 
             PlayerAction.Previous -> {
-                val currentPos = data.queueInfo?.elapsedTime ?: 0.0
+                val currentPos = data.queueInfo?.id
+                    ?.let(positionTracker::effectiveSec)
+                    ?: data.queueInfo?.elapsedTime ?: 0.0
                 (data.queueInfo?.currentItem?.track as? AppMediaItem.Audiobook)
                     ?.chapters?.takeIf { it.isNotEmpty() }
                     ?.let { chapters ->
@@ -1441,19 +1421,6 @@ class MainDataSource(
                             _serverPlayers.update { oldState ->
                                 when (oldState) {
                                     is DataState.Data -> {
-                                        // Update position tracker with new playing state
-                                        data.queueId?.let { queueId ->
-                                            _positionTrackers.update { trackers ->
-                                                trackers[queueId]?.let { tracker ->
-                                                    trackers + (
-                                                            queueId to tracker.copy(
-                                                                isPlaying = data.isPlaying,
-                                                            )
-                                                            )
-                                                } ?: trackers
-                                            }
-                                        }
-                                        // State update
                                         val players = oldState.data
                                         DataState.Data(
                                             if (data.shouldBeShown) {
@@ -1487,22 +1454,6 @@ class MainDataSource(
                                 localPlayerRepository.onServerQueueUpdate(data)
                             }
 
-                            data.elapsedTime?.let { elapsed ->
-                                val player =
-                                    (_serverPlayers.value as? DataState.Data)?.data?.find { it.queueId == data.id }
-                                _positionTrackers.update { trackers ->
-                                    trackers + (
-                                            data.id to PositionTracker(
-                                                queueId = data.id,
-                                                basePosition = elapsed,
-                                                baseTimestamp = currentTimeMillis(),
-                                                isPlaying = player?.isPlaying ?: false,
-                                                duration = data.currentItem?.track?.duration,
-                                            )
-                                            )
-                                }
-                            }
-
                             // Upsert: replace if present, append if new.
                             _queueInfos.update { value ->
                                 if (value.any { it.id == data.id }) {
@@ -1510,6 +1461,16 @@ class MainDataSource(
                                 } else {
                                     value + data
                                 }
+                            }
+                            data.elapsedTime?.let { elapsed ->
+                                val player = (_serverPlayers.value as? DataState.Data)
+                                    ?.data?.find { it.queueId == data.id }
+                                positionTracker.setAnchor(
+                                    queueId = data.id,
+                                    elapsedSec = elapsed,
+                                    isPlaying = player?.isPlaying,
+                                    durationSec = data.currentItem?.track?.duration,
+                                )
                             }
                         }
 
@@ -1527,27 +1488,20 @@ class MainDataSource(
                                 localPlayerRepository.onServerQueueUpdate(data)
                             }
 
-                            // Update position tracker if elapsedTime is present
-                            data.elapsedTime?.let { elapsed ->
-                                val player =
-                                    (_serverPlayers.value as? DataState.Data)?.data?.find { it.queueId == data.id }
-                                _positionTrackers.update { trackers ->
-                                    trackers + (
-                                            data.id to PositionTracker(
-                                                queueId = data.id,
-                                                basePosition = elapsed,
-                                                baseTimestamp = currentTimeMillis(),
-                                                isPlaying = player?.isPlaying ?: false,
-                                                duration = data.currentItem?.track?.duration,
-                                            )
-                                            )
-                                }
-                            }
-
                             _queueInfos.update { value ->
                                 value.map {
                                     if (it.id == data.id) data else it
                                 }
+                            }
+                            data.elapsedTime?.let { elapsed ->
+                                val player = (_serverPlayers.value as? DataState.Data)
+                                    ?.data?.find { it.queueId == data.id }
+                                positionTracker.setAnchor(
+                                    queueId = data.id,
+                                    elapsedSec = elapsed,
+                                    isPlaying = player?.isPlaying,
+                                    durationSec = data.currentItem?.track?.duration,
+                                )
                             }
                         }
 
@@ -1559,6 +1513,16 @@ class MainDataSource(
                                     if (it.id == data.id) data else it
                                 }
                             }
+                            data.elapsedTime?.let { elapsed ->
+                                val player = (_serverPlayers.value as? DataState.Data)
+                                    ?.data?.find { it.queueId == data.id }
+                                positionTracker.setAnchor(
+                                    queueId = data.id,
+                                    elapsedSec = elapsed,
+                                    isPlaying = player?.isPlaying,
+                                    durationSec = data.currentItem?.track?.duration,
+                                )
+                            }
                             (playersData.value as? DataState.Data)?.data?.firstOrNull {
                                 it.queueId == data.id
                             }?.let { refreshPlayerQueueItems(it, data) }
@@ -1568,47 +1532,23 @@ class MainDataSource(
                             // Not staleness-gated: payload has no server-side
                             // `last_updated` to compare against. Relies on
                             // in-order WebSocket delivery instead.
-                            val oldQueue = _queueInfos.value.find { it.id == event.objectId }
-                            // Update position tracker
-                            event.objectId?.let { queueId ->
-                                val player =
-                                    (_serverPlayers.value as? DataState.Data)?.data?.find { it.queueId == queueId }
-                                _positionTrackers.update { trackers ->
-                                    trackers + (
-                                            queueId to PositionTracker(
-                                                queueId = queueId,
-                                                basePosition = event.data,
-                                                baseTimestamp = currentTimeMillis(),
-                                                isPlaying = player?.isPlaying ?: false,
-                                                duration = oldQueue?.currentItem?.track?.duration,
-                                            )
-                                            )
-                                }
-                            }
-
                             _queueInfos.update { value ->
                                 value.map {
                                     if (it.id == event.objectId) it.copy(elapsedTime = event.data) else it
                                 }
                             }
+                            event.objectId?.let { queueId ->
+                                positionTracker.setAnchor(
+                                    queueId = queueId,
+                                    elapsedSec = event.data,
+                                )
+                            }
                         }
 
                         is MediaItemPlayedEvent -> {
-                            _queueInfos.value.find { queue ->
-                                queue.currentItem?.track?.uri == event.data.uri
-                            }?.id?.let {
-                                _positionTrackers.update { trackers ->
-                                    trackers + (
-                                            it to PositionTracker(
-                                                queueId = it,
-                                                basePosition = event.data.secondsPlayed,
-                                                baseTimestamp = currentTimeMillis(),
-                                                isPlaying = event.data.isPlaying,
-                                                duration = event.data.duration,
-                                            )
-                                            )
-                                }
-                            }
+                            // Position-tracking removed; the slider interpolates locally
+                            // from `(queueInfo.elapsedTime, isPlaying, duration)`. Server
+                            // anchors flow via `QueueTimeUpdatedEvent` above.
                         }
 
                         is MediaItemUpdatedEvent -> {
@@ -1742,6 +1682,18 @@ class MainDataSource(
             apiClient.sendRequest(Request.Queue.all())
                 .resultAs<List<ServerQueue>>()?.map { it.toQueue() }?.let { list ->
                     _queueInfos.update { list }
+                    list.forEach { queueInfo ->
+                        queueInfo.elapsedTime?.let { elapsed ->
+                            val player = (_serverPlayers.value as? DataState.Data)
+                                ?.data?.find { it.queueId == queueInfo.id }
+                            positionTracker.setAnchor(
+                                queueId = queueInfo.id,
+                                elapsedSec = elapsed,
+                                isPlaying = player?.isPlaying,
+                                durationSec = queueInfo.currentItem?.track?.duration,
+                            )
+                        }
+                    }
 
                     // Forward local player's queue to repository
                     val localPlayerId = settings.sendspinClientId.value
@@ -1749,25 +1701,6 @@ class MainDataSource(
                         ?.find { it.id == localPlayerId }?.queueId
                     list.find { it.id == localPlayerId || it.id == localQueueId }
                         ?.let { localPlayerRepository.onServerQueueUpdate(it) }
-
-                    // Initialize position trackers from initial queue data
-                    list.forEach { queue ->
-                        queue.elapsedTime?.let { elapsed ->
-                            val player =
-                                (_serverPlayers.value as? DataState.Data)?.data?.find { it.queueId == queue.id }
-                            _positionTrackers.update { trackers ->
-                                trackers + (
-                                        queue.id to PositionTracker(
-                                            queueId = queue.id,
-                                            basePosition = elapsed,
-                                            baseTimestamp = currentTimeMillis(),
-                                            isPlaying = player?.isPlaying ?: false,
-                                            duration = queue.currentItem?.track?.duration,
-                                        )
-                                        )
-                            }
-                        }
-                    }
                 }
         }
     }

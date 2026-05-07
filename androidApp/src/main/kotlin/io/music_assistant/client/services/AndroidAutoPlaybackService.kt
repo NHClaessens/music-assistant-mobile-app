@@ -65,8 +65,11 @@ class AndroidAutoPlaybackService : MediaBrowserServiceCompat() {
     private val mediaNotificationData = currentPlayerData.filterNotNull()
         .map {
             MediaNotificationData.from(
-                it,
-                false,
+                playerData = it,
+                multiplePlayers = false,
+                effectiveElapsedSec = it.queueInfo?.id?.let { id ->
+                    dataSource.positionTracker.effectiveSec(id)
+                },
             )
         }
         .distinctUntilChanged { old, new -> MediaNotificationData.areTooSimilarToUpdate(old, new) }
@@ -81,7 +84,6 @@ class AndroidAutoPlaybackService : MediaBrowserServiceCompat() {
         )
         sessionToken = token
         defaultIconUri = R.drawable.baseline_library_music_24.toUri(this)
-        library.notifyChildrenChanged = { parentId -> notifyChildrenChanged(parentId) }
 
         // Playback data collector — the primary writer for playback state.
         // SharedMediaSessionManager coordinates with error state: if an error is set,
@@ -94,34 +96,37 @@ class AndroidAutoPlaybackService : MediaBrowserServiceCompat() {
             }
         }
 
-        // Queue updates (separate MediaSession property — no conflict with playback state)
+        // Queue updates (separate MediaSession property — no conflict with playback state).
+        // Project to a stable id list and dedup: setQueue is an expensive IPC write that AA
+        // hosts react to (re-rendering, which can re-subscribe browse parents). Without
+        // dedup, every `_localPlayerData` emission — volume changes, optimistic bumps,
+        // anything — churns the AA UI even when the queue itself is unchanged.
         scope.launch {
-            currentPlayerData.filterNotNull().collect { playerData ->
-                when (val queueData = playerData.queue) {
-                    is DataState.Data -> {
-                        when (val queueItems = queueData.data.items) {
-                            is DataState.Data -> {
-                                val baseUrl = dataSource.apiClient.serverBaseUrl.value
-                                sharedSession.updateQueue(
-                                    queueItems.data.map { queueTrack ->
-                                    QueueItem(
-                                        (queueTrack.track as AppMediaItem).toMediaDescription(
-                                            baseUrl,
-                                            defaultIconUri,
-                                        ),
-                                        queueTrack.track.longId,
-                                    )
-                                },
-                                )
-                            }
-
-                            else -> sharedSession.updateQueue(emptyList())
-                        }
-                    }
-
-                    else -> sharedSession.updateQueue(emptyList())
+            currentPlayerData
+                .map { playerData ->
+                    val items = (playerData?.queue as? DataState.Data)
+                        ?.data?.items?.let { it as? DataState.Data }?.data
+                        .orEmpty()
+                    items
                 }
-            }
+                .distinctUntilChanged { old, new ->
+                    old.size == new.size &&
+                        old.zip(new).all { (a, b) -> a.track.longId == b.track.longId }
+                }
+                .collect { items ->
+                    val baseUrl = dataSource.apiClient.serverBaseUrl.value
+                    sharedSession.updateQueue(
+                        items.map { queueTrack ->
+                            QueueItem(
+                                (queueTrack.track as AppMediaItem).toMediaDescription(
+                                    baseUrl,
+                                    defaultIconUri,
+                                ),
+                                queueTrack.track.longId,
+                            )
+                        },
+                    )
+                }
         }
 
         dataSource.apiClient.onExternalConsumerActive()
@@ -270,6 +275,9 @@ class AndroidAutoPlaybackService : MediaBrowserServiceCompat() {
                             sharedSession.clearErrorState()
                             if (!wasAuthenticated) {
                                 wasAuthenticated = true
+                                // Drop stale cached lists from a prior server session before
+                                // AA re-pulls. One-shot, not cyclic.
+                                library.invalidateCache()
                                 notifyChildrenChanged(MediaIds.ROOT)
                                 notifyChildrenChanged(MediaIds.TAB_ARTISTS)
                                 notifyChildrenChanged(MediaIds.TAB_ALBUMS)
@@ -376,7 +384,6 @@ class AndroidAutoPlaybackService : MediaBrowserServiceCompat() {
     }
 
     override fun onDestroy() {
-        library.notifyChildrenChanged = null
         dataSource.apiClient.onExternalConsumerInactive()
         sharedSession.release(isAutoService = true)
         scope.cancel()
