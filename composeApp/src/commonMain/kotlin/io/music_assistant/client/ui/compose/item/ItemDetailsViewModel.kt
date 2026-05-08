@@ -52,10 +52,11 @@ class ItemDetailsViewModel(
     private val _toasts = MutableSharedFlow<String>()
     val toasts = _toasts.asSharedFlow()
 
-    val itemsRowMode = settingsRepository.itemsRowMode
+    fun viewMode(mediaType: MediaType) = settingsRepository.viewMode(mediaType)
 
-    fun toggleItemsRowMode() {
-        settingsRepository.setItemsRowMode(!settingsRepository.itemsRowMode.value)
+    fun toggleViewMode(mediaType: MediaType) {
+        val current = settingsRepository.viewMode(mediaType).value
+        settingsRepository.setViewMode(mediaType, current.toggled())
     }
 
     private val _state = MutableStateFlow(
