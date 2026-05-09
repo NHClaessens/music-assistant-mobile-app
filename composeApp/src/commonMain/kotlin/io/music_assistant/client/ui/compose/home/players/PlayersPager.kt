@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.HorizontalPager
@@ -420,9 +419,9 @@ private fun ExpandedPlayerPage(
                                 playerAction(
                                     player,
                                     if (player.childrenBinds.none { it.isBound }) {
-                                        PlayerAction.GroupToggleMute(player.player.currentMuteState)
-                                    } else {
                                         PlayerAction.ToggleMute(player.player.currentMuteState)
+                                    } else {
+                                        PlayerAction.GroupToggleMute(player.player.currentMuteState)
                                     },
                                 )
                             },
@@ -475,10 +474,8 @@ private fun ExpandedPlayerPage(
                             )
                         },
                     )
-                    Text(
-                        modifier = Modifier.width(24.dp),
-                        text = currentVolume.roundToInt().toString(),
-                        textAlign = TextAlign.End,
+                    VolumeValue(
+                        volume = currentVolume.roundToInt(),
                         style = MaterialTheme.typography.bodyMedium,
                         color = controlTint,
                     )
