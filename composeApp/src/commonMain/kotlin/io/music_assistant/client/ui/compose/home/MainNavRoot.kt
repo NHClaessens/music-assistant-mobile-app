@@ -31,7 +31,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
@@ -52,7 +52,6 @@ import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.home.nav.MainNav
 import io.music_assistant.client.ui.compose.home.nav.rememberMainNavBackStack
 import io.music_assistant.client.ui.compose.home.players.PlayersPager
-import io.music_assistant.client.ui.compose.home.players.collapsedPlayerHeight
 import io.music_assistant.client.ui.compose.item.ItemDetailsScreen
 import io.music_assistant.client.ui.compose.library.LibraryNavCoordinator
 import io.music_assistant.client.ui.compose.library.LibraryScreen
@@ -62,7 +61,6 @@ import io.music_assistant.client.ui.compose.nav.NavigationItem
 import io.music_assistant.client.ui.compose.nav.createNavigationItem
 import io.music_assistant.client.ui.compose.search.SearchScreen
 import io.music_assistant.client.utils.SessionState
-import io.music_assistant.client.utils.WindowClass
 import kotlinx.coroutines.flow.collectLatest
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.nav_home
@@ -182,63 +180,63 @@ fun MainNavigationRoot(
     AdaptiveNavigationScaffold(
         showNavBar = !playerExpanded,
         navigationItems = navigationItems,
-    ) { contentPadding ->
-        val isExpandedScreen = WindowClass.isAtLeastExpanded()
-        val bottomPadding = contentPadding.calculateBottomPadding()
-        val floatingBarHeight = collapsedPlayerHeight(isExpandedScreen)
+    ) { scaffoldContentPadding ->
+        val bottomPadding = scaffoldContentPadding.calculateBottomPadding()
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = bottomPadding)
-                .background(MaterialTheme.colorScheme.background),
-        ) {
-            NavDisplay(
-                entries = multiBackStack.toEntries(
-                    mainNavEntryProvider(
-                        floatingBarHeight,
-                        connectionState,
-                        dataState,
-                        hiddenFolderIds,
-                        serverUrl,
-                        multiBackStack,
-                        viewModel,
-                        playlistActions,
-                        libraryActions,
-                        progressActions,
-                        actionsViewModel,
+        FloatingBarLayout(
+            modifier = Modifier.padding(bottom = bottomPadding),
+            floatingBar = {
+                FloatingBar(
+                    expanded = playerExpanded,
+                    onExpand = onExpandPlayer,
+                ) { expanded, contentPadding ->
+                    Players(
+                        playerPagerState = playerPagerState,
+                        state = playersState,
+                        serverUrl = serverUrl,
+                        homeScreenViewModel = viewModel,
+                        actionsViewModel = actionsViewModel,
+                        expanded = expanded,
+                        onClose = { playerExpanded = false },
+                        contentPadding = contentPadding,
+                        backStack = multiBackStack,
+                    )
+                }
+            },
+        ) { floatingBarContentPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+            ) {
+                NavDisplay(
+                    entries = multiBackStack.toEntries(
+                        mainNavEntryProvider(
+                            floatingBarContentPadding,
+                            connectionState,
+                            dataState,
+                            hiddenFolderIds,
+                            serverUrl,
+                            multiBackStack,
+                            viewModel,
+                            playlistActions,
+                            libraryActions,
+                            progressActions,
+                            actionsViewModel,
+                        ),
                     ),
-                ),
-                onBack = {
-                    multiBackStack.removeLastOrNull()
-                },
-            )
-        }
-
-        FloatingBar(
-            bottomPadding = bottomPadding,
-            expanded = playerExpanded,
-            onExpand = onExpandPlayer,
-        ) { expanded, contentPadding ->
-            Players(
-                playerPagerState = playerPagerState,
-                state = playersState,
-                serverUrl = serverUrl,
-                homeScreenViewModel = viewModel,
-                actionsViewModel = actionsViewModel,
-                expanded = expanded,
-                onClose = { playerExpanded = false },
-                isExpandedScreen = isExpandedScreen,
-                contentPadding = contentPadding,
-                backStack = multiBackStack,
-            )
+                    onBack = {
+                        multiBackStack.removeLastOrNull()
+                    },
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun mainNavEntryProvider(
-    floatingBarHeight: Dp,
+    contentPadding: PaddingValues,
     connectionState: SessionState,
     dataState: DataState<List<AppMediaItem.RecommendationFolder>>,
     hiddenFolderIds: Set<String>,
@@ -254,9 +252,7 @@ private fun mainNavEntryProvider(
     return entryProvider {
         entry<MainNav.Landing> {
             HomeScreen(
-                contentPadding = PaddingValues(
-                    bottom = floatingBarHeight + FloatingBarDefaults.padding,
-                ),
+                contentPadding = contentPadding,
                 connectionState = connectionState,
                 dataState = dataState,
                 serverUrl = serverUrl,
@@ -301,9 +297,7 @@ private fun mainNavEntryProvider(
 
         entry<MainNav.Library> {
             LibraryScreen(
-                contentPadding = PaddingValues(
-                    bottom = floatingBarHeight + FloatingBarDefaults.padding,
-                ),
+                contentPadding = contentPadding,
                 initialTabType = it.type,
                 onNavigateClick = { item ->
                     when (item) {
@@ -331,9 +325,7 @@ private fun mainNavEntryProvider(
 
         entry<MainNav.ItemDetails> {
             ItemDetailsScreen(
-                contentPadding = PaddingValues(
-                    bottom = floatingBarHeight + FloatingBarDefaults.padding,
-                ),
+                contentPadding = contentPadding,
                 itemId = it.itemId,
                 mediaType = it.mediaType,
                 providerId = it.providerId,
@@ -361,9 +353,7 @@ private fun mainNavEntryProvider(
                         ),
                     )
                 },
-                contentPadding = PaddingValues(
-                    bottom = floatingBarHeight + FloatingBarDefaults.padding,
-                ),
+                contentPadding = contentPadding,
             )
         }
     }
@@ -378,7 +368,6 @@ private fun Players(
     actionsViewModel: ActionsViewModel,
     expanded: Boolean,
     onClose: () -> Unit,
-    isExpandedScreen: Boolean,
     contentPadding: PaddingValues,
     backStack: MultiBackStack,
 ) {
@@ -437,17 +426,7 @@ private fun Players(
             simplePlayerAction = simplePlayerAction,
             playerAction = playerAction,
             onFavoriteClick = onFavoriteClick,
-            expanded = expanded,
             onClose = onClose,
-            onPlayersReorder = onPlayersReorder,
-            queueAction = queueAction,
-            moveToPlayer = moveToPlayer,
-            isExpandedScreen = isExpandedScreen,
-            contentPadding = contentPadding,
-            localPlayerId = homeScreenViewModel.localPlayerId,
-            onAdjustPlaybackDelay = homeScreenViewModel::adjustSendspinStaticDelayMs,
-            fetchColors = fetchColors,
-            observePosition = homeScreenViewModel::observePosition,
             navigateToItem = { item ->
                 backStack.add(
                     MainNav.ItemDetails(
@@ -457,9 +436,18 @@ private fun Players(
                     ),
                 )
             },
+            onPlayersReorder = onPlayersReorder,
+            queueAction = queueAction,
+            moveToPlayer = moveToPlayer,
+            contentPadding = contentPadding,
+            localPlayerId = homeScreenViewModel.localPlayerId,
+            onAdjustPlaybackDelay = homeScreenViewModel::adjustSendspinStaticDelayMs,
+            fetchColors = fetchColors,
+            observePosition = homeScreenViewModel::observePosition,
+            compact = !expanded,
         )
     } else {
-        Box(Modifier.fillMaxWidth().height(collapsedPlayerHeight(isExpandedScreen))) {
+        Box(Modifier.fillMaxWidth().height(84.dp)) {
             val text = when (state) {
                 is HomeScreenViewModel.PlayersState.Loading -> "Loading players..."
                 is HomeScreenViewModel.PlayersState.Data -> "No players available"

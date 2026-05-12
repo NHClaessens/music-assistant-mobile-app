@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.pager.HorizontalPager
@@ -31,6 +33,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Speaker
@@ -53,17 +56,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.window.core.layout.WindowSizeClass
 import io.music_assistant.client.data.model.client.AppMediaItem
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
-import io.music_assistant.client.data.model.client.Queue
-import io.music_assistant.client.data.model.client.QueueInfo
-import io.music_assistant.client.data.model.client.QueueTrack
-import io.music_assistant.client.data.model.server.RepeatMode
+import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueue
+import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueueTrack
 import io.music_assistant.client.player.sendspin.SendspinState
 import io.music_assistant.client.ui.alphaOn
 import io.music_assistant.client.ui.compose.common.DataState
@@ -82,7 +83,9 @@ import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
 import io.music_assistant.client.ui.compose.home.CollapsibleQueue
 import io.music_assistant.client.ui.compose.home.HomeScreenViewModel
 import io.music_assistant.client.ui.compose.home.HorizontalPagerIndicator
+import io.music_assistant.client.ui.compose.home.Queue
 import io.music_assistant.client.ui.inactive
+import io.music_assistant.client.utils.WindowClass
 import io.music_assistant.client.utils.conditional
 import kotlinx.coroutines.flow.Flow
 import musicassistantclient.composeapp.generated.resources.Res
@@ -106,25 +109,18 @@ internal fun PlayersPager(
     simplePlayerAction: (String, PlayerAction) -> Unit,
     playerAction: (PlayerData, PlayerAction) -> Unit,
     onFavoriteClick: (AppMediaItem) -> Unit,
-    expanded: Boolean,
     onClose: () -> Unit,
     navigateToItem: (AppMediaItem) -> Unit,
     onPlayersReorder: (List<String>) -> Unit,
     queueAction: (QueueAction) -> Unit,
     moveToPlayer: (String) -> Unit,
-    isExpandedScreen: Boolean,
     contentPadding: PaddingValues,
     localPlayerId: String,
     onAdjustPlaybackDelay: (Int) -> Unit,
     fetchColors: ExtractedColorsFetcher,
     observePosition: (queueId: String) -> Flow<Double>,
+    compact: Boolean,
 ) {
-    val modifier = if (expanded) {
-        modifier
-    } else {
-        modifier.height(collapsedPlayerHeight(isExpandedScreen))
-    }
-
     var isQueueExpanded by remember { mutableStateOf(false) }
 
     // Extract playerData list to ensure proper recomposition
@@ -153,6 +149,13 @@ internal fun PlayersPager(
             fallback = MaterialTheme.colorScheme.primaryContainer,
             fetchColors = fetchColors,
         )
+    }
+
+    val isExpandedScreen = WindowClass.isAtLeastExpanded()
+    val modifier = if (compact) {
+        modifier
+    } else {
+        modifier.statusBarsPadding()
     }
 
     Column(modifier = modifier) {
@@ -191,10 +194,9 @@ internal fun PlayersPager(
 
             val colors by playerColors.getValue(player)
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.wrapContentHeight()) {
                 Column(
                     Modifier
-                        .fillMaxSize()
                         .background(
                             brush = if (player.isLocal) {
                                 Brush.verticalGradient(
@@ -213,7 +215,17 @@ internal fun PlayersPager(
                             },
                         ),
                 ) {
-                    if (expanded) {
+                    if (compact) {
+                        CollapsedPlayerPage(
+                            isExpandedScreen = isExpandedScreen,
+                            player = player,
+                            colors = colors,
+                            sendspinState = playersState.sendspinState,
+                            onSelectPlayer = onSelectPlayer,
+                            onGroupButton = onGroupButton,
+                            playerAction = playerAction,
+                        )
+                    } else {
                         ExpandedPlayerPage(
                             player = player,
                             colors = colors,
@@ -235,16 +247,6 @@ internal fun PlayersPager(
                             isCurrentPage = page == playerPagerState.currentPage,
                             navigateToItem = navigateToItem,
                             livePositionFlow = player.queueInfo?.id?.let(observePosition),
-                        )
-                    } else {
-                        CollapsedPlayerPage(
-                            isExpandedScreen = isExpandedScreen,
-                            player = player,
-                            colors = colors,
-                            sendspinState = playersState.sendspinState,
-                            onSelectPlayer = onSelectPlayer,
-                            onGroupButton = onGroupButton,
-                            playerAction = playerAction,
                         )
                     }
                 }
@@ -312,14 +314,27 @@ private fun ExpandedPlayerPage(
     navigateToItem: (AppMediaItem) -> Unit = {},
     livePositionFlow: Flow<Double>?,
 ) {
+    val isLargeScreen = WindowClass.isAtLeastLarge()
     Column(
         modifier = Modifier.padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                IconButton(
+                    onClick = onClose,
+                ) {
+                    Icon(
+                        Icons.Default.ExpandMore,
+                        "Collapse",
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center,
@@ -332,17 +347,22 @@ private fun ExpandedPlayerPage(
                 )
             }
 
-            PlayerOverflowMenu(
-                currentPlayer = player,
-                allPlayers = allPlayers,
-                queueAction = queueAction,
-                navigateToItem = {
-                    navigateToItem(it)
-                    onClose()
-                },
-                onPlayerSelected = { moveToPlayer(it) },
-                onOpenDsp = onDspButton,
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                PlayerOverflowMenu(
+                    currentPlayer = player,
+                    allPlayers = allPlayers,
+                    queueAction = queueAction,
+                    navigateToItem = {
+                        navigateToItem(it)
+                        onClose()
+                    },
+                    onPlayerSelected = { moveToPlayer(it) },
+                    onOpenDsp = onDspButton,
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -358,6 +378,7 @@ private fun ExpandedPlayerPage(
                     .clickable { onExpandQueue(false) },
             ) {
                 CompactPlayerItem(
+                    modifier = Modifier,
                     item = player,
                     colors = colors,
                     playerAction = playerAction,
@@ -369,139 +390,166 @@ private fun ExpandedPlayerPage(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .conditional(
-                    condition = !isQueueExpanded,
-                    ifTrue = { weight(1f) },
-                    ifFalse = { wrapContentHeight() },
-                ),
-        ) {
-            AnimatedVisibility(
-                visible = !isQueueExpanded,
-                enter = fadeIn(tween(300)) + expandVertically(tween(300)),
-                exit = fadeOut(tween(200)) + shrinkVertically(tween(300)),
+        Row {
+            Column(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .widthIn(max = WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND.dp),
             ) {
-                FullPlayerItem(
-                    modifier = Modifier.fillMaxSize(),
-                    item = player,
-                    colors = colors,
-                    playerAction = playerAction,
-                    onFavoriteClick = onFavoriteClick,
-                    livePositionFlow = livePositionFlow,
-                )
-            }
-        }
-
-        // Fixed-height shell keeps album art space consistent whether
-        // the volume control is shown for this player.
-        Box(modifier = Modifier.fillMaxWidth().height(36.dp)) {
-            if (player.player.isVolumeSliderAccessible && player.player.currentVolume != null) {
-                var currentVolume by remember(player.player.currentVolume) {
-                    mutableStateOf(player.player.currentVolume)
-                }
-                val controlTint = colors.controlTint
-                val volumeSliderColors = SliderDefaults.colors().copy(
-                    thumbColor = controlTint,
-                    activeTrackColor = controlTint,
-                    inactiveTrackColor = controlTint.inactive(),
-                )
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Column(
+                    modifier = Modifier
+                        .conditional(
+                            condition = !isQueueExpanded,
+                            ifTrue = { weight(1f) },
+                            ifFalse = { wrapContentHeight() },
+                        ),
                 ) {
-                    Icon(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .alphaOn(player.player.canMute)
-                            .clickable(enabled = player.player.canMute) {
-                                playerAction(
-                                    player,
-                                    if (player.childrenBinds.none { it.isBound }) {
-                                        PlayerAction.ToggleMute(player.player.currentMuteState)
-                                    } else {
-                                        PlayerAction.GroupToggleMute(player.player.currentMuteState)
+                    AnimatedVisibility(
+                        visible = !isQueueExpanded,
+                        enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(300)),
+                    ) {
+                        FullPlayerItem(
+                            modifier = Modifier.fillMaxSize(),
+                            item = player,
+                            colors = colors,
+                            playerAction = playerAction,
+                            onFavoriteClick = onFavoriteClick,
+                            livePositionFlow = livePositionFlow,
+                        )
+                    }
+                }
+
+                // Fixed-height shell keeps album art space consistent whether
+                // the volume control is shown for this player.
+                Box(modifier = Modifier.fillMaxWidth().height(36.dp)) {
+                    if (player.player.isVolumeSliderAccessible && player.player.currentVolume != null) {
+                        var currentVolume by remember(player.player.currentVolume) {
+                            mutableStateOf(player.player.currentVolume)
+                        }
+                        val controlTint = colors.controlTint
+                        val volumeSliderColors = SliderDefaults.colors().copy(
+                            thumbColor = controlTint,
+                            activeTrackColor = controlTint,
+                            inactiveTrackColor = controlTint.inactive(),
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .alphaOn(player.player.canMute)
+                                    .clickable(enabled = player.player.canMute) {
+                                        playerAction(
+                                            player,
+                                            if (player.childrenBinds.none { it.isBound }) {
+                                                PlayerAction.ToggleMute(player.player.currentMuteState)
+                                            } else {
+                                                PlayerAction.GroupToggleMute(player.player.currentMuteState)
+                                            },
+                                        )
                                     },
-                                )
-                            },
-                        imageVector = if (player.player.currentMuteState) {
-                            VolumeMutedIcon
-                        } else {
-                            VolumeIcon
-                        },
-                        contentDescription = if (player.player.currentMuteState) {
-                            stringResource(
-                                Res.string.cd_unmute,
-                            )
-                        } else {
-                            stringResource(Res.string.cd_mute)
-                        },
-                        tint = controlTint,
-                    )
-                    Slider(
-                        modifier = Modifier.weight(1f),
-                        value = currentVolume,
-                        valueRange = 0f..100f,
-                        onValueChange = {
-                            currentVolume = it
-                        },
-                        onValueChangeFinished = {
-                            playerAction(
-                                player,
-                                if (player.childrenBinds.none { it.isBound }) {
-                                    PlayerAction.VolumeSet(currentVolume.toDouble())
+                                imageVector = if (player.player.currentMuteState) {
+                                    VolumeMutedIcon
                                 } else {
-                                    PlayerAction.GroupVolumeSet(currentVolume.toDouble())
+                                    VolumeIcon
+                                },
+                                contentDescription = if (player.player.currentMuteState) {
+                                    stringResource(
+                                        Res.string.cd_unmute,
+                                    )
+                                } else {
+                                    stringResource(Res.string.cd_mute)
+                                },
+                                tint = controlTint,
+                            )
+                            Slider(
+                                modifier = Modifier.weight(1f),
+                                value = currentVolume,
+                                valueRange = 0f..100f,
+                                onValueChange = {
+                                    currentVolume = it
+                                },
+                                onValueChangeFinished = {
+                                    playerAction(
+                                        player,
+                                        if (player.childrenBinds.none { it.isBound }) {
+                                            PlayerAction.VolumeSet(currentVolume.toDouble())
+                                        } else {
+                                            PlayerAction.GroupVolumeSet(currentVolume.toDouble())
+                                        },
+                                    )
+                                },
+                                thumb = {
+                                    SliderDefaults.Thumb(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        thumbSize = DpSize(16.dp, 16.dp),
+                                        colors = volumeSliderColors,
+                                    )
+                                },
+                                track = { sliderState ->
+                                    SliderDefaults.Track(
+                                        sliderState = sliderState,
+                                        colors = volumeSliderColors,
+                                        thumbTrackGapSize = 0.dp,
+                                        trackInsideCornerSize = 0.dp,
+                                        drawStopIndicator = null,
+                                        modifier = Modifier.height(4.dp),
+                                    )
                                 },
                             )
-                        },
-                        thumb = {
-                            SliderDefaults.Thumb(
-                                interactionSource = remember { MutableInteractionSource() },
-                                thumbSize = DpSize(16.dp, 16.dp),
-                                colors = volumeSliderColors,
+                            VolumeValue(
+                                volume = currentVolume.roundToInt(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = controlTint,
                             )
-                        },
-                        track = { sliderState ->
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                colors = volumeSliderColors,
-                                thumbTrackGapSize = 0.dp,
-                                trackInsideCornerSize = 0.dp,
-                                drawStopIndicator = null,
-                                modifier = Modifier.height(4.dp),
-                            )
-                        },
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.fillMaxWidth().height(8.dp))
+
+                if (!isLargeScreen) {
+                    CollapsibleQueue(
+                        modifier = Modifier
+                            .conditional(
+                                condition = isQueueExpanded,
+                                ifTrue = { weight(1f) },
+                                ifFalse = { wrapContentHeight() },
+                            ),
+                        queue = player.queue,
+                        isQueueExpanded = isQueueExpanded,
+                        onQueueExpandedSwitch = { onExpandQueue(!isQueueExpanded) },
+                        onGoToLibrary = onClose,
+                        serverUrl = serverUrl,
+                        queueAction = queueAction,
+                        tint = colors.controlTint,
+                        isCurrentPage = isCurrentPage,
+                        contentPadding = contentPadding,
                     )
-                    VolumeValue(
-                        volume = currentVolume.roundToInt(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = controlTint,
+                } else {
+                    Spacer(
+                        modifier = Modifier.fillMaxWidth()
+                            .height(contentPadding.calculateBottomPadding()),
                     )
                 }
             }
+
+            if (isLargeScreen && player.queue is DataState.Data) {
+                Queue(
+                    queue = player.queue,
+                    onGoToLibrary = onClose,
+                    isQueueExpanded = true,
+                    isCurrentPage = isCurrentPage,
+                    contentPadding = contentPadding,
+                    queueAction = queueAction,
+                    serverUrl = serverUrl,
+                )
+            }
         }
-
-        Spacer(modifier = Modifier.fillMaxWidth().height(8.dp))
-
-        CollapsibleQueue(
-            modifier = Modifier
-                .conditional(
-                    condition = isQueueExpanded,
-                    ifTrue = { weight(1f) },
-                    ifFalse = { wrapContentHeight() },
-                ),
-            queue = player.queue,
-            isQueueExpanded = isQueueExpanded,
-            onQueueExpandedSwitch = { onExpandQueue(!isQueueExpanded) },
-            onGoToLibrary = onClose,
-            serverUrl = serverUrl,
-            queueAction = queueAction,
-            tint = colors.controlTint,
-            isCurrentPage = isCurrentPage,
-            contentPadding = contentPadding,
-        )
     }
 }
 
@@ -586,7 +634,9 @@ private fun PlayerOverflowMenu(
     }
 
     val navigationOptions =
-        (currentPlayer.queueInfo?.currentItem?.track as? AppMediaItem)?.navigationOptions(navigateToItem)
+        (currentPlayer.queueInfo?.currentItem?.track as? AppMediaItem)?.navigationOptions(
+            navigateToItem,
+        )
             ?: emptyList()
 
     val menuOptions = queueOptions + playerOptions + navigationOptions
@@ -630,6 +680,7 @@ private fun CollapsedPlayerPage(
     }
 
     CompactPlayerItem(
+        modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         item = player,
         colors = colors,
         playerAction = playerAction,
@@ -639,49 +690,129 @@ private fun CollapsedPlayerPage(
     )
 }
 
-fun collapsedPlayerHeight(isExpandedScreen: Boolean): Dp {
-    return if (isExpandedScreen) {
-        84.dp
-    } else {
-        130.dp
-    }
-}
-
 @Preview
 @Composable
 fun ExpandedPlayerPagePreview() {
     MaterialTheme {
-        val track = AppMediaItemFixtures.tracks(listOf("Test Track")).first()
-        val queueInfo = QueueInfo(
-            id = "queue1",
-            available = true,
-            shuffleEnabled = false,
-            repeatMode = RepeatMode.OFF,
-            elapsedTime = 100.0,
-            elapsedTimeLastUpdated = null,
-            currentItem = QueueTrack(
-                track = track,
-                id = "",
-                isPlayable = true,
-                format = null,
-                dsp = null,
-            ),
-        )
-
-        val playerData = PlayerDataFixtures.playerData().copy(
-            queue = DataState.Data(
-                Queue(
-                    info = queueInfo,
-                    items = DataState.NoData(),
-                ),
-            ),
-        )
+        val track = AppMediaItemFixtures.track()
+        val playerData = PlayerDataFixtures.playerData(listOf(track.toQueueTrack()).toQueue())
 
         ExpandedPlayerPage(
             player = playerData,
             colors = PlayerColors(
-                MaterialTheme.colorScheme.primary,
-                MaterialTheme.colorScheme.onPrimary,
+                MaterialTheme.colorScheme.surface,
+                MaterialTheme.colorScheme.onSurface,
+            ),
+            onSelectPlayer = {},
+            onGroupButton = {},
+            onDspButton = null,
+            serverUrl = null,
+            playerAction = { _, _ -> },
+            onFavoriteClick = {},
+            onClose = {},
+            queueAction = {},
+            allPlayers = listOf(playerData),
+            moveToPlayer = {},
+            isExpandedScreen = false,
+            sendspinState = null,
+            isQueueExpanded = false,
+            onExpandQueue = {},
+            contentPadding = PaddingValues(),
+            isCurrentPage = true,
+            livePositionFlow = null,
+        )
+    }
+}
+
+@Preview(
+    widthDp = WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND,
+    heightDp = WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND,
+)
+@Composable
+fun ExpandedPlayerPageMediumScreenPreview() {
+    MaterialTheme {
+        val track = AppMediaItemFixtures.track()
+        val playerData = PlayerDataFixtures.playerData(listOf(track.toQueueTrack()).toQueue())
+
+        ExpandedPlayerPage(
+            player = playerData,
+            colors = PlayerColors(
+                MaterialTheme.colorScheme.surface,
+                MaterialTheme.colorScheme.onSurface,
+            ),
+            onSelectPlayer = {},
+            onGroupButton = {},
+            onDspButton = null,
+            serverUrl = null,
+            playerAction = { _, _ -> },
+            onFavoriteClick = {},
+            onClose = {},
+            queueAction = {},
+            allPlayers = listOf(playerData),
+            moveToPlayer = {},
+            isExpandedScreen = false,
+            sendspinState = null,
+            isQueueExpanded = false,
+            onExpandQueue = {},
+            contentPadding = PaddingValues(),
+            isCurrentPage = true,
+            livePositionFlow = null,
+        )
+    }
+}
+
+@Preview(
+    widthDp = WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND,
+    heightDp = WindowSizeClass.HEIGHT_DP_EXPANDED_LOWER_BOUND,
+)
+@Composable
+fun ExpandedPlayerPageExpandedScreenPreview() {
+    MaterialTheme {
+        val track = AppMediaItemFixtures.track()
+        val playerData = PlayerDataFixtures.playerData(listOf(track.toQueueTrack()).toQueue())
+
+        ExpandedPlayerPage(
+            player = playerData,
+            colors = PlayerColors(
+                MaterialTheme.colorScheme.surface,
+                MaterialTheme.colorScheme.onSurface,
+            ),
+            onSelectPlayer = {},
+            onGroupButton = {},
+            onDspButton = null,
+            serverUrl = null,
+            playerAction = { _, _ -> },
+            onFavoriteClick = {},
+            onClose = {},
+            queueAction = {},
+            allPlayers = listOf(playerData),
+            moveToPlayer = {},
+            isExpandedScreen = true,
+            sendspinState = null,
+            isQueueExpanded = false,
+            onExpandQueue = {},
+            contentPadding = PaddingValues(),
+            isCurrentPage = true,
+            livePositionFlow = null,
+        )
+    }
+}
+
+@Preview(
+    widthDp = WindowSizeClass.WIDTH_DP_LARGE_LOWER_BOUND,
+    heightDp = WindowSizeClass.HEIGHT_DP_EXPANDED_LOWER_BOUND,
+)
+@Composable
+fun ExpandedPlayerPageLargeScreenPreview() {
+    MaterialTheme {
+        val track = AppMediaItemFixtures.track()
+        val playerData = PlayerDataFixtures.playerData(listOf(track.toQueueTrack()).toQueue())
+
+        ExpandedPlayerPage(
+            player = playerData,
+            colors = PlayerColors(
+                MaterialTheme.colorScheme.surface,
+                MaterialTheme.colorScheme.onSurface,
             ),
             onSelectPlayer = {},
             onGroupButton = {},

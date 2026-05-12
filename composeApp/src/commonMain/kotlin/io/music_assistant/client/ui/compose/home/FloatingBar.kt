@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,36 +14,25 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.plus
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.music_assistant.client.ui.compose.nav.BackHandler
 
 @Composable
-fun BoxScope.FloatingBar(
-    modifier: Modifier = Modifier,
-    bottomPadding: Dp = 0.dp,
+fun FloatingBar(
     expanded: Boolean = false,
     onExpand: (Boolean) -> Unit = {},
     content: @Composable (expanded: Boolean, contentPadding: PaddingValues) -> Unit,
@@ -54,14 +42,12 @@ fun BoxScope.FloatingBar(
     }
 
     val clip by animateDpAsState(if (expanded) 0.dp else 16.dp)
-    val padding by animateDpAsState(if (expanded) 0.dp else FloatingBarDefaults.padding)
-    val paddingValues =
-        PaddingValues(padding) + PaddingValues(bottom = if (expanded) 0.dp else bottomPadding)
+    val padding by animateDpAsState(if (expanded) 0.dp else 8.dp)
+    val paddingValues = PaddingValues(padding)
 
     Box(
-        modifier = modifier
+        modifier = Modifier
             .testTag(FloatingBarSemantics.TAG)
-            .align(Alignment.BottomCenter)
             .padding(paddingValues)
             .clip(RoundedCornerShape(clip))
             .fillMaxWidth()
@@ -75,19 +61,6 @@ fun BoxScope.FloatingBar(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         Column {
-            if (expanded) {
-                IconButton(
-                    onClick = { onExpand(false) },
-                    modifier = Modifier.statusBarsPadding().fillMaxWidth().height(36.dp),
-                ) {
-                    Icon(
-                        Icons.Default.ExpandMore,
-                        "Collapse",
-                        modifier = Modifier.size(32.dp),
-                    )
-                }
-            }
-
             val contentPadding = if (expanded) {
                 val windowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Bottom)
                 windowInsets.asPaddingValues()
@@ -100,8 +73,32 @@ fun BoxScope.FloatingBar(
     }
 }
 
-object FloatingBarDefaults {
-    val padding = 8.dp
+@Composable
+fun FloatingBarLayout(
+    modifier: Modifier = Modifier,
+    floatingBar: @Composable () -> Unit,
+    content: @Composable (PaddingValues) -> Unit = {},
+) {
+    SubcomposeLayout(modifier = modifier.fillMaxSize()) { constraints ->
+        val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+
+        val floatingBarPlaceable =
+            subcompose("floatingBar") { Box(modifier = Modifier.wrapContentHeight()) { floatingBar() } }
+                .first()
+                .measure(looseConstraints)
+
+        val contentPadding = PaddingValues(bottom = floatingBarPlaceable.height.toDp())
+        val contentPlaceable = subcompose("content") { Box { content(contentPadding) } }
+            .first()
+            .measure(looseConstraints)
+
+        val layoutWidth = constraints.maxWidth
+        val layoutHeight = constraints.maxHeight
+        layout(layoutWidth, layoutHeight) {
+            contentPlaceable.place(0, 0)
+            floatingBarPlaceable.place(0, layoutHeight - floatingBarPlaceable.height)
+        }
+    }
 }
 
 object FloatingBarSemantics {
@@ -111,41 +108,45 @@ object FloatingBarSemantics {
 @Preview
 @Composable
 private fun PreviewFloatingBarRow() {
-    Box(Modifier.fillMaxSize()) {
-        FloatingBar { _, _ ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Left")
-                Text("Right")
+    FloatingBarLayout(
+        floatingBar = {
+            FloatingBar { _, _ ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Left")
+                    Text("Right")
+                }
             }
-        }
-    }
+        },
+    )
 }
 
 @Preview
 @Composable
 private fun PreviewFloatingBarColumn() {
-    Box(Modifier.fillMaxSize()) {
-        FloatingBar { _, _ ->
-            Column {
-                Text("Top")
-                Text("Bottom")
+    FloatingBarLayout(
+        floatingBar = {
+            FloatingBar { _, _ ->
+                Column {
+                    Text("Top")
+                    Text("Bottom")
+                }
             }
-        }
-    }
+        },
+    )
 }
 
 @Preview
 @Composable
 private fun PreviewFloatingBarExpanded() {
-    Box(Modifier.fillMaxSize()) {
+    FloatingBarLayout(floatingBar = {
         FloatingBar(expanded = true) { _, _ ->
             Column {
                 Text("Top")
                 Text("Bottom")
             }
         }
-    }
+    })
 }
