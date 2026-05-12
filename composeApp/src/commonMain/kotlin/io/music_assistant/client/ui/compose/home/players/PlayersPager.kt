@@ -161,6 +161,7 @@ internal fun PlayersPager(
     Column(modifier = modifier) {
         if (playerDataList.size > 1) {
             HorizontalPagerIndicator(
+                modifier = modifier.padding(top = 4.dp),
                 pagerState = playerPagerState,
             )
         }
@@ -198,21 +199,12 @@ internal fun PlayersPager(
                 Column(
                     Modifier
                         .background(
-                            brush = if (player.isLocal) {
-                                Brush.verticalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        MaterialTheme.colorScheme.surfaceContainerLow,
-                                    ),
-                                )
-                            } else {
-                                Brush.verticalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        colors.dominant.inactive(),
-                                    ),
-                                )
-                            },
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    colors.dominant.inactive(),
+                                ),
+                            ),
                         ),
                 ) {
                     if (compact) {
@@ -316,7 +308,7 @@ private fun ExpandedPlayerPage(
 ) {
     val isLargeScreen = WindowClass.isAtLeastLarge()
     Column(
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
