@@ -1,5 +1,5 @@
 ---
-name: Bug report
+name: 🐞 Bug report
 about: Something that went wrong while using the app
 title: ''
 labels: ''

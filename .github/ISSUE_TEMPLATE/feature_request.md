@@ -1,5 +1,5 @@
 ---
-name: Feature request
+name: 💡 Feature request
 about: Something that the app currently doesn't do
 title: ''
 labels: ''
