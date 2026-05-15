@@ -1,29 +1,24 @@
 package io.music_assistant.client.ui.compose.nav
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
-import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.rememberDecoratedNavEntries
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 
 /**
- * Allows multiple [NavBackStack] instances to be treated as one for use with components like
+ * Allows multiple back stacks to be treated as one for use with components like
  * [androidx.navigation3.ui.NavDisplay] (with [toEntries] when combined with a
  * [androidx.compose.material3.NavigationBar].
  *
- * The [NavBackStack] entries are combined to provide "exit through home" style navigation where
+ * The back stack entries are combined to provide "exit through home" style navigation where
  * navigating backways from the last element of any back stack except the first leads to the top
  * element of the first back stack.
  */
-class MultiBackStack(private val backStacks: List<NavBackStack<NavKey>>) {
+class MultiBackStack<T : NavKey>(private val backStacks: List<MutableList<T>>) {
     var currentBackStack by mutableStateOf(0)
 
-    private val originalItems = backStacks.map { it.toList() }
+    private val roots = backStacks.map { it.first() }
 
     /**
      * Clear the current back stack and reset it back to its original state
@@ -31,11 +26,11 @@ class MultiBackStack(private val backStacks: List<NavBackStack<NavKey>>) {
     fun resetCurrentBackStack() {
         backStacks[currentBackStack].apply {
             clear()
-            addAll(originalItems[currentBackStack])
+            add(roots[currentBackStack])
         }
     }
 
-    fun add(element: NavKey) {
+    fun add(element: T) {
         backStacks[currentBackStack].add(element)
     }
 
@@ -44,7 +39,7 @@ class MultiBackStack(private val backStacks: List<NavBackStack<NavKey>>) {
      * [replacementBottom] entry. Used to redirect navigation into another tab's stack
      * (e.g. tapping "All Albums" on Home jumps to the Library tab rooted at Albums).
      */
-    fun switchTo(index: Int, replacementBottom: NavKey? = null) {
+    fun switchTo(index: Int, replacementBottom: T? = null) {
         currentBackStack = index
         replacementBottom?.let {
             backStacks[index].apply {
@@ -63,7 +58,6 @@ class MultiBackStack(private val backStacks: List<NavBackStack<NavKey>>) {
         }
     }
 
-    @Composable
     fun toEntries(entryProvider: (NavKey) -> NavEntry<NavKey>): List<NavEntry<NavKey>> {
         val activeBackStacks = if (currentBackStack == 0) {
             listOf(backStacks[0])
@@ -71,15 +65,8 @@ class MultiBackStack(private val backStacks: List<NavBackStack<NavKey>>) {
             listOf(backStacks[0]) + listOf(backStacks[currentBackStack])
         }
 
-        val saveableStateHolderForHome = rememberSaveableStateHolder()
-        return activeBackStacks.flatMap {
-            rememberDecoratedNavEntries(
-                backStack = it,
-                entryDecorators = listOf(
-                    rememberSaveableStateHolderNavEntryDecorator(saveableStateHolderForHome),
-                ),
-                entryProvider = entryProvider,
-            )
+        return activeBackStacks.flatMap { backStack ->
+            backStack.map { entryProvider(it) }
         }
     }
 }
