@@ -72,16 +72,15 @@ import musicassistantclient.composeapp.generated.resources.search_no_results
 import musicassistantclient.composeapp.generated.resources.search_start
 import musicassistantclient.composeapp.generated.resources.search_title
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun SearchScreen(
+    searchViewModel: SearchViewModel,
     onNavigateToItem: (String, MediaType, String) -> Unit,
-    viewModel: SearchViewModel = koinViewModel(),
-    actionsViewModel: ActionsViewModel = koinViewModel(),
+    actionsViewModel: ActionsViewModel,
     contentPadding: PaddingValues,
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val state by searchViewModel.state.collectAsStateWithLifecycle()
     val toastState = rememberToastState()
 
     LaunchedEffect(Unit) {
@@ -92,17 +91,13 @@ fun SearchScreen(
 
     Screen(
         topBar = { scrollBehaviour ->
-            LaunchedEffect(state.searchState.query) {
-                scrollBehaviour.state.heightOffset = 0f
-            }
-
             SearchTopBar(
                 state.searchState,
                 scrollBehavior = scrollBehaviour,
-                onQueryChanged = viewModel::onQueryChanged,
-                onSearchTriggered = viewModel::onSearchTriggered,
-                onMediaTypeToggled = viewModel::onMediaTypeToggled,
-                onLibraryOnlyToggled = viewModel::onLibraryOnlyToggled,
+                onQueryChanged = searchViewModel::onQueryChanged,
+                onSearchTriggered = searchViewModel::onSearchTriggered,
+                onMediaTypeToggled = searchViewModel::onMediaTypeToggled,
+                onLibraryOnlyToggled = searchViewModel::onLibraryOnlyToggled,
             )
         },
     ) {
@@ -123,7 +118,7 @@ fun SearchScreen(
                     else -> Unit
                 }
             },
-            onPlayClick = viewModel::onPlayClick,
+            onPlayClick = searchViewModel::onPlayClick,
             playlistActions = ActionsViewModel.PlaylistActions(
                 onLoadPlaylists = actionsViewModel::getEditablePlaylists,
                 onAddToPlaylist = actionsViewModel::addToPlaylist,

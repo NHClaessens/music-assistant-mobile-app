@@ -97,6 +97,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(libs.androidx.navigation3.ui)
             implementation(libs.androidx.navigation3.material3.adaptive)
+            implementation(libs.androidx.navigation3.material3.viewmodel)
 
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.websockets)

@@ -32,10 +32,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberDecoratedNavEntries
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import androidx.savedstate.serialization.SavedStateConfiguration
+import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.AppMediaItem
@@ -52,19 +58,24 @@ import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberExtractedColorsFetcher
 import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
-import io.music_assistant.client.ui.compose.home.nav.MainNav
-import io.music_assistant.client.ui.compose.home.nav.rememberMainNavBackStack
+import io.music_assistant.client.ui.compose.home.players.DspSettingsViewModel
 import io.music_assistant.client.ui.compose.home.players.PlayersPager
 import io.music_assistant.client.ui.compose.item.ItemDetailsScreen
+import io.music_assistant.client.ui.compose.item.ItemDetailsViewModel
 import io.music_assistant.client.ui.compose.library.LibraryNavCoordinator
 import io.music_assistant.client.ui.compose.library.LibraryScreen
+import io.music_assistant.client.ui.compose.library.LibraryViewModel
 import io.music_assistant.client.ui.compose.nav.AdaptiveNavigationScaffold
 import io.music_assistant.client.ui.compose.nav.MultiBackStack
 import io.music_assistant.client.ui.compose.nav.NavigationItem
 import io.music_assistant.client.ui.compose.nav.createNavigationItem
 import io.music_assistant.client.ui.compose.search.SearchScreen
+import io.music_assistant.client.ui.compose.search.SearchViewModel
 import io.music_assistant.client.utils.SessionState
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.polymorphic
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.nav_home
 import musicassistantclient.composeapp.generated.resources.nav_library
@@ -73,19 +84,23 @@ import musicassistantclient.composeapp.generated.resources.nav_settings
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainNavigationRoot(
-    viewModel: HomeScreenViewModel = koinViewModel(),
+    homeScreenViewModel: HomeScreenViewModel = koinViewModel(),
     actionsViewModel: ActionsViewModel = koinViewModel(),
+    dspSettingsViewModel: DspSettingsViewModel = koinViewModel(),
     goToSettings: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     val toastState = rememberToastState()
 
     LaunchedEffect(Unit) {
-        viewModel.links.collectLatest { url -> uriHandler.openUri(url) }
+        homeScreenViewModel.links.collectLatest { url -> uriHandler.openUri(url) }
     }
 
     // Collect toasts
@@ -95,8 +110,8 @@ fun MainNavigationRoot(
         }
     }
 
-    val recommendationsState = viewModel.recommendationsState.collectAsStateWithLifecycle()
-    val playersState by viewModel.playersState.collectAsStateWithLifecycle()
+    val recommendationsState = homeScreenViewModel.recommendationsState.collectAsStateWithLifecycle()
+    val playersState by homeScreenViewModel.playersState.collectAsStateWithLifecycle()
     // Single pager state used across all views
     val data = playersState as? HomeScreenViewModel.PlayersState.Data
     val playerPagerState = rememberPagerState(
@@ -116,7 +131,7 @@ fun MainNavigationRoot(
 
         snapshotFlow { playerPagerState.settledPage }.collect { currentPage ->
             currentData.playerData.getOrNull(currentPage)?.let { playerData ->
-                viewModel.selectPlayer(playerData.player)
+                homeScreenViewModel.selectPlayer(playerData.player)
             }
         }
     }
@@ -195,8 +210,9 @@ fun MainNavigationRoot(
                         Players(
                             playerPagerState = playerPagerState,
                             state = playersState,
-                            homeScreenViewModel = viewModel,
+                            homeScreenViewModel = homeScreenViewModel,
                             actionsViewModel = actionsViewModel,
+                            dspSettingsViewModel = dspSettingsViewModel,
                             expanded = expanded,
                             onClose = { playerExpanded = false },
                             contentPadding = contentPadding,
@@ -212,18 +228,25 @@ fun MainNavigationRoot(
                     .background(MaterialTheme.colorScheme.background),
             ) {
                 NavDisplay(
-                    entries = multiBackStack.toEntries(
-                        mainNavEntryProvider(
-                            floatingBarContentPadding,
-                            connectionState,
-                            dataState,
-                            hiddenFolderIds,
-                            multiBackStack,
-                            viewModel,
-                            playlistActions,
-                            libraryActions,
-                            progressActions,
-                            actionsViewModel,
+                    entries = rememberDecoratedNavEntries(
+                        entryDecorators = listOf(
+                            rememberSaveableStateHolderNavEntryDecorator(),
+                            rememberViewModelStoreNavEntryDecorator(),
+                        ),
+                        entries = multiBackStack.toEntries(
+                            mainNavEntryProvider(
+                                floatingBarContentPadding,
+                                connectionState,
+                                dataState,
+                                hiddenFolderIds,
+
+                                multiBackStack,
+                                homeScreenViewModel,
+                                playlistActions,
+                                libraryActions,
+                                progressActions,
+                                actionsViewModel,
+                            ),
                         ),
                     ),
                     onBack = {
@@ -295,39 +318,44 @@ private fun mainNavEntryProvider(
         }
 
         entry<MainNav.Library> {
+            val libraryViewModel = koinViewModel<LibraryViewModel>()
+
             LibraryScreen(
+                libraryViewModel = libraryViewModel,
                 contentPadding = contentPadding,
                 initialTabType = it.type,
-                onNavigateClick = { item ->
-                    when (item) {
-                        is Artist,
-                        is Album,
-                        is Playlist,
-                        is Podcast,
-                        is Audiobook,
-                        is Genre,
+                actionsViewModel = actionsViewModel,
+            ) { item ->
+                when (item) {
+                    is Artist,
+                    is Album,
+                    is Playlist,
+                    is Podcast,
+                    is Audiobook,
+                    is Genre,
                         -> {
-                            multiBackStack.add(
-                                MainNav.ItemDetails(
-                                    itemId = item.itemId,
-                                    mediaType = item.mediaType,
-                                    providerId = item.provider,
-                                ),
-                            )
-                        }
-
-                        else -> Unit
+                        multiBackStack.add(
+                            MainNav.ItemDetails(
+                                itemId = item.itemId,
+                                mediaType = item.mediaType,
+                                providerId = item.provider,
+                            ),
+                        )
                     }
-                },
-            )
+
+                    else -> Unit
+                }
+            }
         }
 
         entry<MainNav.ItemDetails> {
+            val itemDetailsViewModel = koinViewModel<ItemDetailsViewModel> {
+                parametersOf(it.itemId, it.mediaType, it.providerId)
+            }
+
             ItemDetailsScreen(
-                contentPadding = contentPadding,
-                itemId = it.itemId,
-                mediaType = it.mediaType,
-                providerId = it.providerId,
+                itemDetailsViewModel = itemDetailsViewModel,
+                actionsViewModel = actionsViewModel,
                 onBack = { multiBackStack.removeLastOrNull() },
                 onNavigateToItem = { itemId, mediaType, providerId ->
                     multiBackStack.add(
@@ -338,11 +366,15 @@ private fun mainNavEntryProvider(
                         ),
                     )
                 },
+                contentPadding = contentPadding,
             )
         }
 
         entry<MainNav.Search> {
+            val searchViewModel = koinViewModel<SearchViewModel>()
+
             SearchScreen(
+                searchViewModel = searchViewModel,
                 onNavigateToItem = { itemId, mediaType, providerId ->
                     multiBackStack.add(
                         MainNav.ItemDetails(
@@ -353,6 +385,7 @@ private fun mainNavEntryProvider(
                     )
                 },
                 contentPadding = contentPadding,
+                actionsViewModel = actionsViewModel,
             )
         }
     }
@@ -364,6 +397,7 @@ private fun Players(
     state: HomeScreenViewModel.PlayersState,
     homeScreenViewModel: HomeScreenViewModel,
     actionsViewModel: ActionsViewModel,
+    dspSettingsViewModel: DspSettingsViewModel,
     expanded: Boolean,
     onClose: () -> Unit,
     contentPadding: PaddingValues,
@@ -435,6 +469,7 @@ private fun Players(
             fetchColors = fetchColors,
             observePosition = homeScreenViewModel::observePosition,
             compact = !expanded,
+            dspSettingsViewModel = dspSettingsViewModel,
         )
     } else {
         Box(Modifier.fillMaxWidth().height(84.dp)) {
@@ -453,3 +488,48 @@ private fun Players(
         }
     }
 }
+
+private sealed interface MainNav : NavKey {
+    @Serializable
+    data object Landing : MainNav
+
+    @Serializable
+    data class Library(val type: MediaType?) : MainNav
+
+    /**
+     * Multiple instances of the same item can appear in a back stack - [stackingId] ensures they
+     * are treated as different entries.
+     */
+    @OptIn(ExperimentalUuidApi::class)
+    @Serializable
+    data class ItemDetails(
+        val itemId: String,
+        val mediaType: MediaType,
+        val providerId: String,
+        val stackingId: String = Uuid.generateV4().toString(),
+    ) : MainNav
+
+    @Serializable
+    data object Search : MainNav
+}
+
+@Composable
+private fun rememberMainNavBackStack(bottom: MainNav) = rememberNavBackStack(
+    SavedStateConfiguration(
+        from = SavedStateConfiguration.DEFAULT,
+        builderAction = {
+            serializersModule = SerializersModule {
+                polymorphic(NavKey::class) {
+                    subclass(MainNav.Landing::class, MainNav.Landing.serializer())
+                    subclass(MainNav.Library::class, MainNav.Library.serializer())
+                    subclass(
+                        MainNav.ItemDetails::class,
+                        MainNav.ItemDetails.serializer(),
+                    )
+                    subclass(MainNav.Search::class, MainNav.Search.serializer())
+                }
+            }
+        },
+    ),
+    bottom,
+)
