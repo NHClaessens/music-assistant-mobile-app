@@ -45,7 +45,6 @@ import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
-import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import kotlinx.coroutines.launch
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_add_to_bottom
@@ -71,9 +70,9 @@ fun TrackWithMenu(
     item: Track,
     viewMode: ViewMode = ViewMode.GRID,
     onPlayOption: ((Track, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
+    playlistActions: PlaylistActions? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     PlayableItemWithMenu(
@@ -113,10 +112,10 @@ fun PodcastEpisodeWithMenu(
     item: PodcastEpisode,
     viewMode: ViewMode = ViewMode.GRID,
     onPlayOption: ((PodcastEpisode, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
+    playlistActions: PlaylistActions? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     PlayableItemWithMenu(
@@ -157,9 +156,9 @@ fun RadioWithMenu(
     item: RadioStation,
     viewMode: ViewMode = ViewMode.GRID,
     onPlayOption: ((RadioStation, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
+    playlistActions: PlaylistActions? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     PlayableItemWithMenu(
@@ -205,10 +204,10 @@ private fun <T : PlayableItem> PlayableItemWithMenu(
     modifier: Modifier = Modifier,
     item: T,
     onPlayOption: ((T, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
+    playlistActions: PlaylistActions? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     itemComposable: @Composable (
         modifier: Modifier,
         onClick: (T) -> Unit,
@@ -362,7 +361,7 @@ private fun <T : PlayableItem> PlayableItemWithMenu(
                         // Load playlists when dialogue opens
                         coroutineScope.launch {
                             isLoadingPlaylists = true
-                            playlists = playlistActions.onLoadPlaylists()
+                            playlists = playlistActions.getEditablePlaylists()
                             isLoadingPlaylists = false
                         }
                     },
@@ -456,8 +455,7 @@ private fun <T : PlayableItem> PlayableItemWithMenu(
                             ) { playlist ->
                                 TextButton(
                                     onClick = {
-                                        playlistActions?.onAddToPlaylist
-                                            ?.invoke(item, playlist)
+                                        playlistActions?.addToPlaylist(item, playlist)
                                         showPlaylistDialog = false
                                         playlists = emptyList()
                                     },

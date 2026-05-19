@@ -61,6 +61,9 @@ import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.clearFocusOnScroll
+import io.music_assistant.client.ui.compose.common.items.LibraryActions
+import io.music_assistant.client.ui.compose.common.items.PlaylistActions
+import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.Screen
@@ -151,18 +154,9 @@ fun LibraryScreen(
             onLoadMore = libraryViewModel::loadMore,
             onDismissCreatePlaylistDialog = libraryViewModel::onDismissCreatePlaylistDialog,
             onCreatePlaylist = libraryViewModel::createPlaylist,
-            playlistActions = ActionsViewModel.PlaylistActions(
-                onLoadPlaylists = actionsViewModel::getEditablePlaylists,
-                onAddToPlaylist = actionsViewModel::addToPlaylist,
-            ),
-            libraryActions = ActionsViewModel.LibraryActions(
-                onLibraryClick = actionsViewModel::onLibraryClick,
-                onFavoriteClick = actionsViewModel::onFavoriteClick,
-            ),
-            progressActions = ActionsViewModel.ProgressActions(
-                onMarkPlayed = actionsViewModel::onMarkPlayed,
-                onMarkUnplayed = actionsViewModel::onMarkUnplayed,
-            ),
+            playlistActions = actionsViewModel,
+            libraryActions = actionsViewModel,
+            progressActions = actionsViewModel,
         )
     }
 }
@@ -303,9 +297,9 @@ private fun Library(
     onLoadMore: (LibraryViewModel.Tab) -> Unit,
     onDismissCreatePlaylistDialog: () -> Unit,
     onCreatePlaylist: (String) -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     contentPadding: PaddingValues,
 ) {
     Box(modifier = modifier) {
@@ -399,9 +393,9 @@ private fun TabContent(
     onPlayClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
     onCreatePlaylistClick: () -> Unit,
     onLoadMore: () -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     contentPadding: PaddingValues,
 ) {
     // Create separate grid states for each tab to preserve scroll position

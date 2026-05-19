@@ -46,7 +46,6 @@ import io.music_assistant.client.data.model.client.items.Podcast
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
-import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import kotlinx.coroutines.launch
 import musicassistantclient.composeapp.generated.resources.*
 import musicassistantclient.composeapp.generated.resources.Res
@@ -58,8 +57,8 @@ fun AlbumWithMenu(
     viewMode: ViewMode = ViewMode.GRID,
     onNavigateClick: (Album) -> Unit,
     onPlayOption: ((Album, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
+    playlistActions: PlaylistActions? = null,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     BrowsableItemWithMenu(
@@ -98,8 +97,8 @@ fun ArtistWithMenu(
     viewMode: ViewMode = ViewMode.GRID,
     onNavigateClick: (Artist) -> Unit,
     onPlayOption: ((Artist, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
+    playlistActions: PlaylistActions? = null,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     BrowsableItemWithMenu(
@@ -138,8 +137,8 @@ fun PlaylistWithMenu(
     viewMode: ViewMode = ViewMode.GRID,
     onNavigateClick: (Playlist) -> Unit,
     onPlayOption: ((Playlist, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
+    playlistActions: PlaylistActions? = null,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     BrowsableItemWithMenu(
@@ -178,9 +177,9 @@ fun AudiobookWithMenu(
     viewMode: ViewMode = ViewMode.GRID,
     onNavigateClick: (Audiobook) -> Unit,
     onPlayOption: ((Audiobook, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions? = null,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     BrowsableItemWithMenu(
@@ -220,8 +219,8 @@ fun GenreWithMenu(
     viewMode: ViewMode = ViewMode.GRID,
     onNavigateClick: (Genre) -> Unit,
     onPlayOption: ((Genre, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
+    playlistActions: PlaylistActions? = null,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     BrowsableItemWithMenu(
@@ -260,8 +259,8 @@ fun PodcastWithMenu(
     viewMode: ViewMode = ViewMode.GRID,
     onNavigateClick: (Podcast) -> Unit,
     onPlayOption: ((Podcast, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
-    libraryActions: ActionsViewModel.LibraryActions,
+    playlistActions: PlaylistActions? = null,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)?,
 ) {
     BrowsableItemWithMenu(
@@ -300,9 +299,9 @@ private fun <T : AppMediaItem> BrowsableItemWithMenu(
     item: T,
     onNavigateClick: (T) -> Unit,
     onPlayOption: ((T, QueueOption, Boolean) -> Unit),
-    playlistActions: ActionsViewModel.PlaylistActions? = null,
-    libraryActions: ActionsViewModel.LibraryActions? = null,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions? = null,
+    libraryActions: LibraryActions? = null,
+    progressActions: ProgressActions? = null,
     itemComposable: @Composable (
         modifier: Modifier,
         onClick: (T) -> Unit,
@@ -460,7 +459,7 @@ private fun <T : AppMediaItem> BrowsableItemWithMenu(
                         // Load playlists when dialogue opens
                         coroutineScope.launch {
                             isLoadingPlaylists = true
-                            playlists = playlistActions.onLoadPlaylists()
+                            playlists = playlistActions.getEditablePlaylists()
                             isLoadingPlaylists = false
                         }
                     },
@@ -539,8 +538,7 @@ private fun <T : AppMediaItem> BrowsableItemWithMenu(
                             ) { playlist ->
                                 TextButton(
                                     onClick = {
-                                        playlistActions?.onAddToPlaylist
-                                            ?.invoke(item, playlist)
+                                        playlistActions?.addToPlaylist(item, playlist)
                                         showPlaylistDialog = false
                                         playlists = emptyList()
                                     },

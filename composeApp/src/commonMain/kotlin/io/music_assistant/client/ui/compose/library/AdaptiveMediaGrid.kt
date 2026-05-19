@@ -37,12 +37,14 @@ import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.AudiobookWithMenu
 import io.music_assistant.client.ui.compose.common.items.GenreWithMenu
+import io.music_assistant.client.ui.compose.common.items.LibraryActions
+import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.PlaylistWithMenu
 import io.music_assistant.client.ui.compose.common.items.PodcastEpisodeWithMenu
 import io.music_assistant.client.ui.compose.common.items.PodcastWithMenu
+import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.RadioWithMenu
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
-import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 
 @Composable
 fun AdaptiveMediaGrid(
@@ -55,9 +57,9 @@ fun AdaptiveMediaGrid(
     onPlayClick: ((AppMediaItem, QueueOption, Boolean) -> Unit),
     onLoadMore: () -> Unit = {},
     gridState: LazyGridState = rememberLazyGridState(),
-    playlistActions: ActionsViewModel.PlaylistActions,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     contentPadding: PaddingValues,
 ) {
     val isRow = viewMode == ViewMode.LIST

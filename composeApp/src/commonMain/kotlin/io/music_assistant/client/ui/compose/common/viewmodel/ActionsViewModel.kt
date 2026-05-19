@@ -8,6 +8,9 @@ import io.music_assistant.client.data.MainDataSource
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Playlist
 import io.music_assistant.client.data.repository.MediaItemRepository
+import io.music_assistant.client.ui.compose.common.items.LibraryActions
+import io.music_assistant.client.ui.compose.common.items.PlaylistActions
+import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -20,7 +23,7 @@ class ActionsViewModel(
     private val apiClient: ServiceClient,
     private val dataSource: MainDataSource,
     private val mediaItemRepository: MediaItemRepository,
-) : ViewModel() {
+) : ViewModel(), PlaylistActions, LibraryActions, ProgressActions {
     private val _toasts = MutableSharedFlow<String>()
     val toasts = _toasts.asSharedFlow()
 
@@ -28,7 +31,7 @@ class ActionsViewModel(
      * Toggles library status of the item.
      * Adds to library if not in library, removes if already in library.
      */
-    fun onLibraryClick(item: AppMediaItem) {
+    override fun onLibraryClick(item: AppMediaItem) {
         viewModelScope.launch {
             if (item.isInLibrary) {
                 apiClient.sendRequest(
@@ -45,9 +48,9 @@ class ActionsViewModel(
     /**
      * Sets exact or toggles favorite status of the item.
      */
-    fun onFavoriteClick(item: AppMediaItem, newState: Boolean? = null) {
+    override fun onFavoriteClick(item: AppMediaItem) {
         viewModelScope.launch {
-            if (newState ?: (item.favorite != true)) {
+            if (item.favorite != true) {
                 item.uri?.let {
                     apiClient.sendRequest(Request.Library.addFavorite(it))
                 }
@@ -59,14 +62,14 @@ class ActionsViewModel(
         }
     }
 
-    suspend fun getEditablePlaylists(): List<Playlist> =
+    override suspend fun getEditablePlaylists(): List<Playlist> =
         mediaItemRepository.fetchMediaItems(Request.Playlist.listLibrary())
             .getOrNull()
             ?.filterIsInstance<Playlist>()
             ?.filter { it.isEditable }
             ?: emptyList()
 
-    fun addToPlaylist(
+    override fun addToPlaylist(
         mediaItem: AppMediaItem,
         playlist: Playlist,
     ) {
@@ -112,7 +115,7 @@ class ActionsViewModel(
     /**
      * Mark an audiobook or podcast episode as fully played.
      */
-    fun onMarkPlayed(item: AppMediaItem) {
+    override fun onMarkPlayed(item: AppMediaItem) {
         viewModelScope.launch {
             item.uri?.let { uri ->
                 apiClient.sendRequest(Request.Library.markPlayed(uri))
@@ -125,7 +128,7 @@ class ActionsViewModel(
     /**
      * Mark an audiobook or podcast episode as unplayed (resets progress).
      */
-    fun onMarkUnplayed(item: AppMediaItem) {
+    override fun onMarkUnplayed(item: AppMediaItem) {
         viewModelScope.launch {
             item.uri?.let { uri ->
                 apiClient.sendRequest(Request.Library.markUnplayed(uri))
@@ -136,19 +139,4 @@ class ActionsViewModel(
     }
 
     fun getProviderIcon(provider: String) = dataSource.providerIcon(provider)
-
-    data class PlaylistActions(
-        val onLoadPlaylists: suspend () -> List<Playlist>,
-        val onAddToPlaylist: (AppMediaItem, Playlist) -> Unit,
-    )
-
-    data class LibraryActions(
-        val onLibraryClick: ((AppMediaItem) -> Unit),
-        val onFavoriteClick: ((AppMediaItem) -> Unit),
-    )
-
-    data class ProgressActions(
-        val onMarkPlayed: ((AppMediaItem) -> Unit),
-        val onMarkUnplayed: ((AppMediaItem) -> Unit),
-    )
 }

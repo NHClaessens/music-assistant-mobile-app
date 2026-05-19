@@ -56,8 +56,11 @@ import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.AudiobookWithMenu
 import io.music_assistant.client.ui.compose.common.items.GenreWithMenu
+import io.music_assistant.client.ui.compose.common.items.LibraryActions
+import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.PlaylistWithMenu
 import io.music_assistant.client.ui.compose.common.items.PodcastWithMenu
+import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.RadioWithMenu
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
@@ -119,18 +122,9 @@ fun SearchScreen(
                 }
             },
             onPlayClick = searchViewModel::onPlayClick,
-            playlistActions = ActionsViewModel.PlaylistActions(
-                onLoadPlaylists = actionsViewModel::getEditablePlaylists,
-                onAddToPlaylist = actionsViewModel::addToPlaylist,
-            ),
-            libraryActions = ActionsViewModel.LibraryActions(
-                onLibraryClick = actionsViewModel::onLibraryClick,
-                onFavoriteClick = actionsViewModel::onFavoriteClick,
-            ),
-            progressActions = ActionsViewModel.ProgressActions(
-                onMarkPlayed = actionsViewModel::onMarkPlayed,
-                onMarkUnplayed = actionsViewModel::onMarkUnplayed,
-            ),
+            playlistActions = actionsViewModel,
+            libraryActions = actionsViewModel,
+            progressActions = actionsViewModel,
             providerIconFetcher = { modifier, provider ->
                 actionsViewModel.getProviderIcon(provider)
                     ?.let { ProviderIcon(modifier, it) }
@@ -189,9 +183,9 @@ private fun SearchContent(
     toastState: ToastState,
     onItemClick: (AppMediaItem) -> Unit,
     onPlayClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
     contentPadding: PaddingValues,
 ) {

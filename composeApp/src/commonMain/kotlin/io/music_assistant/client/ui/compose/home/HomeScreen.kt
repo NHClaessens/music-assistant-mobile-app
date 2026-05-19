@@ -58,9 +58,12 @@ import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.AudiobookWithMenu
 import io.music_assistant.client.ui.compose.common.items.GenreWithMenu
+import io.music_assistant.client.ui.compose.common.items.LibraryActions
+import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.PlaylistWithMenu
 import io.music_assistant.client.ui.compose.common.items.PodcastEpisodeWithMenu
 import io.music_assistant.client.ui.compose.common.items.PodcastWithMenu
+import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.RadioWithMenu
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
@@ -84,20 +87,16 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun HomeScreen(
+    homeScreenViewModel: HomeScreenViewModel,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues,
     connectionState: SessionState,
     dataState: DataState<List<RecommendationFolder>>,
     onNavigateClick: (AppMediaItem) -> Unit,
-    onPlayClick: ((AppMediaItem, QueueOption, Boolean) -> Unit),
     onLibraryItemClick: (MediaType?) -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
-    onRefresh: () -> Unit,
     hiddenFolderIds: Set<String>,
-    onSaveHiddenFolders: (Set<String>) -> Unit,
+    actionsViewModel: ActionsViewModel,
 ) {
     var editMode by remember { mutableStateOf(false) }
     var pendingHidden by remember { mutableStateOf(hiddenFolderIds) }
@@ -142,10 +141,10 @@ fun HomeScreen(
             LandingPageTopBar(
                 scrollBehavior = scrollBehavior,
                 editMode = editMode,
-                onRefresh = onRefresh,
+                onRefresh = { homeScreenViewModel.loadRecommendations() },
                 onToggleEditMode = {
                     if (editMode) {
-                        onSaveHiddenFolders(pendingHidden)
+                        homeScreenViewModel.saveHiddenRecommendationFolders(pendingHidden)
                         editMode = false
                     } else {
                         pendingHidden = hiddenFolderIds
@@ -178,12 +177,12 @@ fun HomeScreen(
                             title = row.displayName,
                             rowItemType = row.rowItemType,
                             onNavigateClick = onNavigateClick,
-                            onPlayClick = onPlayClick,
+                            onPlayClick = homeScreenViewModel::onPlayClick,
                             onAllClick = { row.rowItemType?.let { onLibraryItemClick(it) } },
                             mediaItems = row.items.orEmpty(),
-                            playlistActions = playlistActions,
-                            libraryActions = libraryActions,
-                            progressActions = progressActions,
+                            playlistActions = actionsViewModel,
+                            libraryActions = actionsViewModel,
+                            progressActions = actionsViewModel,
                             providerIconFetcher = providerIconFetcher,
                         )
                         if (editMode) {
@@ -267,9 +266,9 @@ fun CategoryRow(
     onPlayClick: ((AppMediaItem, QueueOption, Boolean) -> Unit),
     onAllClick: () -> Unit,
     mediaItems: List<AppMediaItem>,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    libraryActions: ActionsViewModel.LibraryActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
 ) {
     val rowListState = rememberLazyListState()

@@ -68,7 +68,10 @@ import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
+import io.music_assistant.client.ui.compose.common.items.LibraryActions
+import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.PodcastEpisodeWithMenu
+import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberToastState
@@ -153,20 +156,38 @@ fun ItemDetails(
     onAlbumsSortChanged: (SubItemContext, SortOption) -> Unit = { _, _ -> },
     onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit = { _, _ -> },
 ) {
-    val playlistActions = ActionsViewModel.PlaylistActions(
-        onLoadPlaylists = geEditablePlaylists,
-        onAddToPlaylist = addToPlaylist,
-    )
+    val playlistActions = object : PlaylistActions {
+        override suspend fun getEditablePlaylists(): List<Playlist> {
+            return geEditablePlaylists()
+        }
 
-    val libraryActions = ActionsViewModel.LibraryActions(
-        onLibraryClick = onLibraryClick,
-        onFavoriteClick = onFavoriteClick,
-    )
+        override fun addToPlaylist(
+            mediaItem: AppMediaItem,
+            playlist: Playlist,
+        ) {
+            addToPlaylist(mediaItem, playlist)
+        }
+    }
 
-    val progressActions = ActionsViewModel.ProgressActions(
-        onMarkPlayed = onMarkPlayed,
-        onMarkUnplayed = onMarkUnplayed,
-    )
+    val libraryActions = object : LibraryActions {
+        override fun onLibraryClick(item: AppMediaItem) {
+            onLibraryClick(item)
+        }
+
+        override fun onFavoriteClick(item: AppMediaItem) {
+            onFavoriteClick(item)
+        }
+    }
+
+    val progressActions = object : ProgressActions {
+        override fun onMarkPlayed(item: AppMediaItem) {
+            onMarkPlayed(item)
+        }
+
+        override fun onMarkUnplayed(item: AppMediaItem) {
+            onMarkUnplayed(item)
+        }
+    }
 
     ItemChildren(
         state = state,
@@ -237,10 +258,10 @@ private fun ItemChildren(
     onPlayItemClick: (QueueOption, Boolean) -> Unit,
     onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
     onChapterClick: (Int) -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    progressActions: ActionsViewModel.ProgressActions? = null,
+    playlistActions: PlaylistActions,
+    progressActions: ProgressActions? = null,
     onRemoveFromPlaylist: (String, Int) -> Unit,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
     onBack: () -> Unit,
     onToggleViewMode: (MediaType) -> Unit,
@@ -305,10 +326,10 @@ private fun ItemContent(
     onPlayItemClick: (QueueOption, Boolean) -> Unit,
     onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
     onChapterClick: (Int) -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    progressActions: ActionsViewModel.ProgressActions?,
+    playlistActions: PlaylistActions,
+    progressActions: ProgressActions?,
     onRemoveFromPlaylist: (String, Int) -> Unit,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     onBack: () -> Unit,
     viewModeProvider: @Composable (MediaType) -> ViewMode,
@@ -466,10 +487,10 @@ private fun TabContent(
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
     onChapterClick: (Int) -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    progressActions: ActionsViewModel.ProgressActions?,
+    playlistActions: PlaylistActions,
+    progressActions: ProgressActions?,
     onRemoveFromPlaylist: (String, Int) -> Unit,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
@@ -542,7 +563,7 @@ private fun AlbumsTabContent(
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
@@ -597,7 +618,7 @@ private fun ArtistsTabContent(
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
@@ -652,10 +673,10 @@ private fun PlayablesTabContent(
     parentItem: AppMediaItem,
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
-    playlistActions: ActionsViewModel.PlaylistActions,
-    progressActions: ActionsViewModel.ProgressActions?,
+    playlistActions: PlaylistActions,
+    progressActions: ProgressActions?,
     onRemoveFromPlaylist: (String, Int) -> Unit,
-    libraryActions: ActionsViewModel.LibraryActions,
+    libraryActions: LibraryActions,
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
