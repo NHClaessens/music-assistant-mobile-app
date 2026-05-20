@@ -9,6 +9,7 @@ data class QueueInfo(
     val currentIndex: Int?,
     val shuffleEnabled: Boolean,
     val repeatMode: RepeatMode?,
+    val dontStopTheMusicEnabled: Boolean?,
     val elapsedTime: Double?,
     /**
      * Unix epoch seconds (UTC) when [elapsedTime] was last recomputed
@@ -19,7 +20,8 @@ data class QueueInfo(
     val currentItem: QueueTrack?,
     val radioSource: List<AppMediaItem>,
 ) {
-    val isDynamic = radioSource.size == 1 &&
+    val isRadioOn: Boolean = radioSource.isNotEmpty()
+    val isDynamicPlaylist = radioSource.size == 1 &&
             (radioSource[0] as? Playlist)?.isDynamic == true
 }
 

@@ -1,5 +1,6 @@
 package io.music_assistant.client.data.model.client
 
+import io.music_assistant.client.data.model.client.AppMediaItemFixtures.track
 import io.music_assistant.client.data.model.client.PlayerData.ChildBind
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.PlayableItem
@@ -26,6 +27,7 @@ object PlayerDataFixtures {
                         currentIndex = null,
                         shuffleEnabled = false,
                         repeatMode = RepeatMode.OFF,
+                        dontStopTheMusicEnabled = false,
                         elapsedTime = 100.0,
                         elapsedTimeLastUpdated = null,
                         currentItem = null,
@@ -96,7 +98,7 @@ object PlayerDataFixtures {
         )
     }
 
-    fun List<QueueTrack>.toQueue(): Queue {
+    fun List<QueueTrack>.toQueue(hasRadio: Boolean = false): Queue {
         val queueId = uniqueIdGenerator.nextInt().toString()
         val queueInfo = QueueInfo(
             id = queueId,
@@ -104,10 +106,15 @@ object PlayerDataFixtures {
             currentIndex = null,
             shuffleEnabled = false,
             repeatMode = RepeatMode.OFF,
+            dontStopTheMusicEnabled = false,
             elapsedTime = 100.0,
             elapsedTimeLastUpdated = null,
             currentItem = first(),
-            radioSource = emptyList(),
+            radioSource = if (hasRadio) {
+                listOf(track())
+            } else {
+                emptyList()
+            },
         )
 
         return Queue(info = queueInfo, items = DataState.Data(this))
