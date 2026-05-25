@@ -39,6 +39,10 @@ kotlin {
             baseName = "ComposeApp"
             isStatic = true
             binaryOption("bundleId", "io.music_assistant.client.composeapp")
+            // Trades a touch of release-link optimization for ~28% faster
+            // linkReleaseFrameworkIosArm64 and a smaller binary. Experimental
+            // Kotlin/Native flag — revisit if release-build correctness regresses.
+            binaryOption("smallBinary", "true")
         }
 
         // Note: the previous webrtc-kmp test-linker block lived here. It pointed
