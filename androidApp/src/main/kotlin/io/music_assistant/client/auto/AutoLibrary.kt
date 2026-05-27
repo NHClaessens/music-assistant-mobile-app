@@ -31,7 +31,7 @@ import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.data.planLocalPlayerDispatch
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.Timings
-import io.music_assistant.client.ui.compose.library.LibraryTabsViewModel
+import io.music_assistant.client.ui.compose.library.LibraryCategory
 import io.music_assistant.client.utils.DataConnectionState
 import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.resultAs
@@ -134,12 +134,12 @@ class AutoLibrary(
     private fun rootChildren(): List<MediaItem> {
         val titles = defaultAutoTabs.toMap()
         val supportedTypes = titles.keys
-        val stored = settingsRepository.libraryTabsConfig.value
+        val stored = settingsRepository.libraryCategoryConfig.value
         val ordered: List<MediaType> = stored?.mapNotNull { pref ->
             if (!pref.enabled) return@mapNotNull null
-            val tab = runCatching { LibraryTabsViewModel.Tab.valueOf(pref.name) }.getOrNull()
+            val libraryCategory = runCatching { LibraryCategory.valueOf(pref.name) }.getOrNull()
                 ?: return@mapNotNull null
-            tab.mediaType.takeIf { it in supportedTypes }
+            libraryCategory.mediaType.takeIf { it in supportedTypes }
         }
             ?: defaultAutoTabs.map { it.first }
         return ordered.map { type -> rootTabItem(titles.getValue(type), MediaIds.tabIdOf(type)) }
