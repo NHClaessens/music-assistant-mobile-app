@@ -33,72 +33,46 @@ class AuthenticationViewModel(
     val password = MutableStateFlow("")
 
     init {
-        // Trigger initial load if already connected and awaiting auth
+        // sessionState is a StateFlow → emits its current value to the new collector
+        // immediately, so this single launch covers both initial-state handling and
+        // subsequent transitions.
         viewModelScope.launch {
-            val currentState = sessionState.value
-            if (currentState is SessionState.Connected) {
-                val dataConnectionState = currentState.dataConnectionState
-                if (dataConnectionState is DataConnectionState.AwaitingAuth) {
-                    // Only load providers if we're not in a failed state
-                    when (dataConnectionState.authProcessState) {
-                        is AuthProcessState.Failed -> {
-                            // Don't reload providers when auth failed
-                        }
-
-                        else -> {
-                            loadProviders()
-                        }
-                    }
-                }
-            }
-        }
-
-        // Auto-fetch providers when connected and awaiting auth
-        viewModelScope.launch {
-            sessionState.collect { state ->
-                Logger.d("AuthVM") { "SessionState changed: ${state::class.simpleName}" }
-                when (state) {
-                    is SessionState.Connected -> {
-                        val dataConnectionState = state.dataConnectionState
-                        Logger.d("AuthVM") { "DataConnectionState: ${dataConnectionState::class.simpleName}" }
-                        if (dataConnectionState is DataConnectionState.AwaitingAuth) {
-                            Logger.d("AuthVM") { "AwaitingAuth - checking auth process state" }
-                            // Only load providers if we're not in a failed state
-                            // (to avoid overriding error messages)
-                            when (dataConnectionState.authProcessState) {
-                                is AuthProcessState.Failed -> {
-                                    Logger.d("AuthVM") { "Auth failed - not reloading providers" }
-                                    // Don't reload providers when auth failed - keep the error visible
-                                }
-
-                                else -> {
-                                    Logger.d("AuthVM") { "Calling loadProviders()" }
-                                    loadProviders()
-                                }
-                            }
-                        }
-                    }
-
-                    is SessionState.Disconnected -> {
-                        // Clear providers when disconnected so next connection loads fresh
-                        // This ensures switching between WebRTC (builtin only) and Direct (all providers) works correctly
-                        Logger.d("AuthVM") { "Disconnected - clearing providers and cancelling pending load" }
-                        loadProvidersJob?.cancel()
-                        loadProvidersJob = null
-                        loadingForWebRTC = null
-                        _providers.update { emptyList() }
-                    }
-
-                    else -> {
-                        // Connecting, Reconnecting - do nothing
-                    }
-                }
-            }
+            sessionState.collect(::handleSessionState)
         }
     }
 
+    private fun handleSessionState(state: SessionState) {
+        log.d { "SessionState changed: ${state::class.simpleName}" }
+        when (state) {
+            is SessionState.Connected -> onConnected(state.dataConnectionState)
+            is SessionState.Disconnected -> onDisconnected()
+            else -> { /* Connecting, Reconnecting — no action */ }
+        }
+    }
+
+    private fun onConnected(dataConnectionState: DataConnectionState) {
+        log.d { "DataConnectionState: ${dataConnectionState::class.simpleName}" }
+        if (dataConnectionState !is DataConnectionState.AwaitingAuth) return
+        // Skip reload on Failed so we don't overwrite the displayed error.
+        if (dataConnectionState.authProcessState is AuthProcessState.Failed) {
+            log.d { "Auth failed - not reloading providers" }
+            return
+        }
+        log.d { "AwaitingAuth - loading providers" }
+        loadProviders()
+    }
+
+    private fun onDisconnected() {
+        // Clear providers so the next connection (WebRTC ↔ Direct) refetches.
+        log.d { "Disconnected - clearing providers and cancelling pending load" }
+        loadProvidersJob?.cancel()
+        loadProvidersJob = null
+        loadingForWebRTC = null
+        _providers.update { emptyList() }
+    }
+
     fun loadProviders() {
-        Logger.d("AuthVM") { "loadProviders() called, current providers count: ${_providers.value.size}" }
+        log.d { "loadProviders() called, current providers count: ${_providers.value.size}" }
 
         // Don't reload if we already have providers (to avoid overriding error states)
         if (_providers.value.isNotEmpty()) {
@@ -110,13 +84,13 @@ class AuthenticationViewModel(
 
         // If a job is running for the SAME connection type, skip (avoid redundant calls)
         if (loadProvidersJob?.isActive == true && loadingForWebRTC == isWebRTC) {
-            Logger.d("AuthVM") { "Provider loading already in progress for same connection type, skipping" }
+            log.d { "Provider loading already in progress for same connection type, skipping" }
             return
         }
 
         // Cancel if connection type changed (WebRTC ↔ Direct) - old result would be wrong
         if (loadProvidersJob?.isActive == true && loadingForWebRTC != isWebRTC) {
-            Logger.d("AuthVM") { "Connection type changed, cancelling previous load" }
+            log.d { "Connection type changed, cancelling previous load" }
             loadProvidersJob?.cancel()
             loadProvidersJob = null
         }
@@ -125,7 +99,7 @@ class AuthenticationViewModel(
 
         if (isWebRTC) {
             // For WebRTC, skip API call - only builtin auth works (OAuth requires HTTP redirects)
-            Logger.d("AuthVM") { "WebRTC connection - using builtin provider directly (skip API call)" }
+            log.d { "WebRTC connection - using builtin provider directly (skip API call)" }
             val builtinProvider = AuthProvider(
                 id = "builtin",
                 type = "builtin",
@@ -139,16 +113,16 @@ class AuthenticationViewModel(
         }
 
         // For direct connections, fetch all providers from server
-        Logger.d("AuthVM") { "Direct connection - fetching providers from server" }
+        log.d { "Direct connection - fetching providers from server" }
         loadProvidersJob = viewModelScope.launch {
             try {
                 authManager.getProviders()
                     .onSuccess { providerList ->
-                        Logger.d("AuthVM") { "Received ${providerList.size} providers: ${providerList.map { it.id }}" }
+                        log.d { "Received ${providerList.size} providers: ${providerList.map { it.id }}" }
                         _providers.update { providerList }
                     }
                     .onFailure { error ->
-                        Logger.e("AuthVM", error) { "Failed to load providers" }
+                        log.e(error) { "Failed to load providers" }
                     }
             } finally {
                 // Clear job reference when done (success or failure)
@@ -185,5 +159,9 @@ class AuthenticationViewModel(
             // AuthenticationManager handles both flag setting and token clearing
             authManager.logout()
         }
+    }
+
+    private companion object {
+        private val log = Logger.withTag("AuthVM")
     }
 }

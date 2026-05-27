@@ -543,7 +543,7 @@ class KtorServiceClient(
 
                         is TransportState.Failed -> {
                             _sessionState.update { SessionState.Disconnected.Error(transportState.error) }
-                            logger.i { "Transport→Failed → Disconnected.Error: ${transportState.error?.message}" }
+                            logger.i { "Transport→Failed → Disconnected.Error: ${transportState.error.message}" }
                         }
 
                         TransportState.Disconnected -> {

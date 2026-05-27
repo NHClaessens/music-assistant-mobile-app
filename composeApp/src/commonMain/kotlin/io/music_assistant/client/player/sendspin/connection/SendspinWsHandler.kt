@@ -123,10 +123,6 @@ class SendspinWsHandler(
                         is Frame.Ping, is Frame.Pong -> {
                             // Handled automatically by Ktor
                         }
-
-                        else -> {
-                            // Ignore other frame types
-                        }
                     }
                 }
             } catch (e: Exception) {
@@ -137,8 +133,7 @@ class SendspinWsHandler(
                 }
 
                 // Network error - auto-reconnect!
-                Logger.withTag("WebSocketHandler")
-                    .e { "❌ WS ERROR: ${e.message} - will auto-reconnect" }
+                logger.e(e) { "WS error - will auto-reconnect" }
                 _connectionState.value = WebSocketState.Reconnecting(reconnectAttempts)
 
                 attemptReconnect()

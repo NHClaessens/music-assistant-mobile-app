@@ -61,6 +61,7 @@ import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.items.image
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.action.QueueAction
+import io.music_assistant.client.ui.compose.common.dataOrNull
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
 import io.music_assistant.client.ui.compose.common.icons.TrackIcon
 import io.music_assistant.client.ui.compose.common.items.AddToPlaylistDialog
@@ -207,17 +208,8 @@ fun Queue(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } ?: run {
-            // Handle both Data and Stale states - both contain valid queue data
-            val queueData = when (queue) {
-                is DataState.Data -> queue.data
-                is DataState.Stale -> queue.data
-                else -> return@run
-            }
-            val items = when (val itemsState = queueData.items) {
-                is DataState.Data -> itemsState.data
-                is DataState.Stale -> itemsState.data
-                else -> return@run
-            }
+            val queueData = queue.dataOrNull ?: return@run
+            val items = queueData.items.dataOrNull ?: return@run
 
             if (items.isEmpty()) {
                 Column(
