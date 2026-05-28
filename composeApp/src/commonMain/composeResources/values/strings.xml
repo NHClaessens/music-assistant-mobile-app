@@ -116,8 +116,8 @@
   <string name="players_nothing">Nothing playing</string>
   <string name="players_title">Players</string>
   <string name="playlist_add_new">Add new</string>
-  <string name="playlist_add_to_title">Add to Playlist</string>
-  <string name="playlist_create_title">Create New Playlist</string>
+  <string name="playlist_add_to_title">Add to playlist</string>
+  <string name="playlist_create_title">Create new playlist</string>
   <string name="playlist_name_label">Playlist name</string>
   <string name="playlist_no_editable">No editable playlists available</string>
   <string name="quality_dialog_input">Input</string>

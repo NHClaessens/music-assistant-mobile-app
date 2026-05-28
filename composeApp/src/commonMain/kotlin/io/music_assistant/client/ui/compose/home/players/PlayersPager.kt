@@ -892,7 +892,7 @@ private fun PlayerOverflowMenu(
 
     if (showAddToPlaylist && currentTrack != null && playlistActions != null) {
         AddToPlaylistDialog(
-            track = currentTrack,
+            item = currentTrack,
             playlistActions = playlistActions,
             onDismiss = { showAddToPlaylist = false },
         )

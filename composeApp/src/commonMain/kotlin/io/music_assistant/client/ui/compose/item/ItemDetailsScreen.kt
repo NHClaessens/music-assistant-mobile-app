@@ -68,6 +68,7 @@ import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
+import io.music_assistant.client.ui.compose.common.items.supportsAddToPlaylist
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
@@ -147,7 +148,7 @@ fun ItemDetails(
     toastState: ToastState = rememberToastState(),
     onNavigateToItem: (String, MediaType, String) -> Unit = { _, _, _ -> },
     geEditablePlaylists: suspend () -> List<Playlist> = suspend { emptyList() },
-    addToPlaylist: (AppMediaItem, Playlist) -> Unit = { _, _ -> },
+    addToPlaylist: (String?, Playlist) -> Unit = { _, _ -> },
     onLibraryClick: (AppMediaItem) -> Unit = {},
     onFavoriteClick: (AppMediaItem) -> Unit = {},
     onMarkPlayed: (AppMediaItem) -> Unit = {},
@@ -166,10 +167,10 @@ fun ItemDetails(
         }
 
         override fun addToPlaylist(
-            mediaItem: AppMediaItem,
+            itemUri: String?,
             playlist: Playlist,
         ) {
-            addToPlaylist(mediaItem, playlist)
+            addToPlaylist(itemUri, playlist)
         }
     }
 
@@ -370,7 +371,7 @@ private fun ItemContent(
                 item = item,
                 onBack = onBack,
                 libraryActions = libraryActions,
-                playlistActions = playlistActions.takeIf { item !is Genre },
+                playlistActions = playlistActions.takeIf { item.supportsAddToPlaylist },
                 navigateToItem = onNavigateClick,
                 scrollBehavior = scrollBehaviour,
             )
@@ -520,6 +521,7 @@ private fun TabContent(
             viewModeProvider = viewModeProvider,
             onNavigateClick = onNavigateClick,
             onPlayChildClick = onPlayChildClick,
+            playlistActions = playlistActions,
             libraryActions = libraryActions,
             providerIconFetcher = providerIconFetcher,
             contentPadding = contentPadding,
@@ -578,6 +580,7 @@ private fun AlbumsTabContent(
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayChildClick: (AppMediaItem, QueueOption, Boolean) -> Unit,
+    playlistActions: PlaylistActions,
     libraryActions: LibraryActions,
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
@@ -613,6 +616,7 @@ private fun AlbumsTabContent(
                     viewMode = viewMode,
                     onNavigateClick = onNavigateClick,
                     onPlayOption = onPlayChildClick,
+                    playlistActions = playlistActions,
                     libraryActions = libraryActions,
                     providerIconFetcher = providerIconFetcher,
                 )

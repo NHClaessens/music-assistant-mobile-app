@@ -275,6 +275,7 @@ private fun SearchContent(
                                         item = item,
                                         onNavigateClick = onItemClick,
                                         onPlayOption = onPlayClick,
+                                        playlistActions = playlistActions,
                                         libraryActions = libraryActions,
                                         providerIconFetcher = providerIconFetcher,
                                     )
@@ -302,6 +303,7 @@ private fun SearchContent(
                                         item = item,
                                         onNavigateClick = onItemClick,
                                         onPlayOption = onPlayClick,
+                                        playlistActions = playlistActions,
                                         libraryActions = libraryActions,
                                         providerIconFetcher = providerIconFetcher,
                                     )

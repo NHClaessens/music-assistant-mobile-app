@@ -465,7 +465,7 @@ fun Queue(
                 addToPlaylistTrack?.let { track ->
                     if (playlistActions != null) {
                         AddToPlaylistDialog(
-                            track = track,
+                            item = track,
                             playlistActions = playlistActions,
                             onDismiss = { addToPlaylistTrack = null },
                         )

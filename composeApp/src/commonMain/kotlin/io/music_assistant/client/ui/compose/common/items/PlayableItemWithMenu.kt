@@ -2,19 +2,7 @@ package io.music_assistant.client.ui.compose.common.items
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.AddToQueue
-import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlaylistAddCircle
-import androidx.compose.material.icons.filled.QueuePlayNext
-import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,11 +11,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import compose.icons.TablerIcons
-import compose.icons.tablericons.FolderMinus
-import compose.icons.tablericons.FolderPlus
-import compose.icons.tablericons.Heart
-import compose.icons.tablericons.HeartBroken
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.PlayableItem
@@ -35,22 +18,6 @@ import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.settings.ViewMode
-import io.music_assistant.client.ui.compose.common.icons.PlayIcon
-import musicassistantclient.composeapp.generated.resources.Res
-import musicassistantclient.composeapp.generated.resources.action_add_to_bottom
-import musicassistantclient.composeapp.generated.resources.action_add_to_library
-import musicassistantclient.composeapp.generated.resources.action_add_to_playlist
-import musicassistantclient.composeapp.generated.resources.action_favorite
-import musicassistantclient.composeapp.generated.resources.action_insert_next
-import musicassistantclient.composeapp.generated.resources.action_insert_next_and_play
-import musicassistantclient.composeapp.generated.resources.action_mark_played
-import musicassistantclient.composeapp.generated.resources.action_mark_unplayed
-import musicassistantclient.composeapp.generated.resources.action_play_now
-import musicassistantclient.composeapp.generated.resources.action_remove_from_library
-import musicassistantclient.composeapp.generated.resources.action_remove_from_playlist
-import musicassistantclient.composeapp.generated.resources.action_start_radio
-import musicassistantclient.composeapp.generated.resources.action_unfavorite
-import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun TrackWithMenu(
@@ -181,13 +148,10 @@ fun RadioWithMenu(
 }
 
 /**
- * A reusable composable that displays a playable item with a dropdown menu for queue actions.
- * The menu includes options to play now, insert next, add to queue, start radio, and manage library/favorites.
- * It also handles adding to playlists if playlist actions are provided.
- * Default click plays it now.
+ * Playable item with a long-press dropdown menu. Default click plays the item now.
  */
 @Composable
-private fun <T : PlayableItem> PlayableItemWithMenu(
+private fun <T> PlayableItemWithMenu(
     modifier: Modifier = Modifier,
     item: T,
     onPlayOption: ((T, QueueOption, Boolean) -> Unit),
@@ -200,9 +164,18 @@ private fun <T : PlayableItem> PlayableItemWithMenu(
         onClick: (T) -> Unit,
         onLongClick: (T) -> Unit,
     ) -> Unit,
-) {
+) where T : PlayableItem, T : AppMediaItem {
     var expandedItemId by remember { mutableStateOf<String?>(null) }
     var showPlaylistDialog by rememberSaveable { mutableStateOf(false) }
+
+    val actions = resolveLongClickActions(
+        item = item,
+        librarySupported = true,
+        canAddToPlaylist = playlistActions != null && item.supportsAddToPlaylist,
+        canRemoveFromPlaylist = onRemoveFromPlaylist != null,
+        progressSupported = progressActions != null && item is PodcastEpisode,
+    )
+
     Box(modifier = modifier) {
         itemComposable(
             Modifier.align(Alignment.Center),
@@ -213,202 +186,28 @@ private fun <T : PlayableItem> PlayableItemWithMenu(
             expanded = expandedItemId == item.itemId,
             onDismissRequest = { expandedItemId = null },
         ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.action_play_now)) },
-                onClick = {
-                    onPlayOption(item, QueueOption.REPLACE, false)
-                    expandedItemId = null
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = PlayIcon,
-                        contentDescription = stringResource(Res.string.action_play_now),
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.action_insert_next_and_play)) },
-                onClick = {
-                    onPlayOption(item, QueueOption.PLAY, false)
-                    expandedItemId = null
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.PlaylistAddCircle,
-                        contentDescription = stringResource(Res.string.action_insert_next_and_play),
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.action_insert_next)) },
-                onClick = {
-                    onPlayOption(item, QueueOption.NEXT, false)
-                    expandedItemId = null
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.QueuePlayNext,
-                        contentDescription = stringResource(Res.string.action_insert_next),
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.action_add_to_bottom)) },
-                onClick = {
-                    onPlayOption(item, QueueOption.ADD, false)
-                    expandedItemId = null
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.AddToQueue,
-                        contentDescription = stringResource(Res.string.action_add_to_bottom),
-                    )
-                },
-            )
-            if (item.canStartRadio) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.action_start_radio)) },
-                    onClick = {
-                        onPlayOption(item, QueueOption.REPLACE, true)
-                        expandedItemId = null
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.CellTower,
-                            contentDescription = stringResource(Res.string.action_start_radio),
-                        )
-                    },
-                )
-            }
-
-            val libText = if (item.isInLibrary) {
-                stringResource(
-                    Res.string.action_remove_from_library,
-                )
-            } else {
-                stringResource(Res.string.action_add_to_library)
-            }
-            DropdownMenuItem(
-                text = { Text(libText) },
-                onClick = {
-                    libraryActions.onLibraryClick(item as AppMediaItem)
-                    expandedItemId = null
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector =
-                            if (item.isInLibrary) {
-                                TablerIcons.FolderMinus
-                            } else {
-                                TablerIcons.FolderPlus
-                            },
-                        contentDescription = libText,
-                    )
-                },
-            )
-
-            // Favorite management (only for library items)
-            if (item.isInLibrary) {
-                val favText = if (item.favorite == true) {
-                    stringResource(
-                        Res.string.action_unfavorite,
-                    )
-                } else {
-                    stringResource(Res.string.action_favorite)
+            itemActionMenuItems(actions) { action ->
+                expandedItemId = null
+                when (action) {
+                    is ItemAction.Play -> onPlayOption(item, action.queueOption, false)
+                    ItemAction.StartRadio -> onPlayOption(item, QueueOption.REPLACE, true)
+                    ItemAction.AddToLibrary,
+                    ItemAction.RemoveFromLibrary,
+                    -> libraryActions.onLibraryClick(item)
+                    ItemAction.Favorite,
+                    ItemAction.Unfavorite,
+                    -> libraryActions.onFavoriteClick(item)
+                    ItemAction.AddToPlaylist -> showPlaylistDialog = true
+                    ItemAction.RemoveFromPlaylist -> onRemoveFromPlaylist?.invoke()
+                    ItemAction.MarkPlayed -> progressActions?.onMarkPlayed(item)
+                    ItemAction.MarkUnplayed -> progressActions?.onMarkUnplayed(item)
                 }
-                DropdownMenuItem(
-                    text = { Text(favText) },
-                    onClick = {
-                        libraryActions.onFavoriteClick(item as AppMediaItem)
-                        expandedItemId = null
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector =
-                                if (item.favorite == true) {
-                                    TablerIcons.HeartBroken
-                                } else {
-                                    TablerIcons.Heart
-                                },
-                            contentDescription = favText,
-                        )
-                    },
-                )
-            }
-
-            if (playlistActions != null && item is Track) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.action_add_to_playlist)) },
-                    onClick = {
-                        showPlaylistDialog = true
-                        expandedItemId = null
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
-                            contentDescription = stringResource(Res.string.action_add_to_playlist),
-                        )
-                    },
-                )
-            }
-            if (onRemoveFromPlaylist != null) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.action_remove_from_playlist)) },
-                    onClick = {
-                        onRemoveFromPlaylist()
-                        expandedItemId = null
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = stringResource(Res.string.action_remove_from_playlist),
-                        )
-                    },
-                )
-            }
-
-            // Mark played/unplayed (podcast episodes)
-            if (progressActions != null && item is PodcastEpisode) {
-                val isPlayed = item.fullyPlayed == true
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            if (isPlayed) {
-                                stringResource(
-                                    Res.string.action_mark_unplayed,
-                                )
-                            } else {
-                                stringResource(Res.string.action_mark_played)
-                            },
-                        )
-                    },
-                    onClick = {
-                        if (isPlayed) {
-                            progressActions.onMarkUnplayed(item as AppMediaItem)
-                        } else {
-                            progressActions.onMarkPlayed(item as AppMediaItem)
-                        }
-                        expandedItemId = null
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = if (isPlayed) Icons.Default.Replay else Icons.Default.Check,
-                            contentDescription = if (isPlayed) {
-                                stringResource(
-                                    Res.string.action_mark_unplayed,
-                                )
-                            } else {
-                                stringResource(Res.string.action_mark_played)
-                            },
-                        )
-                    },
-                )
             }
         }
 
-        if (showPlaylistDialog && item is Track && playlistActions != null) {
+        if (showPlaylistDialog && playlistActions != null) {
             AddToPlaylistDialog(
-                track = item,
+                item = item,
                 playlistActions = playlistActions,
                 onDismiss = { showPlaylistDialog = false },
             )

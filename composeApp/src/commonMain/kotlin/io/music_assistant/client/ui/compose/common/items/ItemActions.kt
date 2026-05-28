@@ -6,7 +6,7 @@ import io.music_assistant.client.data.model.client.items.Playlist
 interface PlaylistActions {
     suspend fun getEditablePlaylists(): List<Playlist>
     fun addToPlaylist(
-        mediaItem: AppMediaItem,
+        itemUri: String?,
         playlist: Playlist,
     )
 }

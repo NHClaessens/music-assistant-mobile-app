@@ -18,24 +18,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,11 +41,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import coil3.compose.AsyncImage
-import compose.icons.TablerIcons
-import compose.icons.tablericons.FolderMinus
-import compose.icons.tablericons.FolderPlus
-import compose.icons.tablericons.Heart
-import compose.icons.tablericons.HeartBroken
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.client.ImageType
 import io.music_assistant.client.data.model.client.QueueOption
@@ -59,28 +48,22 @@ import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Artist
 import io.music_assistant.client.data.model.client.items.Genre
-import io.music_assistant.client.data.model.client.items.Playlist
 import io.music_assistant.client.ui.compose.common.OverflowMenuButton
-import io.music_assistant.client.ui.compose.common.OverflowMenuOption
 import io.music_assistant.client.ui.compose.common.icons.TrackIcon
+import io.music_assistant.client.ui.compose.common.items.AddToPlaylistDialog
 import io.music_assistant.client.ui.compose.common.items.Badges
+import io.music_assistant.client.ui.compose.common.items.ItemAction
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.localizedSubtitle
 import io.music_assistant.client.ui.compose.common.items.navigationOptions
+import io.music_assistant.client.ui.compose.common.items.resolveDetailOverflowActions
+import io.music_assistant.client.ui.compose.common.items.toOverflowOption
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.utils.WindowClass
-import kotlinx.coroutines.launch
 import musicassistantclient.composeapp.generated.resources.Res
-import musicassistantclient.composeapp.generated.resources.action_add_to_library
-import musicassistantclient.composeapp.generated.resources.action_favorite
-import musicassistantclient.composeapp.generated.resources.action_remove_from_library
-import musicassistantclient.composeapp.generated.resources.action_unfavorite
 import musicassistantclient.composeapp.generated.resources.cd_more
 import musicassistantclient.composeapp.generated.resources.common_back
-import musicassistantclient.composeapp.generated.resources.common_cancel
-import musicassistantclient.composeapp.generated.resources.playlist_add_to_title
-import musicassistantclient.composeapp.generated.resources.playlist_no_editable
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -164,71 +147,28 @@ private fun ItemOverflow(
     playlistActions: PlaylistActions?,
     navigateToItem: (AppMediaItem) -> Unit,
 ) {
-    val coroutineScope = rememberCoroutineScope()
     var showPlaylistDialog by rememberSaveable { mutableStateOf(false) }
-    var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
-    var isLoadingPlaylists by remember { mutableStateOf(false) }
 
+    val canonical = resolveDetailOverflowActions(
+        item = item,
+        librarySupported = libraryActions != null && item !is Genre,
+        canAddToPlaylist = playlistActions != null,
+    ).map { action ->
+        action.toOverflowOption {
+            when (it) {
+                ItemAction.AddToLibrary,
+                ItemAction.RemoveFromLibrary,
+                -> libraryActions?.onLibraryClick(item)
+                ItemAction.Favorite,
+                ItemAction.Unfavorite,
+                -> libraryActions?.onFavoriteClick(item)
+                ItemAction.AddToPlaylist -> showPlaylistDialog = true
+                else -> Unit
+            }
+        }
+    }
     OverflowMenuButton(
-        options = buildList {
-            libraryActions?.let { actions ->
-                if (item !is Genre) {
-                    add(
-                        OverflowMenuOption(
-                            title =
-                                if (item.isInLibrary) {
-                                    stringResource(Res.string.action_remove_from_library)
-                                } else {
-                                    stringResource(Res.string.action_add_to_library)
-                                },
-                            icon =
-                                if (item.isInLibrary) {
-                                    TablerIcons.FolderMinus
-                                } else {
-                                    TablerIcons.FolderPlus
-                                },
-                        ) { actions.onLibraryClick(item) },
-                    )
-                }
-                if (item.isInLibrary) {
-                    add(
-                        OverflowMenuOption(
-                            title =
-                                if (item.favorite == true) {
-                                    stringResource(Res.string.action_unfavorite)
-                                } else {
-                                    stringResource(Res.string.action_favorite)
-                                },
-                            icon =
-                                if (item.favorite == true) {
-                                    TablerIcons.HeartBroken
-                                } else {
-                                    TablerIcons.Heart
-                                },
-                        ) { actions.onFavoriteClick(item) },
-                    )
-                }
-            }
-
-            playlistActions?.let {
-                add(
-                    OverflowMenuOption(
-                        title = stringResource(Res.string.playlist_add_to_title),
-                        icon = Icons.AutoMirrored.Filled.PlaylistAdd,
-                    ) {
-                        showPlaylistDialog = true
-                        // Load playlists when dialog opens
-                        coroutineScope.launch {
-                            isLoadingPlaylists = true
-                            playlists = it.getEditablePlaylists()
-                            isLoadingPlaylists = false
-                        }
-                    },
-                )
-            }
-
-            addAll(item.navigationOptions(navigateToItem))
-        },
+        options = canonical + item.navigationOptions(navigateToItem),
     ) { onClick ->
         IconButton(onClick = onClick) {
             Icon(
@@ -238,54 +178,11 @@ private fun ItemOverflow(
         }
     }
 
-    if (showPlaylistDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showPlaylistDialog = false
-                playlists = emptyList()
-                isLoadingPlaylists = false
-            },
-            title = { Text(stringResource(Res.string.playlist_add_to_title)) },
-            text = {
-                if (isLoadingPlaylists) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                } else if (playlists.isEmpty()) {
-                    Text(stringResource(Res.string.playlist_no_editable))
-                } else {
-                    Column {
-                        playlists.forEach { playlist ->
-                            TextButton(
-                                onClick = {
-                                    playlistActions?.addToPlaylist(item, playlist)
-                                    showPlaylistDialog = false
-                                    playlists = emptyList()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    text = playlist.displayName,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = {
-                    showPlaylistDialog = false
-                    playlists = emptyList()
-                    isLoadingPlaylists = false
-                }) {
-                    Text(stringResource(Res.string.common_cancel))
-                }
-            },
+    if (showPlaylistDialog && playlistActions != null) {
+        AddToPlaylistDialog(
+            item = item,
+            playlistActions = playlistActions,
+            onDismiss = { showPlaylistDialog = false },
         )
     }
 }

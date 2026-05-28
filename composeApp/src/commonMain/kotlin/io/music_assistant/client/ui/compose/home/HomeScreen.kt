@@ -336,6 +336,7 @@ fun CategoryRow(
                         item = item,
                         onNavigateClick = onNavigateClick,
                         onPlayOption = onPlayClick,
+                        playlistActions = playlistActions,
                         libraryActions = libraryActions,
                         providerIconFetcher = providerIconFetcher,
                     )
@@ -377,6 +378,7 @@ fun CategoryRow(
                         item = item,
                         onNavigateClick = onNavigateClick,
                         onPlayOption = onPlayClick,
+                        playlistActions = playlistActions,
                         libraryActions = libraryActions,
                         progressActions = progressActions,
                         providerIconFetcher = providerIconFetcher,

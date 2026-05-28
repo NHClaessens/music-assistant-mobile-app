@@ -3,11 +3,7 @@ package io.music_assistant.client.ui.compose.item
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddToQueue
-import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.PlaylistAddCircle
-import androidx.compose.material.icons.filled.QueuePlayNext
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SplitButtonDefaults.LeadingButton
@@ -23,14 +19,12 @@ import androidx.compose.ui.unit.dp
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.ui.compose.common.OverflowMenuButton
-import io.music_assistant.client.ui.compose.common.OverflowMenuOption
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
+import io.music_assistant.client.ui.compose.common.items.ItemAction
+import io.music_assistant.client.ui.compose.common.items.resolvePlayButtonActions
+import io.music_assistant.client.ui.compose.common.items.toOverflowOption
 import musicassistantclient.composeapp.generated.resources.Res
-import musicassistantclient.composeapp.generated.resources.action_add_to_queue
 import musicassistantclient.composeapp.generated.resources.action_play
-import musicassistantclient.composeapp.generated.resources.action_play_next
-import musicassistantclient.composeapp.generated.resources.action_play_now
-import musicassistantclient.composeapp.generated.resources.action_start_radio
 import musicassistantclient.composeapp.generated.resources.cd_play_now
 import musicassistantclient.composeapp.generated.resources.cd_play_options
 import org.jetbrains.compose.resources.stringResource
@@ -83,44 +77,17 @@ private fun PlayOverflow(
     onPlayClick: (QueueOption, Boolean) -> Unit,
     button: @Composable (() -> Unit) -> Unit,
 ) {
-    OverflowMenuButton(
-        options = buildList {
-            add(
-                OverflowMenuOption(
-                    title = stringResource(Res.string.action_play_now),
-                    icon = Icons.Default.PlaylistAddCircle,
-                ) { onPlayClick(QueueOption.PLAY, false) },
-            )
-            add(
-                OverflowMenuOption(
-                    title = stringResource(Res.string.action_play_next),
-                    icon = Icons.Default.QueuePlayNext,
-                ) {
-                    onPlayClick(QueueOption.NEXT, false)
-                },
-            )
-            add(
-                OverflowMenuOption(
-                    title = stringResource(Res.string.action_add_to_queue),
-                    icon = Icons.Default.AddToQueue,
-                ) {
-                    onPlayClick(
-                        QueueOption.ADD,
-                        false,
-                    )
-                },
-            )
-            if (item.canStartRadio) {
-                add(
-                    OverflowMenuOption(
-                        title = stringResource(Res.string.action_start_radio),
-                        icon = Icons.Default.CellTower,
-                    ) {
-                        onPlayClick(QueueOption.REPLACE, true)
-                    },
-                )
+    val options = resolvePlayButtonActions(item).map { action ->
+        action.toOverflowOption {
+            when (it) {
+                is ItemAction.Play -> onPlayClick(it.queueOption, false)
+                ItemAction.StartRadio -> onPlayClick(QueueOption.REPLACE, true)
+                else -> Unit
             }
-        },
+        }
+    }
+    OverflowMenuButton(
+        options = options,
         buttonContent = button,
     )
 }

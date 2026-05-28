@@ -18,8 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Playlist
-import io.music_assistant.client.data.model.client.items.Track
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.common_cancel
 import musicassistantclient.composeapp.generated.resources.playlist_add_to_title
@@ -28,14 +28,14 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun AddToPlaylistDialog(
-    track: Track,
+    item: AppMediaItem,
     playlistActions: PlaylistActions,
     onDismiss: () -> Unit,
 ) {
     var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(track.itemId) {
+    LaunchedEffect(item.itemId) {
         isLoading = true
         playlists = playlistActions.getEditablePlaylists()
         isLoading = false
@@ -62,7 +62,7 @@ fun AddToPlaylistDialog(
                     ) { playlist ->
                         TextButton(
                             onClick = {
-                                playlistActions.addToPlaylist(track, playlist)
+                                playlistActions.addToPlaylist(item.uri, playlist)
                                 onDismiss()
                             },
                             modifier = Modifier.fillMaxWidth(),

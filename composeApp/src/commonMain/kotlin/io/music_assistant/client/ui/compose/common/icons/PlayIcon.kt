@@ -11,8 +11,8 @@ import androidx.compose.ui.unit.dp
 val PlayIcon: ImageVector by lazy {
     ImageVector.Builder(
         name = "Play",
-        defaultWidth = 30.dp,
-        defaultHeight = 30.dp,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f
     ).apply {

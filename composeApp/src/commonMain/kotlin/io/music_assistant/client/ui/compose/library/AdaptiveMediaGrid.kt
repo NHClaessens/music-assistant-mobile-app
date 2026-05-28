@@ -115,6 +115,7 @@ fun AdaptiveMediaGrid(
                     viewMode = viewMode,
                     onNavigateClick = onNavigateClick,
                     onPlayOption = onPlayClick,
+                    playlistActions = playlistActions,
                     libraryActions = libraryActions,
                     providerIconFetcher = null,
                 )
@@ -161,6 +162,7 @@ fun AdaptiveMediaGrid(
                     viewMode = viewMode,
                     onNavigateClick = onNavigateClick,
                     onPlayOption = onPlayClick,
+                    playlistActions = playlistActions,
                     libraryActions = libraryActions,
                     progressActions = progressActions,
                     providerIconFetcher = null,

@@ -79,15 +79,14 @@ class ActionsViewModel(
             ?: emptyList()
 
     override fun addToPlaylist(
-        mediaItem: AppMediaItem,
+        itemUri: String?,
         playlist: Playlist,
     ) {
         viewModelScope.launch {
-            val itemUri = mediaItem.uri
-                ?: run {
-                    _toasts.emit(getString(Res.string.toast_no_uri))
-                    return@launch
-                }
+            if (itemUri == null) {
+                _toasts.emit(getString(Res.string.toast_no_uri))
+                return@launch
+            }
             apiClient.sendRequest(
                 Request.Playlist.addTracks(
                     playlistId = playlist.itemId,
