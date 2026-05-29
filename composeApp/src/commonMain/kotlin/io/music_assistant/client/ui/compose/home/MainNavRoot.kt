@@ -290,7 +290,7 @@ private fun mainNavEntryProvider(
                     }
                 },
                 onLibraryItemClick = { type ->
-                    multiBackStack.switchTo(1, MainNav.ItemList(type))
+                    multiBackStack.add(MainNav.ItemList(type))
                 },
                 providerIconFetcher = { modifier, provider ->
                     actionsViewModel.getProviderIcon(provider)
@@ -306,6 +306,7 @@ private fun mainNavEntryProvider(
 
             LibraryScreen(
                 libraryCategoriesViewModel,
+                contentPadding = contentPadding,
                 onTypeClick = {
                     multiBackStack.add(MainNav.ItemList(it))
                 },
