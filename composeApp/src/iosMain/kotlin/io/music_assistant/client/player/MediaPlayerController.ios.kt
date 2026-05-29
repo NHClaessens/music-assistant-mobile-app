@@ -52,9 +52,9 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
         return data.size
     }
 
-    actual fun pauseSink() { /* no-op on iOS */ }
-    actual fun resumeSink() { /* no-op on iOS */ }
-    actual fun flush() { /* no-op on iOS */ }
+    actual fun pauseSink() { PlatformPlayerProvider.player?.pauseSink() }
+    actual fun resumeSink() { PlatformPlayerProvider.player?.resumeSink() }
+    actual fun flush() { PlatformPlayerProvider.player?.flush() }
 
     actual fun stopRawPcmStream() {
         PlatformPlayerProvider.player?.stopRawPcmStream()

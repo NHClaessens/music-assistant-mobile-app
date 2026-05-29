@@ -6,38 +6,42 @@ import ComposeApp
 /// Native iOS audio player using AudioQueue
 /// Replaces MPVController for better iOS integration
 class NativeAudioController: NSObject, PlatformAudioPlayer {
-    
+
     // MARK: - AudioQueue
     private var audioQueue: AudioQueueRef?
     private var audioFormat: AudioStreamBasicDescription = AudioStreamBasicDescription()
-    
+
     // MARK: - Audio Buffer
     private var pcmBuffer: [Data] = []
     private let bufferLock = NSLock()
     private let kNumberOfBuffers = 5 // More buffers for smoother playback
     private let kBufferSize: UInt32 = 65536 // 64KB per buffer for less stuttering
 
-    
+
     // MARK: - Decoder
     private var decoder: NativeAudioDecoder?
     private var listener: MediaPlayerListener?
-    
+
     // MARK: - Stream Configuration
     private var currentCodec: String = "flac"
     private var currentSampleRate: Int32 = 48000
     private var currentChannels: Int32 = 2
     private var currentBitDepth: Int32 = 16
     private var codecHeader: Data?
-    
+
     // MARK: - State
     private var isPlaying = false
     private var streamStarted = false
+    // Play-intent gate (mirrors Android's shouldPlayAudio). While false — paused or
+    // interrupted — incoming audio is dropped instead of (re)starting the queue, so
+    // a packet still in the consumer pipeline can't undo an optimistic pause.
+    private var shouldPlay = true
     // True only while we hold a server pause issued in response to an audio-session
     // interruption (phone call, Siri). On .ended we auto-resume the server only if
     // this is set — so we never spontaneously start playback that the user didn't
     // have running before the interruption.
     private var pausedByInterruption = false
-    
+
     override init() {
         super.init()
         print("🎵 NativeAudioController: Initialized")
@@ -79,18 +83,9 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
                 remoteCommandHandler?.onCommand(command: "pause")
             }
         case .ended:
-            let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
-            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-            if options.contains(.shouldResume) && isPlaying, let queue = audioQueue {
-                do {
-                    try AVAudioSession.sharedInstance().setActive(true)
-                    AudioQueueStart(queue, nil)
-                    print("🎵 NativeAudioController: ✅ Resumed after interruption")
-                } catch {
-                    print("🎵 NativeAudioController: ❌ Failed to resume after interruption: \(error)")
-                }
-            }
-            // Resume server playback only if WE paused it on interruption.
+            // Resume only what we paused, so we never start playback the user
+            // didn't have running. The "play" command's resumeSink reclaims the
+            // session; the queue rebuilds on the next audio packet.
             if pausedByInterruption {
                 pausedByInterruption = false
                 print("🎵 NativeAudioController: Resuming server playback after interruption")
@@ -119,7 +114,7 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
     /// pairs `oldDeviceUnavailable` with an `interruption .began` it
     /// never matches with `.ended`, so the queue stays paused while the
     /// server keeps streaming. Without this, PCM piles up unconsumed and
-    /// audio never resumes on the new route. Letting the next PCM packet
+    /// audio never resumes on the new route. Letting the next audio packet
     /// rebuild the queue avoids racing the in-flight interruption.
     private func handleOldDeviceUnavailable(previousRoute: AVAudioSessionRouteDescription?) {
         guard streamStarted else { return }
@@ -131,19 +126,20 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         pcmBuffer.removeAll()
         bufferLock.unlock()
     }
-    
+
     // MARK: - PlatformAudioPlayer Protocol
-    
+
     func prepareStream(codec: String, sampleRate: Int32, channels: Int32, bitDepth: Int32, codecHeader: String?, listener: MediaPlayerListener) {
         print("🎵 NativeAudioController: prepareStream - codec=\(codec), rate=\(sampleRate), ch=\(channels), bit=\(bitDepth)")
-        
+
         self.listener = listener
         self.currentCodec = codec.lowercased()
         self.currentSampleRate = sampleRate
         self.currentChannels = channels
         self.currentBitDepth = bitDepth
         self.streamStarted = false
-        
+        self.shouldPlay = true
+
         // Decode codec header if present
         if let headerBase64 = codecHeader, let headerData = Data(base64Encoded: headerBase64) {
             self.codecHeader = headerData
@@ -151,15 +147,15 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         } else {
             self.codecHeader = nil
         }
-        
+
         // Stop any existing playback
         stopAudioQueue()
-        
+
         // Clear buffers
         bufferLock.lock()
         pcmBuffer.removeAll()
         bufferLock.unlock()
-        
+
         // Create decoder for codec
         do {
             decoder = try AudioDecoderFactory.create(
@@ -175,10 +171,10 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             listener.onError(error: KotlinThrowable(message: error.localizedDescription))
             return
         }
-        
+
         listener.onReady()
     }
-    
+
     /// Called from Kotlin via efficient NSData bulk-copy path (avoids per-byte Swift interop).
     func writeRawPcmNSData(data: Data) {
         processAudioData(data)
@@ -196,6 +192,11 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
     }
 
     private func processAudioData(_ swiftData: Data) {
+        // Suspended (paused / interrupted): drop in-flight audio rather than
+        // restart the queue, so a packet still in the consumer pipeline can't
+        // undo the pause before the server stops streaming.
+        guard shouldPlay else { return }
+
         // Start audio queue on first data
         if !streamStarted {
             streamStarted = true
@@ -218,36 +219,68 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             print("🎵 NativeAudioController: ❌ Decode error: \(error)")
         }
     }
-    
+
     func stopRawPcmStream() {
         print("🎵 NativeAudioController: Stopping stream")
+        shouldPlay = false
         streamStarted = false
         stopAudioQueue()
-        
+
         bufferLock.lock()
         pcmBuffer.removeAll()
         bufferLock.unlock()
     }
-    
+
+    /// Tear down rather than `AudioQueuePause`: a paused queue replays its stale
+    /// primed buffers on resume, then underruns. `shouldPlay = false` drops any
+    /// in-flight audio so the consumer can't immediately rebuild the queue;
+    /// resume then rebuilds clean on the next packet, like a cold start.
+    func pauseSink() {
+        print("🎵 NativeAudioController: pauseSink")
+        shouldPlay = false
+        streamStarted = false
+        tearDownQueue()
+    }
+
+    /// Reactivating the session reclaims audio from another app that grabbed it.
+    /// `shouldPlay = true` re-opens the write gate; the queue rebuilds on the next
+    /// audio packet, or is started here if one still exists (gapless restart).
+    func resumeSink() {
+        print("🎵 NativeAudioController: resumeSink")
+        shouldPlay = true
+        NowPlayingManager.shared.activatePlayback()
+        isPlaying = true
+        if let queue = audioQueue {
+            AudioQueueStart(queue, nil)
+        }
+    }
+
+    /// Drop buffered PCM (track transition / playback-delay re-phase).
+    func flush() {
+        bufferLock.lock()
+        pcmBuffer.removeAll()
+        bufferLock.unlock()
+    }
+
     func setVolume(volume: Int32) {
         guard let queue = audioQueue else { return }
         let floatVolume = Float(volume) / 100.0
         AudioQueueSetParameter(queue, kAudioQueueParam_Volume, floatVolume)
     }
-    
+
     func setMuted(muted: Bool) {
         guard let queue = audioQueue else { return }
         AudioQueueSetParameter(queue, kAudioQueueParam_Volume, muted ? 0.0 : 1.0)
     }
-    
+
     func dispose() {
         NowPlayingManager.shared.clearNowPlayingInfo()
         stopAudioQueue()
         decoder = nil
     }
-    
+
     // MARK: - AudioQueue Management
-    
+
     private func startAudioQueue() {
         // Configure audio format (always output PCM)
         audioFormat.mSampleRate = Float64(currentSampleRate)
@@ -255,7 +288,7 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         audioFormat.mFormatFlags = kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked
         audioFormat.mFramesPerPacket = 1
         audioFormat.mChannelsPerFrame = UInt32(currentChannels)
-        
+
         // FLAC decoder always outputs Int32 (scaled to full range).
         // PCM 24-bit is unpacked to Int32 by PCMPassthroughDecoder.
         // All other cases use the negotiated bit depth directly.
@@ -266,16 +299,16 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             effectiveBitDepth = currentBitDepth
         }
         let bytesPerSample = effectiveBitDepth / 8
-        
+
         audioFormat.mBitsPerChannel = UInt32(effectiveBitDepth)
         audioFormat.mBytesPerFrame = UInt32(currentChannels) * UInt32(bytesPerSample)
         audioFormat.mBytesPerPacket = audioFormat.mBytesPerFrame
-        
+
         print("🎵 NativeAudioController: Audio format - \(currentSampleRate)Hz, \(currentChannels)ch, \(effectiveBitDepth)bit")
-        
+
         // Create AudioQueue
         let selfPointer = Unmanaged.passUnretained(self).toOpaque()
-        
+
         var queue: AudioQueueRef?
         let status = AudioQueueNewOutput(
             &audioFormat,
@@ -286,24 +319,24 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             0,
             &queue
         )
-        
+
         guard status == noErr, let queue = queue else {
             print("🎵 NativeAudioController: ❌ Failed to create AudioQueue: \(status)")
             return
         }
-        
+
         audioQueue = queue
-        
+
         // Allocate and prime buffers
         for _ in 0..<kNumberOfBuffers {
             var buffer: AudioQueueBufferRef?
             let allocStatus = AudioQueueAllocateBuffer(queue, kBufferSize, &buffer)
-            
+
             if allocStatus == noErr, let buffer = buffer {
                 fillBuffer(queue: queue, buffer: buffer)
             }
         }
-        
+
         // Start playback
         let startStatus = AudioQueueStart(queue, nil)
         if startStatus == noErr {
@@ -313,25 +346,32 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             print("🎵 NativeAudioController: ❌ Failed to start AudioQueue: \(startStatus)")
         }
     }
-    
+
     private func stopAudioQueue() {
+        tearDownQueue()
+        pausedByInterruption = false // Stream stopped — no auto-resume on .ended.
+    }
+
+    /// `AudioQueueStop(_, true)` discards enqueued hardware buffers, so a rebuilt
+    /// queue never replays stale audio. Leaves `pausedByInterruption` untouched —
+    /// a pause issued during `.began` must still auto-resume on `.ended`.
+    private func tearDownQueue() {
         guard let queue = audioQueue else { return }
-        
+
         AudioQueueStop(queue, true)
         AudioQueueDispose(queue, true)
-        
+
         audioQueue = nil
         isPlaying = false
-        pausedByInterruption = false // Stream stopped — no auto-resume on .ended.
         print("🎵 NativeAudioController: AudioQueue stopped")
     }
-    
+
     fileprivate func fillBuffer(queue: AudioQueueRef, buffer: AudioQueueBufferRef) {
         // Get next PCM data from buffer
         bufferLock.lock()
         let pcmData = pcmBuffer.isEmpty ? nil : pcmBuffer.removeFirst()
         bufferLock.unlock()
-        
+
         if let data = pcmData {
             // Copy PCM data to buffer
             let copySize = min(data.count, Int(buffer.pointee.mAudioDataBytesCapacity))
@@ -344,15 +384,15 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             memset(buffer.pointee.mAudioData, 0, Int(buffer.pointee.mAudioDataBytesCapacity))
             buffer.pointee.mAudioDataByteSize = buffer.pointee.mAudioDataBytesCapacity
         }
-        
+
         // Re-enqueue buffer
         AudioQueueEnqueueBuffer(queue, buffer, 0, nil)
     }
-    
+
     // MARK: - Now Playing (Control Center / Lock Screen)
-    
+
     private var remoteCommandHandler: RemoteCommandHandler?
-    
+
     /// `duration` and `elapsedTime` are passed as `KotlinDouble?` because Kotlin/Native
     /// boxes nullable primitives in interface signatures. A nil here means "value
     /// unknown — leave the corresponding `MPNowPlayingInfoCenter` field alone" (vs.
@@ -378,14 +418,14 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             playbackRate: playbackRate
         )
     }
-    
+
     func clearNowPlaying() {
         NowPlayingManager.shared.clearNowPlayingInfo()
     }
-    
+
     func setRemoteCommandHandler(handler: RemoteCommandHandler?) {
         self.remoteCommandHandler = handler
-        
+
         NowPlayingManager.shared.setCommandHandler { [weak self] command in
             print("🎵 NativeAudioController: Remote command: \(command)")
             self?.remoteCommandHandler?.onCommand(command: command)
@@ -397,7 +437,7 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
 
 private let audioQueueCallback: AudioQueueOutputCallback = { userData, queue, buffer in
     guard let userData = userData else { return }
-    
+
     let controller = Unmanaged<NativeAudioController>.fromOpaque(userData).takeUnretainedValue()
     controller.fillBuffer(queue: queue, buffer: buffer)
 }
