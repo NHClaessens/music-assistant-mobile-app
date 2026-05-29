@@ -83,11 +83,15 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
                 remoteCommandHandler?.onCommand(command: "pause")
             }
         case .ended:
-            // Resume only what we paused, so we never start playback the user
-            // didn't have running. The "play" command's resumeSink reclaims the
-            // session; the queue rebuilds on the next audio packet.
-            if pausedByInterruption {
-                pausedByInterruption = false
+            guard pausedByInterruption else { break }
+            pausedByInterruption = false
+            // Honor iOS's resume hint: it's set for interruptions we should
+            // recover from (calls, Siri, alarms) and cleared when another app
+            // simply took over — so we never grab audio back the user moved
+            // elsewhere. Resuming routes through the "play" command's resumeSink.
+            let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+            if options.contains(.shouldResume) {
                 print("🎵 NativeAudioController: Resuming server playback after interruption")
                 remoteCommandHandler?.onCommand(command: "play")
             }
