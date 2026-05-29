@@ -113,22 +113,26 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         }
     }
 
-    /// Tear down the AudioQueue when the active output route disappears
-    /// (CarPlay disconnect, AirPods power-off, headphones unplug). iOS
-    /// pairs `oldDeviceUnavailable` with an `interruption .began` it
-    /// never matches with `.ended`, so the queue stays paused while the
-    /// server keeps streaming. Without this, PCM piles up unconsumed and
-    /// audio never resumes on the new route. Letting the next audio packet
-    /// rebuild the queue avoids racing the in-flight interruption.
+    /// Pause when the active output route disappears (Bluetooth disconnect,
+    /// headphones unplug, AirPods power-off, CarPlay disconnect) — never let
+    /// playback silently fall back to the phone speaker. Shutting `shouldPlay`
+    /// drops in-flight packets so the next one can't rebuild the queue on the
+    /// new route; the server pause stops the stream at the source. Unlike an
+    /// interruption, iOS sends no matching `.ended`, so this is a deliberate
+    /// pause the user resumes by hand, on whatever route is then active.
+    /// (AirPods already send their own `pause` remote command on removal; the
+    /// `streamStarted` guard makes this a no-op once that has shut the gate.)
     private func handleOldDeviceUnavailable(previousRoute: AVAudioSessionRouteDescription?) {
         guard streamStarted else { return }
         let prev = previousRoute?.outputs.first?.portType.rawValue ?? "unknown"
-        print("🎵 NativeAudioController: \(prev) disappeared — tearing down AudioQueue")
-        stopAudioQueue()
+        print("🎵 NativeAudioController: \(prev) disappeared — pausing playback")
+        shouldPlay = false
         streamStarted = false
+        stopAudioQueue()
         bufferLock.lock()
         pcmBuffer.removeAll()
         bufferLock.unlock()
+        remoteCommandHandler?.onCommand(command: "pause")
     }
 
     // MARK: - PlatformAudioPlayer Protocol
