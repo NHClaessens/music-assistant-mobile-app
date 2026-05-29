@@ -22,6 +22,16 @@ interface PlatformAudioPlayer {
      * usePinned bulk-copy, avoiding a byte-by-byte Swift interop loop.
      */
     fun writeRawPcmNSData(data: NSData)
+
+    /** Pause output (user pause / interruption / re-phase). */
+    fun pauseSink()
+
+    /** Resume output, reactivating the audio session to reclaim it from other apps. */
+    fun resumeSink()
+
+    /** Drop buffered PCM (track transition / playback-delay re-phase). */
+    fun flush()
+
     fun stopRawPcmStream()
     fun setVolume(volume: Int)
     fun setMuted(muted: Boolean)

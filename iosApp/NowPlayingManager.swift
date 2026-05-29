@@ -8,42 +8,43 @@ import ComposeApp
 ///
 /// Audio playback is handled by NativeAudioController via AudioQueue.
 class NowPlayingManager {
-    
+
     typealias CommandHandler = (String) -> Void
-    
+
     static let shared = NowPlayingManager()
-    
+
     private var commandHandler: CommandHandler?
-    
+
     // State for caching and flicker prevention
     private var lastTrackIdentifier: String?
     private var cachedArtwork: MPMediaItemArtwork?
     private var currentArtworkLoad: Cancellable?
-    
+
     // Track current metadata state to determine if we need to fetch new artwork
     private var currentTitle: String?
     private var currentArtist: String?
     private var currentAlbum: String?
-    
+
     init() {
         print("🎵 NowPlayingManager: Initializing...")
         configureAudioSession()
         setupRemoteCommands() // Setup commands once
         printDebugState("After init")
     }
-    
-    /// Configures the audio session for background playback
+
+    /// Sets the category only — does NOT activate. Activation interrupts other
+    /// apps, so doing it at launch claims audio from whatever is already playing.
+    /// Deferred to `activatePlayback()`, driven by real playback.
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .default, options: [])
-            try session.setActive(true)
-            print("🎵 NowPlayingManager: Audio session configured")
+            print("🎵 NowPlayingManager: Audio session category configured")
         } catch {
             print("🎵 NowPlayingManager: ❌ Failed to configure audio session: \(error)")
         }
     }
-    
+
     /// Call this when playback starts to ensure we become the Now Playing app
     func activatePlayback() {
         do {
@@ -53,14 +54,14 @@ class NowPlayingManager {
             print("🎵 NowPlayingManager: ❌ Failed to activate playback: \(error)")
         }
     }
-    
+
     /// Sets the handler for remote commands
     /// We now support dynamic handler updates without re-registering commands
     func setCommandHandler(_ handler: @escaping CommandHandler) {
         self.commandHandler = handler
         print("🎵 NowPlayingManager: Command handler updated")
     }
-    
+
     // Track pending update to handle race conditions
     private var pendingIdentifier: String?
 
@@ -273,7 +274,7 @@ class NowPlayingManager {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
-    
+
     /// Clears the Now Playing info
     func clearNowPlayingInfo() {
         print("🎵 NowPlayingManager: Clearing Now Playing info")
@@ -283,18 +284,18 @@ class NowPlayingManager {
             self?.updateCurrentState(title: nil, artist: nil, album: nil)
         }
     }
-    
+
     // MARK: - Debug
     private func printDebugState(_ context: String) {
         // ... (Keep existing debug logic if needed, or remove for brevity)
     }
-    
+
     // MARK: - Private
-    
+
     private func setupRemoteCommands() {
         let commandCenter = MPRemoteCommandCenter.shared()
         print("🎵 NowPlayingManager: Setting up remote commands (Once)")
-        
+
         // Helper to attach targets
         func addTarget(_ command: MPRemoteCommand, cmd: String) {
             command.isEnabled = true
@@ -304,24 +305,24 @@ class NowPlayingManager {
                 return .success
             }
         }
-        
+
         addTarget(commandCenter.playCommand, cmd: "play")
         addTarget(commandCenter.pauseCommand, cmd: "pause")
         addTarget(commandCenter.togglePlayPauseCommand, cmd: "toggle_play_pause")
         addTarget(commandCenter.nextTrackCommand, cmd: "next")
         addTarget(commandCenter.previousTrackCommand, cmd: "previous")
-        
+
         commandCenter.changePlaybackPositionCommand.isEnabled = true
         commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
             self?.commandHandler?("seek:\(positionEvent.positionTime)")
             return .success
         }
-        
+
         commandCenter.skipForwardCommand.isEnabled = false
         commandCenter.skipBackwardCommand.isEnabled = false
     }
-    
+
     private func loadArtwork(urlString: String, completion: @escaping (MPMediaItemArtwork?) -> Void) -> Cancellable {
         return KmpHelper.shared.loadArtworkBytes(urlString: urlString) { data in
             guard let data = data as Data?, let image = UIImage(data: data) else {
