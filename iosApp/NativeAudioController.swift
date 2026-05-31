@@ -85,15 +85,16 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         case .ended:
             guard pausedByInterruption else { break }
             pausedByInterruption = false
-            // Honor iOS's resume hint: it's set for interruptions we should
-            // recover from (calls, Siri, alarms) and cleared when another app
-            // simply took over — so we never grab audio back the user moved
-            // elsewhere. Resuming routes through the "play" command's resumeSink.
-            let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
-            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-            if options.contains(.shouldResume) {
+            // We deliberately do not use .shouldResume here as it is not guaranteed
+            // to be set even in cases it should be. As per Apple, it's a hint not
+            // a contract. Instead we track for ourselves if we were interrupted,
+            // and once control is handed back, if another app is now using the
+            // audio device exclusively.
+            if !AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint {
                 print("🎵 NativeAudioController: Resuming server playback after interruption")
                 remoteCommandHandler?.onCommand(command: "play")
+            } else {
+                print("🎵 NativeAudioController: Another app holds audio — staying paused")
             }
         @unknown default:
             break
