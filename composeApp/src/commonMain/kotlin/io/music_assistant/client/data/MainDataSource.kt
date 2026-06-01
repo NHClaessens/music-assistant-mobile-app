@@ -227,7 +227,6 @@ class MainDataSource(
 
     private var watchJob: Job? = null
     private var updateJob: Job? = null
-    private var queueItemsGateJob: Job? = null
 
     init {
         // Mirror optimistic-bump stamps into `_queueInfos` so the gate sees them.
@@ -1710,13 +1709,11 @@ class MainDataSource(
                         ?.let { localPlayerRepository.onServerQueueUpdate(it) }
                 }
         }
-        // Gate on queueInfo being merged into _playersData, not just on Data:
-        // the _queueInfos→_playersData combine is debounced, so a players-only
-        // emission (null queueInfo for all) can land first and make
-        // refreshAllPlayersQueueItems skip everyone. Cancel-and-replace bounds
-        // the gate to one — updatePlayersAndQueues re-runs on every reconnect.
-        queueItemsGateJob?.cancel()
-        queueItemsGateJob = launch {
+        launch {
+            // Gate on queueInfo being merged into _playersData, not just on Data:
+            // the _queueInfos→_playersData combine is debounced, so a players-only
+            // emission (null queueInfo for all) can land first and make
+            // refreshAllPlayersQueueItems skip everyone.
             _playersData.first { state ->
                 state is DataState.Data && state.data.any { it.queueInfo != null }
             }
