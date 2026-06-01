@@ -1710,10 +1710,13 @@ class MainDataSource(
                 }
         }
         launch {
-            // Wait for the players+queues combine to land, then fetch items
-            // for every player. Single-shot per call — runtime queue changes
-            // are covered by QueueItemsUpdatedEvent.
-            _playersData.first { it is DataState.Data }
+            // Gate on queueInfo being merged into _playersData, not just on Data:
+            // the _queueInfos→_playersData combine is debounced, so a players-only
+            // emission (null queueInfo for all) can land first and make
+            // refreshAllPlayersQueueItems skip everyone.
+            _playersData.first { state ->
+                state is DataState.Data && state.data.any { it.queueInfo != null }
+            }
             refreshAllPlayersQueueItems()
         }
     }
