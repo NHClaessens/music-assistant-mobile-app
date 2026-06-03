@@ -291,6 +291,7 @@ class AutoLibrary(
         return apiClient.sendRequest(request)
             .resultAs<List<ServerMediaItem>>()
             ?.let { mediaItemFactory.createList(it) }
+            ?.filter { it.isPlayable }
             ?.map { it.toAutoMediaItem(true, defaultIconUri) }
     }
 
@@ -325,7 +326,7 @@ class AutoLibrary(
             ?: return null
         val sorted =
             if (context == SubItemContext.PLAYLIST_TRACKS) items else items.clientSorted(sort)
-        return sorted.map { it.toAutoMediaItem(true, defaultIconUri) }
+        return sorted.filter { it.isPlayable }.map { it.toAutoMediaItem(true, defaultIconUri) }
     }
 
     private fun defaultSortFor(context: SubItemContext): SortOption = when (context) {
@@ -897,7 +898,7 @@ private fun ServerMediaItem.toAutoMediaItem(
     defaultIconUri: Uri,
     category: String? = null,
 ): MediaItem? =
-    factory.create(this)?.toAutoMediaItem(allowBrowse, defaultIconUri, category)
+    factory.create(this)?.takeIf { it.isPlayable }?.toAutoMediaItem(allowBrowse, defaultIconUri, category)
 
 private fun AppMediaItem.toAutoMediaItem(
     allowBrowse: Boolean,
