@@ -78,7 +78,7 @@ class MediaItemFactory(
                 album = album?.let { create(it) as? Album },
                 discNumber = discNumber,
                 trackNumber = trackNumber,
-                position = position,
+                position = position?.takeIf { it in 0L..Int.MAX_VALUE.toLong() }?.toInt(),
                 version = version,
             )
 
