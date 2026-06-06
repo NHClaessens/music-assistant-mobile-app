@@ -41,6 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,9 +58,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import compose.icons.TablerIcons
 import compose.icons.tablericons.GripVertical
+import io.music_assistant.client.data.model.client.Chapter
 import io.music_assistant.client.data.model.client.ImageType
 import io.music_assistant.client.data.model.client.Queue
 import io.music_assistant.client.data.model.client.items.AppMediaItem
@@ -75,6 +79,7 @@ import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.localizedSubtitle
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.utils.conditional
+import kotlinx.coroutines.flow.Flow
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_add_to_playlist
 import musicassistantclient.composeapp.generated.resources.cd_toggle_queue
@@ -107,6 +112,8 @@ fun CollapsibleQueue(
     contentPadding: PaddingValues,
     playlistActions: PlaylistActions? = null,
     navigateToItem: (AppMediaItem) -> Unit = {},
+    onChapterClick: (Chapter) -> Unit = {},
+    livePositionFlow: Flow<Double>? = null,
 ) {
     Column(
         modifier = modifier
@@ -168,6 +175,8 @@ fun CollapsibleQueue(
                 queueAction = queueAction,
                 playlistActions = playlistActions,
                 navigateToItem = navigateToItem,
+                onChapterClick = onChapterClick,
+                livePositionFlow = livePositionFlow,
             )
         }
     }
@@ -185,6 +194,8 @@ fun Queue(
     queueAction: (QueueAction) -> Unit,
     playlistActions: PlaylistActions? = null,
     navigateToItem: (AppMediaItem) -> Unit = {},
+    onChapterClick: (Chapter) -> Unit = {},
+    livePositionFlow: Flow<Double>? = null,
 ) {
     Box(
         modifier = modifier,
@@ -250,33 +261,112 @@ fun Queue(
                     }
                 } else {
                     val currentItemId = queueData.info.currentItem?.id
-                    val currentItemIndex = currentItemId?.let { id ->
-                        items.indexOfFirst { it.id == id }
-                    } ?: -1
 
                     var internalItems by remember(items) { mutableStateOf(items) }
+                    // Index of the current item in the OPTIMISTIC list, so played-state
+                    // shading stays consistent with the displayed (possibly mid-drag) order.
+                    val currentItemIndex = remember(internalItems, currentItemId) {
+                        currentItemId?.let { id -> internalItems.indexOfFirst { it.id == id } } ?: -1
+                    }
+                    // Drag origin/destination in real queue-index space, tracked from
+                    // the reorder lambda's live reads. Never captured from a row's
+                    // composition (which goes stale after the server echo resets the
+                    // list), so the relative positionShift sent to the server stays
+                    // correct across consecutive drags.
+                    var dragStartIndex by remember { mutableStateOf<Int?>(null) }
                     var dragEndIndex by remember { mutableStateOf<Int?>(null) }
                     var menuItemId by remember { mutableStateOf<String?>(null) }
                     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
                     val listState = rememberLazyListState()
+
+                    // Flattened rows: real queue items, plus chapter rows under the
+                    // current audiobook. Structurally stable across playback ticks.
+                    val displayRows = remember(internalItems, currentItemId) {
+                        buildDisplayRows(internalItems, currentItemId)
+                    }
+                    val currentChapters = remember(displayRows) {
+                        displayRows.filterIsInstance<QueueDisplayRow.ChapterItem>()
+                            .map { it.chapter }
+                    }
+
+                    // Live position drives only the active-chapter highlight + scroll
+                    // target. derivedStateOf scans per tick but notifies readers only
+                    // at chapter boundaries, so the Queue body does not recompose every
+                    // ~500ms. Read positionState.value only inside a derivedStateOf (see
+                    // active, scrollReady); a direct body read recomposes every tick.
+                    // Seeded null (not elapsedTime) so the open-scroll can distinguish a
+                    // resolved live position from the stale server seed — see scrollReady.
+                    val positionState: State<Double?>? = livePositionFlow
+                        ?.collectAsStateWithLifecycle(initialValue = null)
+                    // Stand-in until the live flow resolves, and for previews where it
+                    // never does. Constant, so deliberately NOT a remember key below:
+                    // keying on it would re-create the derivedStateOf every server tick.
+                    val fallbackPosition = queueData.info.elapsedTime ?: 0.0
+                    val active by remember(currentChapters, positionState) {
+                        derivedStateOf {
+                            activeChapter(currentChapters, positionState?.value ?: fallbackPosition)
+                        }
+                    }
+
                     val reorderableLazyListState =
                         rememberReorderableLazyListState(listState) { from, to ->
-                            if (to.index <= currentItemIndex) {
+                            // Map visual indices to real queue indices from live State,
+                            // never a captured value, so the mapping can't go stale
+                            // against an optimistic mid-drag reorder.
+                            val rows = buildDisplayRows(internalItems, currentItemId)
+                            val currentIdx = internalItems.indexOfFirst { it.id == currentItemId }
+                            val fromQueueIndex = rows.queueIndexAt(from.index)
+                                ?: return@rememberReorderableLazyListState
+                            val toQueueIndex = rows.queueIndexAt(to.index)
+                                ?: return@rememberReorderableLazyListState
+                            // currentIdx == -1 (no current item) must not block reorders.
+                            if (currentIdx >= 0 && toQueueIndex <= currentIdx) {
                                 return@rememberReorderableLazyListState
                             }
+                            // First move of a drag records the true origin index.
+                            if (dragStartIndex == null) dragStartIndex = fromQueueIndex
                             internalItems = internalItems.toMutableList().apply {
-                                add(to.index, removeAt(from.index))
+                                add(toQueueIndex, removeAt(fromQueueIndex))
                             }
-                            dragEndIndex = to.index
+                            dragEndIndex = toQueueIndex
                         }
 
-                    // Auto-scroll to current item when queue is shown or page becomes current
-                    LaunchedEffect(isQueueExpanded, isCurrentPage, currentItemIndex) {
-                        if (isQueueExpanded && isCurrentPage && currentItemIndex >= 0) {
-                            // Scroll to show the current item with some context
-                            // Center the current item in the viewport
+                    // Recomputed when the active chapter changes so a (re)open lands on the
+                    // chapter playing now. The scroll itself (LaunchedEffect below) is
+                    // intentionally NOT keyed on `active`, so crossing a chapter boundary
+                    // mid-browse never yanks the user's scroll position.
+                    val autoScrollIndex = remember(displayRows, active) {
+                        val activeIdx = displayRows.indexOfFirst {
+                            it is QueueDisplayRow.ChapterItem && it.chapter == active
+                        }
+                        val currentIdx = displayRows.indexOfFirst {
+                            it is QueueDisplayRow.QueueItem && it.item.id == currentItemId
+                        }
+                        when {
+                            active != null && activeIdx >= 0 -> activeIdx
+                            currentIdx >= 0 -> currentIdx
+                            else -> -1
+                        }
+                    }
+
+                    // Gate the one-shot open-scroll on a resolved live position when the
+                    // current item has chapters: the elapsedTime seed can name the previous
+                    // chapter just after a boundary, and the scroll never re-runs on later
+                    // position changes (by design — see autoScrollIndex). No chapters → the
+                    // target is position-independent, so scroll immediately. derivedStateOf
+                    // so this flips once on resolution, not on every ~500ms tick.
+                    val scrollReady by remember(currentChapters, positionState) {
+                        derivedStateOf {
+                            currentChapters.isEmpty() ||
+                                positionState == null || positionState.value != null
+                        }
+                    }
+                    LaunchedEffect(isQueueExpanded, isCurrentPage, currentItemId, scrollReady) {
+                        val shouldScroll =
+                            isQueueExpanded && isCurrentPage && scrollReady && autoScrollIndex >= 0
+                        if (shouldScroll && !listState.isScrollInProgress) {
                             listState.animateScrollToItem(
-                                index = currentItemIndex,
+                                index = autoScrollIndex,
                                 scrollOffset = -100, // Offset to show some items above
                             )
                         }
@@ -291,16 +381,26 @@ fun Queue(
                         contentPadding = contentPadding,
                     ) {
                         itemsIndexed(
-                            items = internalItems,
-                            key = { _, item -> item.id },
-                        ) { index, item ->
+                            items = displayRows,
+                            key = { _, row -> row.key },
+                        ) { _, row ->
+                            if (row is QueueDisplayRow.ChapterItem) {
+                                QueueChapterRow(
+                                    chapter = row.chapter,
+                                    isActive = row.chapter == active,
+                                    onClick = { onChapterClick(row.chapter) },
+                                )
+                                return@itemsIndexed
+                            }
+                            val queueRow = row as QueueDisplayRow.QueueItem
+                            val item = queueRow.item
                             val isCurrent = item.id == currentItemId
-                            val isPlayed = index < currentItemIndex
+                            val isPlayed = queueRow.queueIndex < currentItemIndex
                             val isPlayable = item.isPlayable
 
                             ReorderableItem(
                                 state = reorderableLazyListState,
-                                key = item.id,
+                                key = queueRow.key,  // MUST equal the LazyColumn item key
                                 enabled = isPlayable,  // Disable reordering for unplayable items
                             ) {
                                 Box {
@@ -424,16 +524,20 @@ fun Queue(
                                                 modifier = Modifier
                                                     .draggableHandle(
                                                         onDragStopped = {
-                                                            dragEndIndex?.let { to ->
+                                                            val from = dragStartIndex
+                                                            val to = dragEndIndex
+                                                            if (from != null && to != null) {
                                                                 queueAction(
                                                                     QueueAction.MoveItem(
                                                                         queueData.info.id,
                                                                         item.id,
-                                                                        from = index,
+                                                                        from = from,
                                                                         to = to,
                                                                     ),
                                                                 )
                                                             }
+                                                            dragStartIndex = null
+                                                            dragEndIndex = null
                                                         },
                                                     )
                                                     .size(16.dp),
@@ -503,6 +607,65 @@ fun Queue(
                 }
             }
         }
+    }
+}
+
+/**
+ * Display-only chapter row nested under the current audiobook. Tap-to-seek only:
+ * no image, drag handle, menu, or delete. Kept private to this file so it cannot
+ * be mistaken for a real queue item elsewhere.
+ */
+@Composable
+private fun QueueChapterRow(
+    chapter: Chapter,
+    isActive: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(start = 72.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = chapter.name,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+            color = if (isActive) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.secondary
+            },
+        )
+
+        formatChapterDuration(chapter.duration)?.let { duration ->
+            Text(
+                text = duration,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+/**
+ * Human chapter length, or null below one second (nothing worth showing).
+ * Seconds under a minute, whole minutes under an hour, else `Hh Mm` / `Hh`.
+ */
+internal fun formatChapterDuration(seconds: Double): String? = when {
+    seconds < 1.0 -> null
+    seconds < 60.0 -> "${seconds.toInt()}s"
+    seconds < 3600.0 -> "${(seconds / 60).toInt()}m"
+    else -> {
+        val hours = (seconds / 3600).toInt()
+        val minutes = ((seconds % 3600) / 60).toInt()
+        if (minutes > 0) "${hours}h ${minutes}m" else "${hours}h"
     }
 }
 
