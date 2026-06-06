@@ -728,10 +728,6 @@ private fun ExpandedPlayerPage(
                         tint = colors.controlTint,
                         isCurrentPage = isCurrentPage,
                         contentPadding = contentPadding,
-                        navigateToItem = {
-                            navigateToItem(it)
-                            onClose()
-                        },
                         livePositionFlow = livePositionFlow,
                         onChapterClick = { chapter ->
                             playerAction(player, PlayerAction.SeekTo(chapterSeekSeconds(chapter.start)))
@@ -754,10 +750,6 @@ private fun ExpandedPlayerPage(
                     contentPadding = contentPadding,
                     queueAction = queueAction,
                     playlistActions = playlistActions,
-                    navigateToItem = {
-                        navigateToItem(it)
-                        onClose()
-                    },
                     livePositionFlow = livePositionFlow,
                     onChapterClick = { chapter ->
                         playerAction(player, PlayerAction.SeekTo(chapterSeekSeconds(chapter.start)))

@@ -39,7 +39,7 @@ class QueueDisplayRowsTest {
         val book = audiobookTrack("b1")
         val items = listOf(song, book)
 
-        val rows = buildDisplayRows(items, currentItemId = book.id)
+        val rows = items.buildDisplayRows(currentItemId = book.id)
 
         // One row per queue item plus one row per chapter of the current book.
         assertEquals(items.size + chapterNames.size, rows.size)
@@ -60,7 +60,7 @@ class QueueDisplayRowsTest {
             .copy(chapters = null)
         val book = queueTrackOf(withNull, id = "b1")
 
-        val rows = buildDisplayRows(listOf(book), currentItemId = book.id)
+        val rows = listOf(book).buildDisplayRows(currentItemId = book.id)
 
         assertEquals(1, rows.size)
         assertTrue(rows.single() is QueueDisplayRow.QueueItem)
@@ -70,7 +70,7 @@ class QueueDisplayRowsTest {
     fun currentAudiobookWithEmptyChaptersEmitsNoChapterRows() {
         val book = audiobookTrack("b1", chapters = emptyList())
 
-        val rows = buildDisplayRows(listOf(book), currentItemId = book.id)
+        val rows = listOf(book).buildDisplayRows(currentItemId = book.id)
 
         assertEquals(1, rows.size)
         assertTrue(rows.single() is QueueDisplayRow.QueueItem)
@@ -81,7 +81,7 @@ class QueueDisplayRowsTest {
         val book = audiobookTrack("b1")
         val current = songTrack("s0")
 
-        val rows = buildDisplayRows(listOf(current, book), currentItemId = current.id)
+        val rows = listOf(current, book).buildDisplayRows(currentItemId = current.id)
 
         assertTrue(rows.none { it is QueueDisplayRow.ChapterItem })
         assertEquals(2, rows.size)
@@ -91,7 +91,7 @@ class QueueDisplayRowsTest {
     fun nonAudiobookCurrentItemEmitsSingleRow() {
         val song = songTrack("s0")
 
-        val rows = buildDisplayRows(listOf(song), currentItemId = song.id)
+        val rows = listOf(song).buildDisplayRows(currentItemId = song.id)
 
         assertEquals(1, rows.size)
         assertTrue(rows.single() is QueueDisplayRow.QueueItem)
@@ -106,21 +106,21 @@ class QueueDisplayRowsTest {
     fun activeChapterAtExactStartBoundaryReturnsThatChapter() {
         val target = chapters[1]
 
-        assertEquals(target, activeChapter(chapters, target.start))
+        assertEquals(target, chapters.activeChapter(target.start))
     }
 
     @Test
     fun activeChapterBeforeFirstStartReturnsNull() {
         val beforeAll = chapters.first().start - 1.0
 
-        assertNull(activeChapter(chapters, beforeAll))
+        assertNull(chapters.activeChapter(beforeAll))
     }
 
     @Test
     fun activeChapterPastLastStartReturnsLastChapter() {
         val pastEnd = chapters.last().start + 1.0
 
-        assertEquals(chapters.last(), activeChapter(chapters, pastEnd))
+        assertEquals(chapters.last(), chapters.activeChapter(pastEnd))
     }
 
     // --- queueIndexAt -----------------------------------------------------
@@ -128,7 +128,7 @@ class QueueDisplayRowsTest {
     @Test
     fun queueIndexAtMapsQueueRowsAndRejectsChapterRows() {
         val items = listOf(songTrack("s0"), audiobookTrack("b1"), songTrack("s2"))
-        val rows = buildDisplayRows(items, currentItemId = items[1].id)
+        val rows = items.buildDisplayRows(currentItemId = items[1].id)
 
         rows.forEachIndexed { visualIndex, row ->
             when (row) {
@@ -144,7 +144,7 @@ class QueueDisplayRowsTest {
 
     @Test
     fun activeChapterWithNoChaptersReturnsNull() {
-        assertNull(activeChapter(emptyList(), position = 123.0))
+        assertNull(emptyList<Chapter>().activeChapter(position = 123.0))
     }
 
     @Test
@@ -159,7 +159,7 @@ class QueueDisplayRowsTest {
             id = "b1",
         )
 
-        val keys = buildDisplayRows(listOf(book), currentItemId = book.id).map { it.key }
+        val keys = listOf(book).buildDisplayRows(currentItemId = book.id).map { it.key }
 
         assertEquals(keys.size, keys.toSet().size, "Display row keys must be unique")
     }

@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -66,7 +65,6 @@ import io.music_assistant.client.data.model.client.Chapter
 import io.music_assistant.client.data.model.client.ImageType
 import io.music_assistant.client.data.model.client.Queue
 import io.music_assistant.client.data.model.client.items.AppMediaItem
-import io.music_assistant.client.data.model.client.items.Audiobook
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.items.image
 import io.music_assistant.client.ui.compose.common.DataState
@@ -79,6 +77,7 @@ import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.localizedSubtitle
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.utils.conditional
+import io.music_assistant.client.utils.formatDuration
 import kotlinx.coroutines.flow.Flow
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_add_to_playlist
@@ -97,6 +96,7 @@ import musicassistantclient.composeapp.generated.resources.queue_not_loaded
 import org.jetbrains.compose.resources.stringResource
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import kotlin.time.DurationUnit
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -111,7 +111,6 @@ fun CollapsibleQueue(
     isCurrentPage: Boolean = true,
     contentPadding: PaddingValues,
     playlistActions: PlaylistActions? = null,
-    navigateToItem: (AppMediaItem) -> Unit = {},
     onChapterClick: (Chapter) -> Unit = {},
     livePositionFlow: Flow<Double>? = null,
 ) {
@@ -174,7 +173,6 @@ fun CollapsibleQueue(
                 contentPadding = contentPadding,
                 queueAction = queueAction,
                 playlistActions = playlistActions,
-                navigateToItem = navigateToItem,
                 onChapterClick = onChapterClick,
                 livePositionFlow = livePositionFlow,
             )
@@ -193,7 +191,6 @@ fun Queue(
     contentPadding: PaddingValues,
     queueAction: (QueueAction) -> Unit,
     playlistActions: PlaylistActions? = null,
-    navigateToItem: (AppMediaItem) -> Unit = {},
     onChapterClick: (Chapter) -> Unit = {},
     livePositionFlow: Flow<Double>? = null,
 ) {
@@ -282,7 +279,7 @@ fun Queue(
                     // Flattened rows: real queue items, plus chapter rows under the
                     // current audiobook. Structurally stable across playback ticks.
                     val displayRows = remember(internalItems, currentItemId) {
-                        buildDisplayRows(internalItems, currentItemId)
+                        internalItems.buildDisplayRows(currentItemId)
                     }
                     val currentChapters = remember(displayRows) {
                         displayRows.filterIsInstance<QueueDisplayRow.ChapterItem>()
@@ -304,7 +301,7 @@ fun Queue(
                     val fallbackPosition = queueData.info.elapsedTime ?: 0.0
                     val active by remember(currentChapters, positionState) {
                         derivedStateOf {
-                            activeChapter(currentChapters, positionState?.value ?: fallbackPosition)
+                            currentChapters.activeChapter(positionState?.value ?: fallbackPosition)
                         }
                     }
 
@@ -313,7 +310,7 @@ fun Queue(
                             // Map visual indices to real queue indices from live State,
                             // never a captured value, so the mapping can't go stale
                             // against an optimistic mid-drag reorder.
-                            val rows = buildDisplayRows(internalItems, currentItemId)
+                            val rows = internalItems.buildDisplayRows(currentItemId)
                             val currentIdx = internalItems.indexOfFirst { it.id == currentItemId }
                             val fromQueueIndex = rows.queueIndexAt(from.index)
                                 ?: return@rememberReorderableLazyListState
@@ -503,22 +500,6 @@ fun Queue(
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                         }
-                                        if (isCurrent) {
-                                            (item.track as? Audiobook)
-                                                ?.takeIf { (it.chapters?.size ?: 0) > 0 }
-                                                ?.let { audiobook ->
-                                                    Icon(
-                                                        modifier = Modifier
-                                                            .size(16.dp)
-                                                            .clickable {
-                                                                navigateToItem(audiobook)
-                                                            },
-                                                        imageVector = Icons.Default.Bookmarks,
-                                                        contentDescription = "Chapters",
-                                                        tint = MaterialTheme.colorScheme.secondary,
-                                                    )
-                                                }
-                                        }
                                         if (!isCurrent && !isPlayed && isPlayable) {
                                             Icon(
                                                 modifier = Modifier
@@ -644,28 +625,13 @@ private fun QueueChapterRow(
             },
         )
 
-        formatChapterDuration(chapter.duration)?.let { duration ->
+        if (chapter.end != null) {
             Text(
-                text = duration,
+                text = chapter.duration.formatDuration(DurationUnit.SECONDS),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
             )
         }
-    }
-}
-
-/**
- * Human chapter length, or null below one second (nothing worth showing).
- * Seconds under a minute, whole minutes under an hour, else `Hh Mm` / `Hh`.
- */
-internal fun formatChapterDuration(seconds: Double): String? = when {
-    seconds < 1.0 -> null
-    seconds < 60.0 -> "${seconds.toInt()}s"
-    seconds < 3600.0 -> "${(seconds / 60).toInt()}m"
-    else -> {
-        val hours = (seconds / 3600).toInt()
-        val minutes = ((seconds % 3600) / 60).toInt()
-        if (minutes > 0) "${hours}h ${minutes}m" else "${hours}h"
     }
 }
 

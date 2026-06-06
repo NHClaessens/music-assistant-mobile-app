@@ -37,32 +37,31 @@ internal sealed interface QueueDisplayRow {
  * Flattens queue items into display rows, inserting chapter rows only under the
  * current item when it is an audiobook with chapters. Position-independent: does
  * not encode active state, so the result is stable across playback ticks and
- * safe to `remember` keyed only on [items] and [currentItemId].
+ * safe to `remember` keyed only on the receiver and [currentItemId].
  */
-internal fun buildDisplayRows(
-    items: List<QueueTrack>,
-    currentItemId: String?,
-): List<QueueDisplayRow> =
-    items.flatMapIndexed { queueIndex, item ->
-        val queueRow = QueueDisplayRow.QueueItem(queueIndex, item)
-        val chapters = if (item.id == currentItemId) {
-            (item.track as? Audiobook)?.chapters.orEmpty()
-        } else {
-            emptyList()
-        }
-        listOf(queueRow) + chapters.mapIndexed { chapterIndex, chapter ->
-            QueueDisplayRow.ChapterItem(
-                parentQueueIndex = queueIndex,
-                parentQueueItemId = item.id,
-                chapterIndex = chapterIndex,
-                chapter = chapter,
-            )
+internal fun List<QueueTrack>.buildDisplayRows(currentItemId: String?): List<QueueDisplayRow> =
+    flatMapIndexed { queueIndex, item ->
+        buildList {
+            add(QueueDisplayRow.QueueItem(queueIndex, item))
+            if (item.id == currentItemId) {
+                (item.track as? Audiobook)?.chapters.orEmpty()
+                    .forEachIndexed { chapterIndex, chapter ->
+                        add(
+                            QueueDisplayRow.ChapterItem(
+                                parentQueueIndex = queueIndex,
+                                parentQueueItemId = item.id,
+                                chapterIndex = chapterIndex,
+                                chapter = chapter,
+                            ),
+                        )
+                    }
+            }
         }
     }
 
 /** Last chapter whose start is at or before [position]; null if [position] precedes all. */
-internal fun activeChapter(chapters: List<Chapter>, position: Double): Chapter? =
-    chapters.lastOrNull { it.start <= position }
+internal fun List<Chapter>.activeChapter(position: Double): Chapter? =
+    lastOrNull { it.start <= position }
 
 /** Maps a LazyColumn visual index to a real queue index, or null for chapter rows. */
 internal fun List<QueueDisplayRow>.queueIndexAt(visualIndex: Int): Int? =
