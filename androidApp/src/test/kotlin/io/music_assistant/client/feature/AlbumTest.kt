@@ -7,9 +7,15 @@ import io.music_assistant.client.support.FakeServiceClient
 import io.music_assistant.client.support.Qualifiers
 import io.music_assistant.client.support.ServerMediaItemFixtures
 import io.music_assistant.client.support.ServerPlayerFixtures
+import io.music_assistant.client.support.get
 import io.music_assistant.client.support.launchLoggedInApp
-import io.music_assistant.client.support.pages.expandPlayer
+import io.music_assistant.client.support.pages.clickItemOption
+import io.music_assistant.client.support.pages.playMedia
 import io.music_assistant.client.support.rules.createTestRuleChain
+import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.action_play_album_from_here
+import org.hamcrest.CoreMatchers.equalTo
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,7 +24,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
 @Config(qualifiers = Qualifiers.MEDIUM_PHONE)
-class QueueTest {
+class AlbumTest {
     @get:Rule
     val testRuleChain = createTestRuleChain()
 
@@ -28,53 +34,38 @@ class QueueTest {
     private val serviceClient: FakeServiceClient by inject(ServiceClient::class.java)
 
     @Test
-    fun `can view current player queue`() {
+    fun `clicking on a track plays just that track`() {
         val album = ServerMediaItemFixtures.album()
         val track1 = ServerMediaItemFixtures.track(album = album)
         val track2 = ServerMediaItemFixtures.track(album = album)
-        serviceClient.addToLibrary(track1, track2)
+        val track3 = ServerMediaItemFixtures.track(album = album)
+        serviceClient.addToLibrary(track1, track2, track3)
 
         val player = ServerPlayerFixtures.player()
         serviceClient.addPlayers(player)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(album)
-            .clickPlay()
-            .expandPlayer(player.displayName, playing = true, item = track1.name)
-            .openQueue(1, 2)
-            .assertQueue(track1.name, track2.name)
+            .playMedia(track2)
+
+        assertThat(serviceClient.getQueueForPlayer(player), equalTo(listOf(track2)))
     }
 
     @Test
-    fun `can clear current player queue`() {
+    fun `long pressing a track and clicking 'Play album from here' queues the rest of the album`() {
         val album = ServerMediaItemFixtures.album()
-        val track = ServerMediaItemFixtures.track(album = album)
-        serviceClient.addToLibrary(track)
+        val track1 = ServerMediaItemFixtures.track(album = album)
+        val track2 = ServerMediaItemFixtures.track(album = album)
+        val track3 = ServerMediaItemFixtures.track(album = album)
+        serviceClient.addToLibrary(track1, track2, track3)
 
         val player = ServerPlayerFixtures.player()
         serviceClient.addPlayers(player)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(album)
-            .clickPlay()
-            .expandPlayer(player.displayName, playing = true, item = track.name)
-            .clearQueue()
-    }
+            .clickItemOption(track2, Res.string.action_play_album_from_here.get())
 
-    @Test
-    fun `can transfer queue to another player`() {
-        val album = ServerMediaItemFixtures.album()
-        val track = ServerMediaItemFixtures.track(album = album)
-        serviceClient.addToLibrary(track)
-
-        val player1 = ServerPlayerFixtures.player()
-        val player2 = ServerPlayerFixtures.player()
-        serviceClient.addPlayers(player1, player2)
-
-        launchLoggedInApp(composeTestRule, serviceClient)
-            .clickOnMedia(album)
-            .clickPlay()
-            .expandPlayer(player1.displayName, playing = true, item = track.name)
-            .transferQueue(player2.displayName)
+        assertThat(serviceClient.getQueueForPlayer(player), equalTo(listOf(track2, track3)))
     }
 }

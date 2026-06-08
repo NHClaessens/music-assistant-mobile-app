@@ -5,10 +5,12 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.isDisplayed
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.support.get
@@ -27,7 +29,7 @@ import musicassistantclient.composeapp.generated.resources.players_nothing
 fun ComposePage.clickOnMedia(
     serverMediaItem: ServerMediaItem,
     navigationItem: String,
-): MediaItemPage {
+): ItemPage {
     return clickOnMedia(
         serverMediaItem.name,
         MediaType.fromServer(serverMediaItem.mediaType) ?: MediaType.UNKNOWN,
@@ -35,12 +37,18 @@ fun ComposePage.clickOnMedia(
     )
 }
 
-fun ComposePage.clickOnMedia(name: String, type: MediaType, navigationItem: String): MediaItemPage {
+fun ComposePage.clickOnMedia(name: String, type: MediaType, navigationItem: String): ItemPage {
     composeTestRule.onNodeWithText(name)
         .assertIsDisplayed()
         .performClick()
 
-    return MediaItemPage(name, type, navigationItem, composeTestRule).assertOnPage()
+    return ItemPage(name, type, navigationItem, composeTestRule).assertOnPage()
+}
+
+fun <T : ComposePage> T.clickItemOption(serverMediaItem: ServerMediaItem, action: String): T {
+    composeTestRule.onNodeWithText(serverMediaItem.name).performTouchInput { longClick() }
+    composeTestRule.onNodeWithText(action).performClick()
+    return this
 }
 
 fun ComposePage.assertNavBar(items: List<String>, selected: String) {

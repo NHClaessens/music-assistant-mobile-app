@@ -22,7 +22,7 @@ import musicassistantclient.composeapp.generated.resources.nav_library
 import musicassistantclient.composeapp.generated.resources.nav_search
 import musicassistantclient.composeapp.generated.resources.nav_settings
 
-class MediaItemPage(
+class ItemPage(
     private val name: String,
     private val type: MediaType,
     private val navigationItem: String,
@@ -41,7 +41,8 @@ class MediaItemPage(
 
     override fun assert() {
         composeTestRule.onNodeWithText(name).assertIsDisplayed()
-        composeTestRule.onNodeWithText(Res.string.action_play_now.get()).assertIsDisplayed().assertHasClickAction()
+        composeTestRule.onNodeWithText(Res.string.action_play_now.get()).assertIsDisplayed()
+            .assertHasClickAction()
         assertNavBar(
             items = listOf(
                 Res.string.nav_home.get(),
@@ -54,13 +55,17 @@ class MediaItemPage(
 
         when (type) {
             MediaType.ARTIST -> {
-                composeTestRule.onNode(isTab(Res.string.media_type_albums.get())).assertIsDisplayed()
-                composeTestRule.onNode(isTab(Res.string.media_type_tracks.get())).assertIsDisplayed()
+                composeTestRule.onNode(isTab(Res.string.media_type_albums.get()))
+                    .assertIsDisplayed()
+                composeTestRule.onNode(isTab(Res.string.media_type_tracks.get()))
+                    .assertIsDisplayed()
             }
 
             MediaType.ALBUM -> {
-                composeTestRule.onNode(isTab(Res.string.media_type_tracks.get())).assertIsDisplayed()
-                composeTestRule.onNode(isTab(Res.string.media_type_albums.get())).assertIsNotDisplayed()
+                composeTestRule.onNode(isTab(Res.string.media_type_tracks.get()))
+                    .assertIsDisplayed()
+                composeTestRule.onNode(isTab(Res.string.media_type_albums.get()))
+                    .assertIsNotDisplayed()
             }
 
             MediaType.TRACK -> TODO()
@@ -77,10 +82,10 @@ class MediaItemPage(
         }
     }
 
-    fun clickGoToArtist(artist: String): MediaItemPage {
+    fun clickGoToArtist(artist: String): ItemPage {
         composeTestRule.onNodeWithContentDescription(Res.string.cd_more.get()).performClick()
         composeTestRule.onNodeWithText(Res.string.action_go_to_artist.get()).performClick()
-        return MediaItemPage(
+        return ItemPage(
             artist,
             MediaType.ARTIST,
             navigationItem,
@@ -88,7 +93,7 @@ class MediaItemPage(
         ).assertOnPage()
     }
 
-    fun clickPlay(): MediaItemPage {
+    fun clickPlay(): ItemPage {
         composeTestRule.onNodeWithText(Res.string.action_play_now.get()).performClick()
         return this
     }

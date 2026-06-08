@@ -3,6 +3,7 @@ package io.music_assistant.client.ui.compose.common.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.AddToQueue
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -28,6 +29,7 @@ import musicassistantclient.composeapp.generated.resources.action_insert_next
 import musicassistantclient.composeapp.generated.resources.action_insert_next_and_play
 import musicassistantclient.composeapp.generated.resources.action_mark_played
 import musicassistantclient.composeapp.generated.resources.action_mark_unplayed
+import musicassistantclient.composeapp.generated.resources.action_play_album_from_here
 import musicassistantclient.composeapp.generated.resources.action_play_now
 import musicassistantclient.composeapp.generated.resources.action_remove_from_library
 import musicassistantclient.composeapp.generated.resources.action_remove_from_playlist
@@ -39,6 +41,7 @@ sealed class ItemAction(val kind: Kind) {
     enum class Kind { PLAYBACK, OTHER }
 
     data class Play(val queueOption: QueueOption) : ItemAction(Kind.PLAYBACK)
+    data object PlayFromHere : ItemAction(Kind.PLAYBACK)
     data object StartRadio : ItemAction(Kind.PLAYBACK)
 
     data object AddToLibrary : ItemAction(Kind.OTHER)
@@ -62,6 +65,8 @@ fun ItemAction.title(): StringResource = when (this) {
         QueueOption.NEXT -> Res.string.action_insert_next
         QueueOption.ADD -> Res.string.action_add_to_queue
     }
+
+    ItemAction.PlayFromHere -> Res.string.action_play_album_from_here
     ItemAction.StartRadio -> Res.string.action_start_radio
     ItemAction.AddToLibrary -> Res.string.action_add_to_library
     ItemAction.RemoveFromLibrary -> Res.string.action_remove_from_library
@@ -81,6 +86,8 @@ fun ItemAction.icon(): ImageVector = when (this) {
         QueueOption.NEXT -> Icons.Default.QueuePlayNext
         QueueOption.ADD -> Icons.Default.AddToQueue
     }
+
+    ItemAction.PlayFromHere -> Icons.Default.Album
     ItemAction.StartRadio -> Icons.Default.CellTower
     ItemAction.AddToLibrary -> TablerIcons.FolderPlus
     ItemAction.RemoveFromLibrary -> TablerIcons.FolderMinus
