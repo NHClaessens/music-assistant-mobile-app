@@ -665,10 +665,10 @@ private data class PlayerBuildInputs(
                         localPlayerRepository.onInitialPlayersReceived(hasLocalPlayer = false)
                     } else {
                         stopSendspin()
-                        // User turned Sendspin off — the local player is gone for good,
-                        // so drop its UI state and any queued offline commands.
+                        // User turned Sendspin off — the local player is gone for good.
+                        // stopSendspin() no longer resets it (transient teardowns must
+                        // preserve a queued resume), so clear it explicitly here.
                         localPlayerRepository.clearState()
-                        localPlayerRepository.clearCommandQueue()
                     }
                 }
             }
@@ -930,7 +930,6 @@ private data class PlayerBuildInputs(
         _queueInfos.update { emptyList() }
         positionTracker.clear()
         localPlayerRepository.clearState()
-        localPlayerRepository.clearCommandQueue()
         // Note: _providersIcons deliberately NOT cleared (static data)
     }
 
