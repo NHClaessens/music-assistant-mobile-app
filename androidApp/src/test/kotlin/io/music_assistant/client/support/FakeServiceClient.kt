@@ -511,7 +511,6 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
     }
 
     override fun onPlaybackActive() {
-        TODO("Not yet implemented")
     }
 
     override fun onExternalConsumerInactive() {
@@ -519,7 +518,6 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
     }
 
     override fun onPlaybackInactive() {
-        TODO("Not yet implemented")
     }
 
     fun addToLibrary(vararg items: ServerMediaItem) {
