@@ -3,6 +3,7 @@ import ComposeApp
 import UIKit
 import CarPlay
 import Intents
+import os
 import os.log
 import os.lock
 
@@ -87,6 +88,28 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
+#if DEBUG
+/// Forwards Kermit logs (via the KMP `OsLogSink` bridge) to the unified log with
+/// `privacy: .public`, for local development
+final class OsLogSinkImpl: NSObject, OsLogSink {
+    private let subsystem = Bundle.main.bundleIdentifier ?? "io.music-assistant.client"
+
+    func log(severity: String, tag: String, message: String) {
+        let logger = os.Logger(subsystem: subsystem, category: tag)
+        let level: OSLogType
+        switch severity {
+        case "Verbose", "Debug": level = .debug
+        case "Info":             level = .info
+        case "Warn":             level = .default
+        case "Error":            level = .error
+        case "Assert":           level = .fault
+        default:                 level = .default
+        }
+        logger.log(level: level, "\(message, privacy: .public)")
+    }
+}
+#endif
+
 @main
 struct iOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -98,6 +121,12 @@ struct iOSApp: App {
     init() {
         // Register the Swift implementation with Kotlin
         PlatformPlayerProvider.shared.player = player
+
+        #if DEBUG
+        // Route Kermit logs to the unified log un-redacted during development
+        // Must run before bootstrapKmp() so init-time logs reach the sink.
+        OsLogSinkProvider.shared.sink = OsLogSinkImpl()
+        #endif
 
         // Initialize NowPlayingManager early to configure AudioSession
         _ = NowPlayingManager.shared
