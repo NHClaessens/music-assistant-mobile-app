@@ -89,6 +89,8 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
             return items.filter { it.mediaType == MediaType.GENRE.serverValue }
         }
 
+    private val playlistItems = mutableMapOf<String, List<String>>()
+
     val username = "user"
     val password = "password"
 
@@ -220,6 +222,26 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                 )
             }
 
+            APICommands.musicGet(APICommands.KIND_PLAYLISTS) -> {
+                Result.success(
+                    answer(
+                        request = request,
+                        result = findItem(request, playlists),
+                    ),
+                )
+            }
+
+            APICommands.MUSIC_PLAYLISTS_PLAYLIST_TRACKS -> {
+                val playlistId = request.getArg("item_id")
+
+                Result.success(
+                    answer(
+                        request = request,
+                        result = tracks.filter { playlistItems[playlistId]!!.contains(it.itemId) },
+                    ),
+                )
+            }
+
             APICommands.MUSIC_TRACKS_LIBRARY_ITEMS -> {
                 Result.success(
                     answer(
@@ -282,7 +304,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                         MediaType.ALBUM -> {
                             val albumTracks = tracks.filter { it.album == item }
                             val startIndex = if (startItemId != null) {
-                                tracks.indexOfFirst { it.itemId == startItemId }
+                                albumTracks.indexOfFirst { it.itemId == startItemId }
                             } else {
                                 0
                             }
@@ -290,6 +312,16 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                             albumTracks.drop(startIndex)
                         }
                         MediaType.TRACK -> listOf(item)
+                        MediaType.PLAYLIST -> {
+                            val playlistTracks = tracks.filter { playlistItems[item.itemId]!!.contains(it.itemId) }
+                            val startIndex = if (startItemId != null) {
+                                playlistTracks.indexOfFirst { it.itemId == startItemId }
+                            } else {
+                                0
+                            }
+
+                            playlistTracks.drop(startIndex)
+                        }
                         else -> TODO()
                     }
                 } ?: emptyList()
@@ -592,6 +624,10 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
 
     fun getQueueForPlayer(player: ServerPlayer): List<ServerMediaItem> {
         return queueItems[player.activeSource]!!.map { it.mediaItem!! }
+    }
+
+    fun setPlaylist(playlist: ServerMediaItem, vararg tracks: ServerMediaItem) {
+        playlistItems[playlist.itemId] = tracks.map { it.itemId }
     }
 }
 

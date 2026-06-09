@@ -3,7 +3,6 @@ package io.music_assistant.client.ui.compose.common.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.AddToQueue
-import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -18,7 +17,9 @@ import compose.icons.tablericons.FolderPlus
 import compose.icons.tablericons.Heart
 import compose.icons.tablericons.HeartBroken
 import io.music_assistant.client.data.model.client.QueueOption
+import io.music_assistant.client.ui.compose.common.icons.AlbumIcon
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
+import io.music_assistant.client.ui.compose.common.icons.PlaylistIcon
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_add_to_library
 import musicassistantclient.composeapp.generated.resources.action_add_to_playlist
@@ -31,6 +32,7 @@ import musicassistantclient.composeapp.generated.resources.action_mark_played
 import musicassistantclient.composeapp.generated.resources.action_mark_unplayed
 import musicassistantclient.composeapp.generated.resources.action_play_album_from_here
 import musicassistantclient.composeapp.generated.resources.action_play_now
+import musicassistantclient.composeapp.generated.resources.action_play_playlist_from_here
 import musicassistantclient.composeapp.generated.resources.action_remove_from_library
 import musicassistantclient.composeapp.generated.resources.action_remove_from_playlist
 import musicassistantclient.composeapp.generated.resources.action_start_radio
@@ -41,7 +43,7 @@ sealed class ItemAction(val kind: Kind) {
     enum class Kind { PLAYBACK, OTHER }
 
     data class Play(val queueOption: QueueOption) : ItemAction(Kind.PLAYBACK)
-    data object PlayFromHere : ItemAction(Kind.PLAYBACK)
+    data class PlayFromHere(val isPlaylist: Boolean) : ItemAction(Kind.PLAYBACK)
     data object StartRadio : ItemAction(Kind.PLAYBACK)
 
     data object AddToLibrary : ItemAction(Kind.OTHER)
@@ -66,7 +68,11 @@ fun ItemAction.title(): StringResource = when (this) {
         QueueOption.ADD -> Res.string.action_add_to_queue
     }
 
-    ItemAction.PlayFromHere -> Res.string.action_play_album_from_here
+    is ItemAction.PlayFromHere -> if (isPlaylist) {
+        Res.string.action_play_playlist_from_here
+    } else {
+        Res.string.action_play_album_from_here
+    }
     ItemAction.StartRadio -> Res.string.action_start_radio
     ItemAction.AddToLibrary -> Res.string.action_add_to_library
     ItemAction.RemoveFromLibrary -> Res.string.action_remove_from_library
@@ -87,7 +93,11 @@ fun ItemAction.icon(): ImageVector = when (this) {
         QueueOption.ADD -> Icons.Default.AddToQueue
     }
 
-    ItemAction.PlayFromHere -> Icons.Default.Album
+    is ItemAction.PlayFromHere -> if (isPlaylist) {
+        PlaylistIcon
+    } else {
+        AlbumIcon
+    }
     ItemAction.StartRadio -> Icons.Default.CellTower
     ItemAction.AddToLibrary -> TablerIcons.FolderPlus
     ItemAction.RemoveFromLibrary -> TablerIcons.FolderMinus
