@@ -27,9 +27,9 @@ import io.music_assistant.client.utils.connectionInfo
 import io.music_assistant.client.utils.createPlatformHttpClient
 import io.music_assistant.client.utils.currentTimeMillis
 import io.music_assistant.client.utils.myJson
-import io.music_assistant.client.utils.resultAs
 import io.music_assistant.client.utils.update
 import io.music_assistant.client.webrtc.model.RemoteId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,9 +55,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonPrimitive
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.qualifier.named
@@ -101,6 +99,14 @@ class KtorServiceClient(
     private var hasActiveExternalConsumer = false
     private var hasActivePlayback = false
     private var backgroundedAt = 0L
+
+    private val silentReauth = SilentReauth(
+        ReauthPolicy(
+            maxSilentFailures = MAX_SILENT_REAUTH_FAILURES,
+            roundTripTimeoutMs = AUTH_ROUNDTRIP_TIMEOUT_MS,
+            retryDelayMs = SILENT_REAUTH_RETRY_DELAY_MS,
+        ),
+    )
 
     private sealed class BackgroundedConnectionInfo {
         data class Direct(val connectionInfo: ConnectionInfo) : BackgroundedConnectionInfo()
@@ -579,6 +585,9 @@ class KtorServiceClient(
      * should keep using [connect] so accidental double-connects are still cheap.
      */
     private fun forceConnect(connection: ConnectionInfo) {
+        // New connection episode: the silent-failure budget is per-server-session, so
+        // a prior server's failures must not pre-charge this one's escape hatch.
+        silentReauth.reset()
         // Cancel observer before disconnecting transport to prevent race where the old
         // observer processes TransportState.Disconnected and briefly sets ByUser
         transportObserverJob?.cancel()
@@ -635,6 +644,7 @@ class KtorServiceClient(
 
     /** WebRTC twin of [forceConnect]. */
     private fun forceConnectWebRTC(remoteId: RemoteId) {
+        silentReauth.reset()
         transportObserverJob?.cancel()
         transport?.disconnect()
         transport?.close()
@@ -732,49 +742,48 @@ class KtorServiceClient(
         username: String,
         password: String,
     ) {
-        if (_sessionState.value !is SessionState.Connected) return
-        setAuthState(AuthProcessState.InProgress)
-
         try {
-            val response =
-                sendRequestRaw(Request.Auth.login(username, password, settings.deviceName.value))
-            if (_sessionState.value !is SessionState.Connected) return
-
-            if (response.isFailure) {
-                setAuthFailed("No response from server")
-                return
-            }
-
-            if (response.getOrNull()?.json?.containsKey("error_code") == true) {
-                val errorMessage =
-                    response.getOrNull()?.json["error"]?.jsonPrimitive?.contentOrNull
-                        ?: "Authentication failed"
-                clearCurrentServerToken()
-                setAuthFailed(errorMessage)
-                return
-            }
-
-            response.resultAs<LoginResponse>()?.let { auth ->
-                if (!auth.success) {
-                    setAuthFailed(auth.error ?: "Authentication failed")
-                    return
+            when (
+                // Manual login is single-shot (isAutoLogin = false surfaces on the first
+                // failure). Unlike re-auth it must proceed from a LoggedOut session, so its
+                // guard checks only liveness — not LoggedOut, which would abort the retry.
+                val resolution = silentReauth.resolve(
+                    isAutoLogin = false,
+                    shouldAttempt = { _sessionState.value is SessionState.Connected },
+                    onAttempt = { setAuthState(AuthProcessState.InProgress) },
+                    send = {
+                        sendRequestRaw(Request.Auth.login(username, password, settings.deviceName.value))
+                    },
+                )
+            ) {
+                AuthResolution.Aborted -> return
+                is AuthResolution.Surface -> setAuthFailed(resolution.message)
+                is AuthResolution.Reject -> {
+                    clearCurrentServerToken()
+                    setAuthFailed(resolution.message)
                 }
-                if (auth.token.isNullOrBlank()) {
-                    setAuthFailed("No token received")
-                    return
-                }
-                if (auth.user == null) {
-                    setAuthFailed("No user data received")
-                    return
-                }
-                authorize(auth.token, isAutoLogin = false)
-            } ?: run {
-                setAuthFailed("Failed to parse auth data")
+
+                is AuthResolution.Authenticated -> handleLoginResponse(resolution.answer)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (_sessionState.value !is SessionState.Connected) return
             setAuthFailed(e.message ?: "Exception happened: $e")
             clearCurrentServerToken()
+        }
+    }
+
+    private suspend fun handleLoginResponse(answer: Answer) {
+        val auth = answer.resultAs<LoginResponse>() ?: run {
+            setAuthFailed("Failed to parse auth data")
+            return
+        }
+        when {
+            !auth.success -> setAuthFailed(auth.error ?: "Authentication failed")
+            auth.token.isNullOrBlank() -> setAuthFailed("No token received")
+            auth.user == null -> setAuthFailed("No user data received")
+            else -> authorize(auth.token, isAutoLogin = false)
         }
     }
 
@@ -815,58 +824,67 @@ class KtorServiceClient(
 
     override suspend fun authorize(token: String, isAutoLogin: Boolean) {
         try {
-            if (_sessionState.value !is SessionState.Connected) return
-            setAuthState(AuthProcessState.InProgress)
-            val response = sendRequestRaw(Request.Auth.authorize(token, settings.deviceName.value))
-            if (_sessionState.value !is SessionState.Connected) return
-            if (response.isFailure) {
-                Logger.e(response.exceptionOrNull().toString())
-                setAuthFailed("No response from server")
-                return
-            }
-            if (response.getOrNull()?.json?.containsKey("error_code") == true) {
-                val errorMessage =
-                    response.getOrNull()?.json["error"]?.jsonPrimitive?.contentOrNull
-                        ?: "Authentication failed"
-                clearCurrentServerToken()
-                setAuthFailed(errorMessage)
-                return
-            }
-            response.resultAs<AuthorizationResponse>()?.user?.let { user ->
-                val currentState = _sessionState.value
-                if (currentState is SessionState.Connected) {
-                    val serverIdentifier = when (currentState) {
-                        is SessionState.Connected.Direct -> {
-                            settings.getDirectServerIdentifier(
-                                currentState.connectionInfo.host,
-                                currentState.connectionInfo.port,
-                                currentState.connectionInfo.isTls,
-                            )
-                        }
-
-                        is SessionState.Connected.WebRTC -> {
-                            settings.getWebRTCServerIdentifier(currentState.remoteId.rawId)
-                        }
-                    }
-                    settings.setTokenForServer(serverIdentifier, token)
-                    logger.d { "Saved token for server" }
+            when (
+                val resolution = silentReauth.resolve(
+                    isAutoLogin = isAutoLogin,
+                    // Keep retrying only while the session is live and hasn't been logged
+                    // out from under us — otherwise a late retry could undo a logout.
+                    shouldAttempt = {
+                        val state = _sessionState.value
+                        state is SessionState.Connected &&
+                            state.authProcessState != AuthProcessState.LoggedOut
+                    },
+                    onAttempt = { setAuthState(AuthProcessState.InProgress) },
+                    send = { sendRequestRaw(Request.Auth.authorize(token, settings.deviceName.value)) },
+                )
+            ) {
+                AuthResolution.Aborted -> return
+                is AuthResolution.Surface -> setAuthFailed(resolution.message)
+                is AuthResolution.Reject -> {
+                    clearCurrentServerToken()
+                    setAuthFailed(resolution.message)
                 }
-
-                _sessionState.update {
-                    (it as? SessionState.Connected)?.update(
-                        authProcessState = AuthProcessState.NotStarted,
-                        user = user,
-                        wasAutoLogin = isAutoLogin,
-                        needsServerReauth = false,
-                    ) ?: it
-                }
-            } ?: run {
-                setAuthFailed("Failed to parse user data")
+                is AuthResolution.Authenticated ->
+                    onAuthorized(token, isAutoLogin, resolution.answer)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (_sessionState.value !is SessionState.Connected) return
             setAuthFailed(e.message ?: "Exception happened: $e")
             clearCurrentServerToken()
+        }
+    }
+
+    private fun onAuthorized(token: String, isAutoLogin: Boolean, answer: Answer) {
+        val user = answer.resultAs<AuthorizationResponse>()?.user ?: run {
+            setAuthFailed("Failed to parse user data")
+            return
+        }
+        val currentState = _sessionState.value
+        if (currentState is SessionState.Connected) {
+            val serverIdentifier = when (currentState) {
+                is SessionState.Connected.Direct -> settings.getDirectServerIdentifier(
+                    currentState.connectionInfo.host,
+                    currentState.connectionInfo.port,
+                    currentState.connectionInfo.isTls,
+                )
+
+                is SessionState.Connected.WebRTC ->
+                    settings.getWebRTCServerIdentifier(currentState.remoteId.rawId)
+            }
+            settings.setTokenForServer(serverIdentifier, token)
+            logger.d { "Saved token for server" }
+        }
+
+        silentReauth.reset()
+        _sessionState.update {
+            (it as? SessionState.Connected)?.update(
+                authProcessState = AuthProcessState.NotStarted,
+                user = user,
+                wasAutoLogin = isAutoLogin,
+                needsServerReauth = false,
+            ) ?: it
         }
     }
 
@@ -1090,6 +1108,18 @@ class KtorServiceClient(
     companion object {
         private const val STALE_CONNECTION_THRESHOLD_MS = 30_000L
         private const val ENSURE_READY_TIMEOUT_MS = 10_000L
+
+        // Silent reconnect re-auth failures tolerated before surfacing login — rides
+        // through a flaky handoff without trapping the user if re-auth never recovers.
+        private const val MAX_SILENT_REAUTH_FAILURES = 3
+
+        // Cap on one auth round-trip. Above the 10s ping interval so a merely slow
+        // server isn't cut off, but bounded so a dead-after-send socket can't suspend
+        // the auth flow forever (the reply rides the same WebSocket as the request).
+        private const val AUTH_ROUNDTRIP_TIMEOUT_MS = 15_000L
+
+        // Backoff between silent re-auth retries, so a fast-failing attempt can't spin.
+        private const val SILENT_REAUTH_RETRY_DELAY_MS = 1_000L
         private const val WEBRTC_PROXY_BASE = "mawebrtc://proxy"
     }
 }
