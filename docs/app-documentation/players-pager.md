@@ -74,10 +74,12 @@ You can create a temporary group on the fly directly from the compacted or expan
 
 ## Volume Control
 
-Volume is available for external players and groups in the expanded view.
+Software volume is available for external players and groups in the expanded view.
 
 - **Drag** the volume bar to adjust continuously.
 - **Tap left or right** of the slider position to step the volume up or down in small increments.
+
+> **Good to know:** hardware volume control is only available for the Local Player. It’s not and won’t be available for external players or groups.
 
 ## Queue
 
