@@ -27,31 +27,43 @@ import org.koin.compose.koinInject
 
 /**
  * Theme-independent extraction result kept in [DominantColorViewModel]'s cache.
- * A single vivid [background] serves both themes; the readable tint is pre-computed
- * per surface luminance so consumers select cheaply.
+ * Background and tint colors are pre-computed for dark and light surfaces so consumers
+ * can select cheaply without re-deriving palette roles during recomposition.
  */
 data class ExtractedColors(
-    val background: Color,
+    val backgroundOnDark: Color,
+    val backgroundOnLight: Color,
     val tintOnDark: Color,
     val tintOnLight: Color,
 )
 
 private fun RgbColor.toColor() = Color(r, g, b) // Compose Color(Int, Int, Int) expects 0..255
 
+internal const val MIN_DARK_WASH_CHROMA = 48
+internal const val MIN_DARK_WASH_LUMINANCE = 0.12
+
+internal fun RgbColor.chroma(): Int = maxOf(r, g, b) - minOf(r, g, b)
+
+internal fun RgbColor.isDarkBackgroundWashCandidate(): Boolean =
+    !isBlackOrWhite() && chroma() >= MIN_DARK_WASH_CHROMA && relativeLuminance(this) >= MIN_DARK_WASH_LUMINANCE
+
+private fun MediaItemPalette.chromaticDarkBackgroundWash(): RgbColor? =
+    listOfNotNull(accent, primary).firstOrNull { it.isDarkBackgroundWashCandidate() }
+
 /**
- * Build extraction colors from a palette — server-provided or locally derived (see
- * [derivePalette]). Uses the vivid `primary` (falling back to `accent`) as the single background
- * for both themes, and the spec's WCAG-clean `on_dark`/`on_light` as the readable control tint
- * per surface, falling back to [ensureReadable] only when a slot is absent. The muted
- * `background_*` slots are intentionally unused (the wash keeps the vivid `primary`). Returns null
- * when neither vivid slot is present, so the caller falls back to local extraction.
+ * Build theme-specific UI colors from a server-provided or locally derived palette.
+ * Dark surfaces use vivid artwork colors when available, with palette background roles as safe
+ * fallbacks; light surfaces keep the primary artwork color so the wash remains visible.
  */
 fun MediaItemPalette.toExtractedColors(): ExtractedColors? {
     val base = (primary ?: accent)?.toColor() ?: return null
+    val darkTint = onDark?.toColor() ?: base.ensureReadable(onDarkSurface = true)
+    val lightTint = onLight?.toColor() ?: base.ensureReadable(onDarkSurface = false)
     return ExtractedColors(
-        background = base,
-        tintOnDark = onDark?.toColor() ?: base.ensureReadable(onDarkSurface = true),
-        tintOnLight = onLight?.toColor() ?: base.ensureReadable(onDarkSurface = false),
+        backgroundOnDark = chromaticDarkBackgroundWash()?.toColor() ?: backgroundDark?.toColor() ?: base,
+        backgroundOnLight = base,
+        tintOnDark = darkTint,
+        tintOnLight = lightTint,
     )
 }
 
@@ -98,7 +110,9 @@ fun rememberAnimatedPlayerColors(
         value = imageUrl?.let { fetchColors(it) }
     }
 
-    val targetDominant = extracted?.background ?: fallback
+    val targetDominant = extracted
+        ?.let { if (onDark) it.backgroundOnDark else it.backgroundOnLight }
+        ?: fallback
     val targetTint = extracted
         ?.let { if (onDark) it.tintOnDark else it.tintOnLight }
         ?: fallback.ensureReadable(onDarkSurface = onDark)

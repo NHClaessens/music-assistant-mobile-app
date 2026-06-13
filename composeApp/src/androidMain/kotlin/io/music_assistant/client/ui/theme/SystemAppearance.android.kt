@@ -1,13 +1,17 @@
 package io.music_assistant.client.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme as composeIsSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 @Composable
-actual fun SystemAppearance(isDarkTheme: Boolean) {
+actual fun isSystemInDarkTheme(): Boolean = composeIsSystemInDarkTheme()
+
+@Composable
+actual fun SystemAppearance(isDarkTheme: Boolean, followsSystem: Boolean) {
     val view = LocalView.current
     if (!view.isInEditMode) {
         // This LaunchedEffect will re-run every time isDarkTheme changes

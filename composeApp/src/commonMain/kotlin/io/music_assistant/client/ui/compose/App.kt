@@ -1,7 +1,6 @@
 package io.music_assistant.client.ui.compose
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +23,7 @@ import io.music_assistant.client.ui.compose.common.dismissKeyboardOnTap
 import io.music_assistant.client.ui.compose.common.items.ProvideClickActionPrefs
 import io.music_assistant.client.ui.theme.AppTheme
 import io.music_assistant.client.ui.theme.SystemAppearance
+import io.music_assistant.client.ui.theme.isSystemInDarkTheme
 import io.music_assistant.client.ui.theme.ThemeSetting
 import io.music_assistant.client.ui.theme.ThemeViewModel
 import org.koin.compose.koinInject
@@ -55,12 +55,13 @@ fun App() {
     AppLifecycleObserver()
     val themeViewModel = koinViewModel<ThemeViewModel>()
     val theme = themeViewModel.theme.collectAsStateWithLifecycle(ThemeSetting.FollowSystem)
+    val followsSystem = theme.value == ThemeSetting.FollowSystem
     val darkTheme = when (theme.value) {
         ThemeSetting.Dark -> true
         ThemeSetting.Light -> false
         ThemeSetting.FollowSystem -> isSystemInDarkTheme()
     }
-    SystemAppearance(isDarkTheme = darkTheme)
+    SystemAppearance(isDarkTheme = darkTheme, followsSystem = followsSystem)
     AppTheme(darkTheme = darkTheme) {
         Box(Modifier.fillMaxSize().dismissKeyboardOnTap()) {
             ProvideClickActionPrefs {

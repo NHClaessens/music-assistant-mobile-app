@@ -1,6 +1,8 @@
 package io.music_assistant.client.ui.compose.common
 
 import androidx.collection.LruCache
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.lifecycle.ViewModel
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -39,22 +41,60 @@ class DominantColorViewModel : ViewModel() {
         // Shared request: same fixed size + cache key as artwork display, so Coil serves the
         // already-decoded bitmap instead of decoding a second time (see artworkImageRequest).
         val request = artworkImageRequest(context, url)
-        val result = SingletonImageLoader.get(context).execute(request) as? SuccessResult
-            ?: return null
+        val result = SingletonImageLoader.get(context).execute(request) as? SuccessResult ?: return null
         val bitmap = result.image.toImageBitmap() ?: return null
-        val palette = bitmap.generatePalette {
+        val filteredPalette = bitmap.generatePalette {
             maximumColorCount(QUANTIZE_COLORS)
-            // Match the server's modern_colorthief MMCQ, which does NO filtering. kmpalette's
-            // DEFAULT_FILTER rejects near-black/near-white/near-red pixels, so black-heavy
-            // artwork yields zero swatches → empty candidates → null palette → fallback color.
+        }
+        val unfilteredPalette = bitmap.generatePalette {
+            maximumColorCount(QUANTIZE_COLORS)
+            // Keep a fallback path for genuinely black/white/monochrome covers. kmpalette's
+            // default filter rejects near-black/near-white pixels; without this fallback those
+            // covers can produce no local colors at all.
             clearFilters()
         }
-        val candidates = palette.swatches
-            .sortedByDescending { it.population } // approximates MMCQ's dominant-first order
-            .map { it.rgb.toRgbColor() }
-        // Exclude black/white backgrounds so a small colored figure drives the palette, but keep
-        // them when the cover is wholly achromatic so we still emit a palette (never null).
-        return derivePalette(meaningfulCandidates(candidates)).toExtractedColors()
+        val filteredSwatches = filteredPalette.swatches.sortedByDescending { it.population }
+        val swatches = filteredSwatches.ifEmpty { unfilteredPalette.swatches.sortedByDescending { it.population } }
+        val paletteCandidates = swatches.map { it.rgb.toRgbColor() } // approximates MMCQ's dominant-first order
+        val pixelAccentCandidates = bitmap.brightChromaticCandidates()
+        // Keep the dominant palette swatch first, then allow bright pixel accents to compete
+        // before lower-ranked quantized swatches.
+        val candidates = (
+            paletteCandidates.take(1) +
+                pixelAccentCandidates +
+                paletteCandidates.drop(1)
+            ).distinct()
+        val meaningful = meaningfulCandidates(candidates)
+        val derived = derivePalette(meaningful)
+        return derived.toExtractedColors()
+    }
+
+    private fun ImageBitmap.brightChromaticCandidates(): List<RgbColor> {
+        val pixelMap = toPixelMap()
+        val buckets = linkedMapOf<RgbColor, Int>()
+        val stepX = (width / PIXEL_SAMPLE_TARGET).coerceAtLeast(1)
+        val stepY = (height / PIXEL_SAMPLE_TARGET).coerceAtLeast(1)
+        for (y in 0 until height step stepY) {
+            for (x in 0 until width step stepX) {
+                val color = pixelMap[x, y]
+                val r = (color.red * RGB_MAX).toInt().coerceIn(0, RGB_MAX)
+                val g = (color.green * RGB_MAX).toInt().coerceIn(0, RGB_MAX)
+                val b = (color.blue * RGB_MAX).toInt().coerceIn(0, RGB_MAX)
+                val max = maxOf(r, g, b)
+                val min = minOf(r, g, b)
+                if (max < BRIGHT_PIXEL_MIN_CHANNEL || max - min < BRIGHT_PIXEL_MIN_CHROMA) continue
+                val bucket = RgbColor(
+                    (r / PIXEL_BUCKET_SIZE) * PIXEL_BUCKET_SIZE,
+                    (g / PIXEL_BUCKET_SIZE) * PIXEL_BUCKET_SIZE,
+                    (b / PIXEL_BUCKET_SIZE) * PIXEL_BUCKET_SIZE,
+                )
+                buckets[bucket] = (buckets[bucket] ?: 0) + 1
+            }
+        }
+        return buckets.entries
+            .sortedByDescending { it.value }
+            .take(MAX_PIXEL_ACCENT_CANDIDATES)
+            .map { it.key }
     }
 
     // Swatch.rgb is a packed ARGB ColorInt; drop alpha and split channels.
@@ -63,5 +103,11 @@ class DominantColorViewModel : ViewModel() {
 
     private companion object {
         const val MAX_CACHE_SIZE = 200
+        const val RGB_MAX = 255
+        const val PIXEL_SAMPLE_TARGET = 128
+        const val PIXEL_BUCKET_SIZE = 16
+        const val BRIGHT_PIXEL_MIN_CHANNEL = 160
+        const val BRIGHT_PIXEL_MIN_CHROMA = 64
+        const val MAX_PIXEL_ACCENT_CANDIDATES = 3
     }
 }
