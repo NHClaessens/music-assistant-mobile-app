@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -52,17 +53,22 @@ kotlin {
             binaryOption("smallBinary", "true")
         }
 
-        // Note: the previous webrtc-kmp test-linker block lived here. It pointed
-        // `:composeApp:*Test*` tasks at `iosApp/Frameworks/WebRTC.xcframework` so
-        // Kotlin/Native test executables could resolve the WebRTC symbols at link
-        // time. After the Phase A migration to `io.ktor:ktor-client-webrtc`, the
-        // iOS engine pulls WebRTC via the WebRTC-SDK CocoaPod instead; that
-        // XCFramework directory is gone and the linker hook would just fail.
-        //
-        // iOS still needs a runtime WebRTC framework to be present for the
-        // ComposeApp framework to link against — see the `iosApp/iosApp.xcodeproj`
-        // build phase (currently still references the deleted XCFramework). That's
-        // a known follow-up; iOS hasn't been validated against the new engine yet.
+        val webRtcSlice = if (iosTarget.name == "iosSimulatorArm64") {
+            "ios-arm64_x86_64-simulator"
+        } else {
+            "ios-arm64"
+        }
+        iosTarget.binaries.withType<TestExecutable>().configureEach {
+            linkerOpts("-F${project.rootDir}/iosApp/Frameworks/WebRTC.xcframework/$webRtcSlice")
+        }
+
+        val copyWebRtcForTests = tasks.register<Copy>("copyWebRtcFor${iosTarget.name.replaceFirstChar { it.uppercase() }}Tests") {
+            from("${project.rootDir}/iosApp/Frameworks/WebRTC.xcframework/$webRtcSlice/WebRTC.framework")
+            into(layout.buildDirectory.dir("bin/${iosTarget.name}/debugTest/Frameworks/WebRTC.framework"))
+        }
+        tasks.matching { it.name == "${iosTarget.name}Test" }.configureEach {
+            dependsOn(copyWebRtcForTests)
+        }
     }
 
     sourceSets {
