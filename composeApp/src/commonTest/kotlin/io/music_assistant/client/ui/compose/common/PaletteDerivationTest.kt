@@ -121,7 +121,7 @@ class PaletteDerivationTest {
     }
 
     @Test
-    fun `dark extraction wash prefers chromatic accent over white text`() {
+    fun `extraction wash uses chromatic artwork identity across themes`() {
         val darkBackground = RgbColor(0, 0, 0)
         val neonGreen = RgbColor(0, 255, 0)
         val whiteText = RgbColor(255, 255, 255)
@@ -135,7 +135,7 @@ class PaletteDerivationTest {
         )
 
         assertEquals(Color(0, 255, 0), extracted.backgroundOnDark)
-        assertEquals(Color(0, 0, 0), extracted.backgroundOnLight)
+        assertEquals(Color(0, 255, 0), extracted.backgroundOnLight)
         assertEquals(Color(255, 255, 255), extracted.tintOnDark)
     }
 
@@ -155,7 +155,7 @@ class PaletteDerivationTest {
     }
 
     @Test
-    fun `dark extraction uses gold accent from mostly white artwork`() {
+    fun `extraction uses gold accent from mostly white artwork across themes`() {
         val extracted = assertNotNull(
             MediaItemPalette(
                 backgroundDark = RgbColor(40, 34, 0),
@@ -168,12 +168,12 @@ class PaletteDerivationTest {
         )
 
         assertEquals(Color(212, 175, 55), extracted.backgroundOnDark)
-        assertEquals(Color(245, 245, 240), extracted.backgroundOnLight)
+        assertEquals(Color(212, 175, 55), extracted.backgroundOnLight)
         assertEquals(Color(255, 255, 255), extracted.tintOnDark)
     }
 
     @Test
-    fun `dark extraction uses accent before primary for mixed bold colors`() {
+    fun `extraction uses accent before primary for mixed bold colors across themes`() {
         val extracted = assertNotNull(
             MediaItemPalette(
                 backgroundDark = RgbColor(20, 20, 70),
@@ -185,7 +185,7 @@ class PaletteDerivationTest {
         )
 
         assertEquals(Color(230, 45, 120), extracted.backgroundOnDark)
-        assertEquals(Color(36, 80, 220), extracted.backgroundOnLight)
+        assertEquals(Color(230, 45, 120), extracted.backgroundOnLight)
         assertEquals(Color(255, 255, 255), extracted.tintOnDark)
     }
 

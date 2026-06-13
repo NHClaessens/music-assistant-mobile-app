@@ -47,21 +47,29 @@ internal fun RgbColor.chroma(): Int = maxOf(r, g, b) - minOf(r, g, b)
 internal fun RgbColor.isDarkBackgroundWashCandidate(): Boolean =
     !isBlackOrWhite() && chroma() >= MIN_DARK_WASH_CHROMA && relativeLuminance(this) >= MIN_DARK_WASH_LUMINANCE
 
-private fun MediaItemPalette.chromaticDarkBackgroundWash(): RgbColor? =
+private fun MediaItemPalette.chromaticBackgroundWash(): RgbColor? =
     listOfNotNull(accent, primary).firstOrNull { it.isDarkBackgroundWashCandidate() }
+
+private fun MediaItemPalette.artworkWashColor(): RgbColor? =
+    chromaticBackgroundWash()
+        ?: listOfNotNull(primary, accent).firstOrNull { !it.isBlackOrWhite() }
+        ?: backgroundDark
+        ?: primary
+        ?: accent
 
 /**
  * Build theme-specific UI colors from a server-provided or locally derived palette.
- * Dark surfaces use vivid artwork colors when available, with palette background roles as safe
- * fallbacks; light surfaces keep the primary artwork color so the wash remains visible.
+ * Both dark and light surfaces use the same artwork-identity wash color so the hero hue stays
+ * consistent across themes; only foreground/control tints are adapted per surface luminance.
  */
 fun MediaItemPalette.toExtractedColors(): ExtractedColors? {
-    val base = (primary ?: accent)?.toColor() ?: return null
+    val wash = artworkWashColor()?.toColor() ?: return null
+    val base = (primary ?: accent)?.toColor() ?: wash
     val darkTint = onDark?.toColor() ?: base.ensureReadable(onDarkSurface = true)
     val lightTint = onLight?.toColor() ?: base.ensureReadable(onDarkSurface = false)
     return ExtractedColors(
-        backgroundOnDark = chromaticDarkBackgroundWash()?.toColor() ?: backgroundDark?.toColor() ?: base,
-        backgroundOnLight = base,
+        backgroundOnDark = wash,
+        backgroundOnLight = wash,
         tintOnDark = darkTint,
         tintOnLight = lightTint,
     )
