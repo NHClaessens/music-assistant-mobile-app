@@ -23,9 +23,9 @@ import io.music_assistant.client.ui.compose.common.dismissKeyboardOnTap
 import io.music_assistant.client.ui.compose.common.items.ProvideClickActionPrefs
 import io.music_assistant.client.ui.theme.AppTheme
 import io.music_assistant.client.ui.theme.SystemAppearance
-import io.music_assistant.client.ui.theme.isSystemInDarkTheme
 import io.music_assistant.client.ui.theme.ThemeSetting
 import io.music_assistant.client.ui.theme.ThemeViewModel
+import io.music_assistant.client.ui.theme.isSystemInDarkTheme
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.annotation.KoinExperimentalAPI

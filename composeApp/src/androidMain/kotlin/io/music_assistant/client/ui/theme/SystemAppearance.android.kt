@@ -1,14 +1,13 @@
 package io.music_assistant.client.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme as composeIsSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 @Composable
-actual fun isSystemInDarkTheme(): Boolean = composeIsSystemInDarkTheme()
+actual fun isSystemInDarkTheme(): Boolean = androidx.compose.foundation.isSystemInDarkTheme()
 
 @Composable
 actual fun SystemAppearance(isDarkTheme: Boolean, followsSystem: Boolean) {
