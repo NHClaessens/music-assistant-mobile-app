@@ -363,17 +363,25 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         guard let strings = strings else { return }
         let imageSize = CGSize(width: 100, height: 100)
         let manager = CarPlayContentManager.shared
+
+        // Full catalog of CarPlay-supported browse categories, keyed by LibraryCategory.name.
         // Symbols match Material Design icons from HomeScreen.kt LibraryRow;
         // titles come from the shared catalog so they follow the app locale.
-        let categories: [(title: String, symbol: String, fetcher: (@escaping ([CPListItem]?) -> Void) -> Void)] = [
-            (strings.artists,    "mic.fill",                          manager.fetchArtists),       // Icons.Default.Mic
-            (strings.albums,     "opticaldisc.fill",                  manager.fetchAlbums),        // Icons.Default.Album
-            (strings.tracks,     "music.note",                        manager.fetchTracks),        // Icons.Default.MusicNote
-            (strings.playlists,  "list.bullet.rectangle.fill",        manager.fetchPlaylists),     // Icons.AutoMirrored.Filled.FeaturedPlayList
-            (strings.audiobooks, "book.fill",                         manager.fetchAudiobooks),    // Icons.AutoMirrored.Filled.MenuBook
-            (strings.podcasts,   "antenna.radiowaves.left.and.right", manager.fetchPodcasts),      // Icons.Default.Podcasts
-            (strings.radio,      "radio.fill",                        manager.fetchRadioStations), // Icons.Default.Radio
+        typealias CategoryEntry = (title: String, symbol: String, fetcher: (@escaping ([CPListItem]?) -> Void) -> Void)
+        let allCategories: [String: CategoryEntry] = [
+            "ARTISTS":    (strings.artists,    "mic.fill",                          manager.fetchArtists),
+            "ALBUMS":     (strings.albums,     "opticaldisc.fill",                  manager.fetchAlbums),
+            "PLAYLISTS":  (strings.playlists,  "list.bullet.rectangle.fill",        manager.fetchPlaylists),
+            "PODCASTS":   (strings.podcasts,   "antenna.radiowaves.left.and.right", manager.fetchPodcasts),
+            "RADIOS":     (strings.radio,      "radio.fill",                        manager.fetchRadioStations),
+            "AUDIOBOOKS": (strings.audiobooks, "book.fill",                         manager.fetchAudiobooks),
         ]
+
+        // Apply the user's Car Tabs ordering and visibility (Settings → Car → Tabs).
+        // Falls back to the full default set when no config is stored.
+        let configuredNames = manager.carBrowseCategories()
+        let categories: [CategoryEntry] = configuredNames.compactMap { allCategories[$0] }
+
         let buttons = categories.map { category -> CPGridButton in
             let image = Self.dynamicCategoryImage(symbol: category.symbol, size: imageSize)
             return CPGridButton(titleVariants: [category.title], image: image) { [weak self] _ in
