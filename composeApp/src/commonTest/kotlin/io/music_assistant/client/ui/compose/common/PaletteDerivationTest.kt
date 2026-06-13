@@ -1,5 +1,6 @@
 package io.music_assistant.client.ui.compose.common
 
+import androidx.compose.ui.graphics.Color
 import io.music_assistant.client.data.model.server.MediaItemPalette
 import io.music_assistant.client.data.model.server.RgbColor
 import kotlin.test.Test
@@ -117,6 +118,89 @@ class PaletteDerivationTest {
     fun `meaningfulCandidates falls back to full list when all are achromatic`() {
         val mono = listOf(black, white, RgbColor(20, 20, 20))
         assertEquals(mono, meaningfulCandidates(mono)) // never empty ⇒ never a null palette
+    }
+
+    @Test
+    fun `extraction wash uses chromatic artwork identity across themes`() {
+        val darkBackground = RgbColor(0, 0, 0)
+        val neonGreen = RgbColor(0, 255, 0)
+        val whiteText = RgbColor(255, 255, 255)
+        val extracted = assertNotNull(
+            MediaItemPalette(
+                primary = darkBackground,
+                accent = neonGreen,
+                onDark = whiteText,
+                onLight = darkBackground,
+            ).toExtractedColors(),
+        )
+
+        assertEquals(Color(0, 255, 0), extracted.backgroundOnDark)
+        assertEquals(Color(0, 255, 0), extracted.backgroundOnLight)
+        assertEquals(Color(255, 255, 255), extracted.tintOnDark)
+    }
+
+    @Test
+    fun `dark extraction uses explicit background before text fallback`() {
+        val extracted = assertNotNull(
+            MediaItemPalette(
+                backgroundDark = RgbColor(30, 56, 66),
+                primary = RgbColor(0, 0, 0),
+                onDark = RgbColor(255, 255, 255),
+                onLight = RgbColor(0, 0, 0),
+            ).toExtractedColors(),
+        )
+
+        assertEquals(Color(30, 56, 66), extracted.backgroundOnDark)
+        assertEquals(Color(255, 255, 255), extracted.tintOnDark)
+    }
+
+    @Test
+    fun `extraction uses gold accent from mostly white artwork across themes`() {
+        val extracted = assertNotNull(
+            MediaItemPalette(
+                backgroundDark = RgbColor(40, 34, 0),
+                backgroundLight = RgbColor(252, 250, 242),
+                primary = RgbColor(245, 245, 240),
+                accent = RgbColor(212, 175, 55),
+                onDark = RgbColor(255, 255, 255),
+                onLight = RgbColor(60, 45, 0),
+            ).toExtractedColors(),
+        )
+
+        assertEquals(Color(212, 175, 55), extracted.backgroundOnDark)
+        assertEquals(Color(212, 175, 55), extracted.backgroundOnLight)
+        assertEquals(Color(255, 255, 255), extracted.tintOnDark)
+    }
+
+    @Test
+    fun `extraction uses accent before primary for mixed bold colors across themes`() {
+        val extracted = assertNotNull(
+            MediaItemPalette(
+                backgroundDark = RgbColor(20, 20, 70),
+                primary = RgbColor(36, 80, 220),
+                accent = RgbColor(230, 45, 120),
+                onDark = RgbColor(255, 255, 255),
+                onLight = RgbColor(20, 20, 70),
+            ).toExtractedColors(),
+        )
+
+        assertEquals(Color(230, 45, 120), extracted.backgroundOnDark)
+        assertEquals(Color(230, 45, 120), extracted.backgroundOnLight)
+        assertEquals(Color(255, 255, 255), extracted.tintOnDark)
+    }
+
+    @Test
+    fun `dark extraction falls back to base for monochrome palette without background shade`() {
+        val extracted = assertNotNull(
+            MediaItemPalette(
+                primary = RgbColor(0, 0, 0),
+                onDark = RgbColor(255, 255, 255),
+                onLight = RgbColor(0, 0, 0),
+            ).toExtractedColors(),
+        )
+
+        assertEquals(Color(0, 0, 0), extracted.backgroundOnDark)
+        assertEquals(Color(255, 255, 255), extracted.tintOnDark)
     }
 
     @Test

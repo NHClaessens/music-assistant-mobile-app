@@ -7,7 +7,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 @Composable
-actual fun SystemAppearance(isDarkTheme: Boolean) {
+actual fun isSystemInDarkTheme(): Boolean = androidx.compose.foundation.isSystemInDarkTheme()
+
+@Composable
+actual fun SystemAppearance(isDarkTheme: Boolean, followsSystem: Boolean) {
     val view = LocalView.current
     if (!view.isInEditMode) {
         // This LaunchedEffect will re-run every time isDarkTheme changes
