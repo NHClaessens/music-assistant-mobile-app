@@ -17,7 +17,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.itemKind
-import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.PlayableItem
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
@@ -25,13 +24,13 @@ import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.settings.ViewMode
 
-typealias PlayHandler<T> = (item: T, queueOption: QueueOption, radio: Boolean, parent: AppMediaItem?) -> Unit
+typealias PlayHandler<T> = (item: T, queueOption: QueueOption, radio: Boolean, fromHereInParent: Boolean) -> Unit
 
 @Composable
 fun TrackWithMenu(
     item: Track,
     viewMode: ViewMode = ViewMode.GRID,
-    parent: AppMediaItem? = null,
+    showTrackNumber: Boolean = false,
     onPlayOption: PlayHandler<Track>,
     playlistActions: PlaylistActions? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
@@ -44,7 +43,6 @@ fun TrackWithMenu(
             ViewMode.LIST -> Modifier.fillMaxWidth()
         },
         item = item,
-        parent = parent,
         onPlayOption = onPlayOption,
         playlistActions = playlistActions,
         onRemoveFromPlaylist = onRemoveFromPlaylist,
@@ -54,7 +52,7 @@ fun TrackWithMenu(
                 ViewMode.LIST -> TrackRowItem(
                     modifier = mod,
                     item = item,
-                    isAlbumRow = parent is Album,
+                    showTrackNumber = showTrackNumber,
                     onClick = onClick,
                     onLongClick = onLongClick,
                     providerIconFetcher = providerIconFetcher,
@@ -165,7 +163,6 @@ fun RadioWithMenu(
 private fun <T> PlayableItemWithMenu(
     modifier: Modifier = Modifier,
     item: T,
-    parent: AppMediaItem? = null,
     onPlayOption: PlayHandler<T>,
     playlistActions: PlaylistActions? = null,
     onRemoveFromPlaylist: (() -> Unit)? = null,
@@ -183,24 +180,25 @@ private fun <T> PlayableItemWithMenu(
 
     // The tap action for this item's (kind, context) pair (PLAY_NOW outside customizable
     // screens). Null when the item isn't playable — then a tap opens the menu instead.
-    val effectiveDefault = LocalClickActionConfig.current.effectiveActionFor(item)
+    val clickActionConfig = LocalClickActionConfig.current
+    val effectiveDefault = clickActionConfig.effectiveActionFor(item)
 
     val actions = resolveLongClickActions(
         item = item,
+        clickContext = clickActionConfig.context,
         librarySupported = true,
         canAddToPlaylist = playlistActions != null && item.supportsAddToPlaylist,
         canRemoveFromPlaylist = onRemoveFromPlaylist != null,
         progressSupported = progressActions != null && item is PodcastEpisode,
         defaultAction = effectiveDefault,
-        parent = parent,
         customizationAllowed = true,
     )
 
     val runPlayAction: (ItemAction) -> Unit = { action ->
         when (action) {
-            is ItemAction.Play -> onPlayOption(item, action.queueOption, false, null)
-            ItemAction.StartRadio -> onPlayOption(item, QueueOption.REPLACE, true, null)
-            is ItemAction.PlayFromHere -> onPlayOption(item, QueueOption.REPLACE, false, parent)
+            is ItemAction.Play -> onPlayOption(item, action.queueOption, false, false)
+            ItemAction.StartRadio -> onPlayOption(item, QueueOption.REPLACE, true, false)
+            is ItemAction.PlayFromHere -> onPlayOption(item, QueueOption.REPLACE, false, true)
             else -> Unit
         }
     }
@@ -222,7 +220,7 @@ private fun <T> PlayableItemWithMenu(
             expanded = expandedItemId == item.itemId,
             onDismissRequest = { expandedItemId = null },
         ) {
-            ItemActionMenuItems(actions, defaultAction = effectiveDefault) { action ->
+            ItemActionMenuItems(clickActionConfig.context, actions, defaultAction = effectiveDefault) { action ->
                 expandedItemId = null
                 when (action) {
                     is ItemAction.Play,
@@ -256,7 +254,10 @@ private fun <T> PlayableItemWithMenu(
 
         if (showCustomizeDialog) {
             item.itemKind()?.let { kind ->
-                DefaultClickActionsDialog(itemKind = kind, onDismiss = { showCustomizeDialog = false })
+                DefaultClickActionsDialog(
+                    itemKind = kind,
+                    onDismiss = { showCustomizeDialog = false },
+                )
             }
         }
     }
