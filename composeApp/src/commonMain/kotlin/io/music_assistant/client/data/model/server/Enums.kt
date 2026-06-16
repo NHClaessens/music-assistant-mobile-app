@@ -63,6 +63,9 @@ enum class EventType {
     @SerialName("application_shutdown")
     SHUTDOWN,
 
+    @SerialName("core_state_updated")
+    CORE_STATE_UPDATED,
+
     @SerialName("media_item_added")
     MEDIA_ITEM_ADDED,
 
@@ -81,11 +84,23 @@ enum class EventType {
     @SerialName("player_config_updated")
     PLAYER_CONFIG_UPDATED,
 
+    @SerialName("player_dsp_config_updated")
+    PLAYER_DSP_CONFIG_UPDATED,
+
+    @SerialName("player_options_updated")
+    PLAYER_OPTIONS_UPDATED,
+
+    @SerialName("dsp_presets_updated")
+    DSP_PRESETS_UPDATED,
+
     @SerialName("sync_tasks_updated")
     SYNC_TASKS_UPDATED,
 
     @SerialName("tasks_updated")
     TASKS_UPDATED,
+
+    @SerialName("music_sync_completed")
+    MUSIC_SYNC_COMPLETED,
 
     @SerialName("auth_session")
     AUTH_SESSION,

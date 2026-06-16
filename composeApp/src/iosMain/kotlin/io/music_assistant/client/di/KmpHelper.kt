@@ -131,7 +131,7 @@ object KmpHelper : KoinComponent {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                log.w(e) { "loadArtworkBytes failed for $urlString" }
+                log.w { "loadArtworkBytes failed for $urlString: ${e.message}" }
                 null
             }
             completion(bytes?.toNSData())

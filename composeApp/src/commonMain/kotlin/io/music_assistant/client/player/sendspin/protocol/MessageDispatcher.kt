@@ -74,6 +74,9 @@ class MessageDispatcher(
     private var messageListenerJob: Job? = null
     private var clockSyncJob: Job? = null
 
+    // Last state value we logged; the heartbeat sends every ~2s but we only log on change.
+    private var lastLoggedState: PlayerStateValue? = null
+
     private val _serverHelloEvent = MutableSharedFlow<ServerHelloPayload>(extraBufferCapacity = 1)
     val serverHelloEvent: Flow<ServerHelloPayload> = _serverHelloEvent.asSharedFlow()
 
@@ -98,6 +101,7 @@ class MessageDispatcher(
 
     fun start() {
         logger.i { "Starting MessageDispatcher" }
+        lastLoggedState = null
         startMessageListener()
     }
 
@@ -243,7 +247,10 @@ class MessageDispatcher(
             payload = ClientStatePayload(player = state),
         )
         val json = myJson.encodeToString(message)
-        logger.i { "Sending client/state: $json" }
+        if (state.state != lastLoggedState) {
+            logger.i { "Sending client/state: ${state.state}" }
+            lastLoggedState = state.state
+        }
         transport.sendText(json)
     }
 

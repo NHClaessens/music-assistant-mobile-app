@@ -46,28 +46,33 @@ data class Event(
     @Suppress("MemberNameEqualsClassName") // TODO: rename to `decode()` (touches several callers)
     fun event(): Event<out Any>? = try {
         when (type) {
-            EventType.PLAYER_ADDED -> myJson.decodeFromJsonElement<PlayerAddedEvent>(json)
-            EventType.PLAYER_REMOVED -> myJson.decodeFromJsonElement<PlayerRemovedEvent>(json)
-            EventType.PLAYER_UPDATED -> myJson.decodeFromJsonElement<PlayerUpdatedEvent>(json)
-            EventType.MEDIA_ITEM_UPDATED -> myJson.decodeFromJsonElement<MediaItemUpdatedEvent>(json)
             EventType.MEDIA_ITEM_ADDED -> myJson.decodeFromJsonElement<MediaItemAddedEvent>(json)
             EventType.MEDIA_ITEM_DELETED -> myJson.decodeFromJsonElement<MediaItemDeletedEvent>(json)
             EventType.MEDIA_ITEM_PLAYED -> myJson.decodeFromJsonElement<MediaItemPlayedEvent>(json)
+            EventType.MEDIA_ITEM_UPDATED -> myJson.decodeFromJsonElement<MediaItemUpdatedEvent>(json)
+            EventType.PLAYER_ADDED -> myJson.decodeFromJsonElement<PlayerAddedEvent>(json)
+            EventType.PLAYER_REMOVED -> myJson.decodeFromJsonElement<PlayerRemovedEvent>(json)
+            EventType.PLAYER_UPDATED -> myJson.decodeFromJsonElement<PlayerUpdatedEvent>(json)
             EventType.QUEUE_ADDED -> myJson.decodeFromJsonElement<QueueAddedEvent>(json)
-            EventType.QUEUE_UPDATED -> myJson.decodeFromJsonElement<QueueUpdatedEvent>(json)
-            EventType.QUEUE_TIME_UPDATED -> myJson.decodeFromJsonElement<QueueTimeUpdatedEvent>(json)
             EventType.QUEUE_ITEMS_UPDATED -> myJson.decodeFromJsonElement<QueueItemsUpdatedEvent>(json)
-            EventType.PLAYER_SETTINGS_UPDATED,
-            EventType.QUEUE_SETTINGS_UPDATED,
-            EventType.SHUTDOWN,
-            EventType.PROVIDERS_UPDATED,
-            EventType.PLAYER_CONFIG_UPDATED,
-            EventType.SYNC_TASKS_UPDATED,
-            EventType.TASKS_UPDATED,
+            EventType.QUEUE_TIME_UPDATED -> myJson.decodeFromJsonElement<QueueTimeUpdatedEvent>(json)
+            EventType.QUEUE_UPDATED -> myJson.decodeFromJsonElement<QueueUpdatedEvent>(json)
+            EventType.ALL,
             EventType.AUTH_SESSION,
             EventType.CONNECTED,
+            EventType.CORE_STATE_UPDATED,
             EventType.DISCONNECTED,
-            EventType.ALL,
+            EventType.DSP_PRESETS_UPDATED,
+            EventType.MUSIC_SYNC_COMPLETED,
+            EventType.PLAYER_CONFIG_UPDATED,
+            EventType.PLAYER_DSP_CONFIG_UPDATED,
+            EventType.PLAYER_OPTIONS_UPDATED,
+            EventType.PLAYER_SETTINGS_UPDATED,
+            EventType.PROVIDERS_UPDATED,
+            EventType.QUEUE_SETTINGS_UPDATED,
+            EventType.SHUTDOWN,
+            EventType.SYNC_TASKS_UPDATED,
+            EventType.TASKS_UPDATED,
             -> {
                 logger.d { "Ignoring unmodeled event: $type" }
                 null
