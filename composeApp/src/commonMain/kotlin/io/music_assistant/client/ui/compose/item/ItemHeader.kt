@@ -69,6 +69,7 @@ import io.music_assistant.client.ui.compose.common.items.resolveDetailOverflowAc
 import io.music_assistant.client.ui.compose.common.items.toOverflowOption
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.ui.contentColorByLuminance
+import io.music_assistant.client.ui.fadingEdges
 import io.music_assistant.client.ui.inactive
 import io.music_assistant.client.utils.WindowClass
 import musicassistantclient.composeapp.generated.resources.Res
@@ -254,7 +255,7 @@ private fun ItemText(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            modifier = Modifier.basicMarquee(),
+            modifier = Modifier.fillMaxWidth().fadingEdges().basicMarquee(),
             text = item.name,
             textAlign = textAlign,
             style = MaterialTheme.typography.titleLarge,
@@ -263,7 +264,7 @@ private fun ItemText(
         (item as? Album)?.version?.let {
             if (it.isNotBlank()) {
                 Text(
-                    modifier = Modifier.basicMarquee(),
+                    modifier = Modifier.fillMaxWidth().fadingEdges().basicMarquee(),
                     text = it,
                     textAlign = textAlign,
                     style = MaterialTheme.typography.titleSmall,
@@ -273,7 +274,7 @@ private fun ItemText(
 
         item.localizedSubtitle()?.let {
             Text(
-                modifier = Modifier.basicMarquee(),
+                modifier = Modifier.fillMaxWidth().fadingEdges().basicMarquee(),
                 text = it,
                 textAlign = textAlign,
                 style = MaterialTheme.typography.titleMedium,
