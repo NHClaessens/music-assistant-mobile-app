@@ -63,6 +63,7 @@ import io.music_assistant.client.ui.compose.library.ItemListScreen
 import io.music_assistant.client.ui.compose.library.ItemListViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
 import io.music_assistant.client.ui.compose.library.LibraryScreen
+import io.music_assistant.client.ui.compose.library.LibraryScreenState
 import io.music_assistant.client.ui.compose.nav.AdaptiveNavigationScaffold
 import io.music_assistant.client.ui.compose.nav.BackHandler
 import io.music_assistant.client.ui.compose.nav.ConditionalBackNavDisplay
@@ -71,6 +72,7 @@ import io.music_assistant.client.ui.compose.nav.NavigationItem
 import io.music_assistant.client.ui.compose.nav.createNavigationItem
 import io.music_assistant.client.ui.compose.search.GlobalSearchRequest
 import io.music_assistant.client.ui.compose.search.SearchScreen
+import io.music_assistant.client.ui.compose.search.SearchScreenState
 import io.music_assistant.client.ui.compose.search.SearchViewModel
 import io.music_assistant.client.utils.DataConnectionState
 import io.music_assistant.client.utils.SessionState
@@ -116,7 +118,8 @@ fun MainNavigationRoot(
         }
     }
 
-    val recommendationsState = homeScreenViewModel.recommendationsState.collectAsStateWithLifecycle()
+    val recommendationsState =
+        homeScreenViewModel.recommendationsState.collectAsStateWithLifecycle()
     val playersState by homeScreenViewModel.playersState.collectAsStateWithLifecycle()
     // Single pager state used across all views
     val data = playersState as? HomeScreenViewModel.PlayersState.Data
@@ -197,21 +200,28 @@ fun MainNavigationRoot(
         deepLinkBus.consume(dest)
     }
 
+    val homeScreenState = HomeScreenState.create()
+    val libraryScreenState = LibraryScreenState.create()
+    val searchScreenState = SearchScreenState.create()
+
     val navigationItems = listOf(
         multiBackStack.createNavigationItem(
             backStack = 0,
             icon = Icons.Default.Home,
             label = stringResource(Res.string.nav_home),
+            screenState = homeScreenState,
         ),
         multiBackStack.createNavigationItem(
             backStack = 1,
             icon = Icons.Default.LibraryMusic,
             label = stringResource(Res.string.nav_library),
+            screenState = libraryScreenState,
         ),
         multiBackStack.createNavigationItem(
             backStack = 2,
             icon = Icons.Default.Search,
             label = stringResource(Res.string.nav_search),
+            screenState = searchScreenState,
         ),
         NavigationItem(
             selected = false,
@@ -222,83 +232,86 @@ fun MainNavigationRoot(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-    AdaptiveNavigationScaffold(
-        showNavBar = !playerExpanded,
-        navigationItems = navigationItems,
-    ) { scaffoldContentPadding ->
-        val bottomPadding = scaffoldContentPadding.calculateBottomPadding()
+        AdaptiveNavigationScaffold(
+            showNavBar = !playerExpanded,
+            navigationItems = navigationItems,
+        ) { scaffoldContentPadding ->
+            val bottomPadding = scaffoldContentPadding.calculateBottomPadding()
 
-        FloatingBarLayout(
-            floatingBar = {
-                FloatingBar(
-                    collapsedBottomPadding = bottomPadding,
-                    expanded = playerExpanded,
-                    onExpand = onExpandPlayer,
-                    content = { expanded, contentPadding ->
-                        PlayersPager(
-                            playerPagerState = playerPagerState,
-                            state = playersState,
-                            homeScreenViewModel = homeScreenViewModel,
-                            actionsViewModel = actionsViewModel,
-                            dspSettingsViewModel = dspSettingsViewModel,
-                            expanded = expanded,
-                            onClose = { playerExpanded = false },
-                            contentPadding = contentPadding,
-                        ) { item ->
-                            multiBackStack.add(
-                                MainNav.ItemDetails(
-                                    itemId = item.itemId,
-                                    mediaType = item.mediaType,
-                                    providerId = item.provider,
+            FloatingBarLayout(
+                floatingBar = {
+                    FloatingBar(
+                        collapsedBottomPadding = bottomPadding,
+                        expanded = playerExpanded,
+                        onExpand = onExpandPlayer,
+                        content = { expanded, contentPadding ->
+                            PlayersPager(
+                                playerPagerState = playerPagerState,
+                                state = playersState,
+                                homeScreenViewModel = homeScreenViewModel,
+                                actionsViewModel = actionsViewModel,
+                                dspSettingsViewModel = dspSettingsViewModel,
+                                expanded = expanded,
+                                onClose = { playerExpanded = false },
+                                contentPadding = contentPadding,
+                            ) { item ->
+                                multiBackStack.add(
+                                    MainNav.ItemDetails(
+                                        itemId = item.itemId,
+                                        mediaType = item.mediaType,
+                                        providerId = item.provider,
+                                    ),
+                                )
+                            }
+                        },
+                    )
+                },
+            ) { floatingBarContentPadding ->
+                BackHandler(playerExpanded) {
+                    playerExpanded = !playerExpanded
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                ) {
+                    ConditionalBackNavDisplay(
+                        entries = rememberDecoratedNavEntries(
+                            entryDecorators = listOf(
+                                rememberSaveableStateHolderNavEntryDecorator(),
+                                rememberViewModelStoreNavEntryDecorator(),
+                            ),
+                            entries = multiBackStack.toEntries(
+                                mainNavEntryProvider(
+                                    floatingBarContentPadding,
+                                    connectionState,
+                                    dataState,
+                                    homeRowsConfig,
+                                    multiBackStack,
+                                    homeScreenViewModel,
+                                    actionsViewModel,
+                                    homeScreenState,
+                                    libraryScreenState,
+                                    searchScreenState,
                                 ),
-                            )
-                        }
-                    },
-                )
-            },
-        ) { floatingBarContentPadding ->
-            BackHandler(playerExpanded) {
-                playerExpanded = !playerExpanded
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
-            ) {
-                ConditionalBackNavDisplay(
-                    entries = rememberDecoratedNavEntries(
-                        entryDecorators = listOf(
-                            rememberSaveableStateHolderNavEntryDecorator(),
-                            rememberViewModelStoreNavEntryDecorator(),
-                        ),
-                        entries = multiBackStack.toEntries(
-                            mainNavEntryProvider(
-                                floatingBarContentPadding,
-                                connectionState,
-                                dataState,
-                                homeRowsConfig,
-                                multiBackStack,
-                                homeScreenViewModel,
-                                actionsViewModel,
                             ),
                         ),
-                    ),
-                    onBack = {
-                        multiBackStack.removeLastOrNull()
-                    },
-                    backEnabled = !playerExpanded,
-                    // Workaround for CMP 1.10.3 iOS crash: LazyLayout measured inside
-                    // AnimatedContent + CupertinoOverscroll trips a SubcomposeLayout
-                    // precondition on first frame. Disabling transitions removes the
-                    // animating measure path.
-                    transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                    popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                    predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
-                )
+                        onBack = {
+                            multiBackStack.removeLastOrNull()
+                        },
+                        backEnabled = !playerExpanded,
+                        // Workaround for CMP 1.10.3 iOS crash: LazyLayout measured inside
+                        // AnimatedContent + CupertinoOverscroll trips a SubcomposeLayout
+                        // precondition on first frame. Disabling transitions removes the
+                        // animating measure path.
+                        transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                        popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                        predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                    )
+                }
             }
         }
-    }
         ToastHost(toastState = toastState)
     }
 }
@@ -312,6 +325,9 @@ private fun mainNavEntryProvider(
     multiBackStack: MultiBackStack<NavKey>,
     homeScreenViewModel: HomeScreenViewModel,
     actionsViewModel: ActionsViewModel,
+    homeScreenState: HomeScreenState,
+    libraryScreenState: LibraryScreenState,
+    searchScreenState: SearchScreenState,
 ): (NavKey) -> NavEntry<NavKey> {
     // Hoisted here (outlives the per-NavEntry SearchViewModel) to carry an empty-quick-search
     // escalation from the library tab to the Search tab. Set by ItemList, consumed by SearchScreen.
@@ -331,7 +347,7 @@ private fun mainNavEntryProvider(
                         is Podcast,
                         is Audiobook,
                         is Genre,
-                        -> {
+                            -> {
                             multiBackStack.add(
                                 MainNav.ItemDetails(
                                     itemId = item.itemId,
@@ -353,6 +369,7 @@ private fun mainNavEntryProvider(
                 },
                 homeRowsConfig = homeRowsConfig,
                 actionsViewModel = actionsViewModel,
+                state = homeScreenState,
             )
         }
 
@@ -362,6 +379,7 @@ private fun mainNavEntryProvider(
             LibraryScreen(
                 libraryCategoriesViewModel,
                 contentPadding = contentPadding,
+                state = libraryScreenState,
                 onTypeClick = {
                     multiBackStack.add(MainNav.ItemList(it))
                 },
@@ -445,6 +463,7 @@ private fun mainNavEntryProvider(
                 },
                 contentPadding = contentPadding,
                 actionsViewModel = actionsViewModel,
+                state = searchScreenState,
                 pendingSearch = pendingSearch,
                 onSearchConsumed = { pendingSearch = null },
             )

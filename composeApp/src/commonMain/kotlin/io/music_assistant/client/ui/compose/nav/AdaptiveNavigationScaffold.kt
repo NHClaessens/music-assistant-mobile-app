@@ -92,12 +92,13 @@ fun <T : NavKey> MultiBackStack<T>.createNavigationItem(
     backStack: Int,
     icon: ImageVector,
     label: String? = null,
+    screenState: ScreenState? = null,
 ): NavigationItem {
     return NavigationItem(
         selected = currentBackStack == backStack,
         onClick = {
             if (this.currentBackStack == backStack) {
-                resetCurrentBackStack()
+                resetCurrentBackStack(screenState)
             } else {
                 currentBackStack = backStack
             }

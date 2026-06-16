@@ -21,12 +21,17 @@ class MultiBackStack<T : NavKey>(private val backStacks: List<MutableList<T>>) {
     private val roots = backStacks.map { it.first() }
 
     /**
-     * Clear the current back stack and reset it back to its original state
+     * Clear the current back stack and reset it back to its original state. Optionally takes a
+     * [ScreenState] that can be reset if the current back stack is already at the root.
      */
-    fun resetCurrentBackStack() {
+    fun resetCurrentBackStack(screenState: ScreenState? = null) {
         backStacks[currentBackStack].apply {
-            clear()
-            add(roots[currentBackStack])
+            if (size == 1) {
+                screenState?.reset()
+            } else {
+                clear()
+                add(roots[currentBackStack])
+            }
         }
     }
 
@@ -54,4 +59,8 @@ class MultiBackStack<T : NavKey>(private val backStacks: List<MutableList<T>>) {
             backStack.map { entryProvider(it) }
         }
     }
+}
+
+interface ScreenState {
+    fun reset()
 }
