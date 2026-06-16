@@ -1196,6 +1196,7 @@ class KtorServiceClient(
             ?: args?.stringArg("queue_id")
             ?: args?.stringArg("queue_item_id")
         return buildString {
+            append('#').append(messageId.substringBefore('-')).append(' ')
             append(command)
             targetId?.let { append(" target=").append(it) }
         }

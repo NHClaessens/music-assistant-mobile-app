@@ -4,8 +4,10 @@
 
 package io.music_assistant.client.player.sendspin
 
+import co.touchlab.kermit.Logger
 import kotlin.concurrent.Volatile
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlin.time.TimeSource
@@ -17,12 +19,17 @@ enum class SyncQuality {
 }
 
 data class ClockStats(
-    val offset: Long,
-    val rtt: Long,
+    val offset: Long, // μs
+    val rtt: Long, // μs
     val quality: SyncQuality,
-)
+) {
+    val offsetMs: Long get() = offset.microseconds.inWholeMilliseconds
+    val rttMs: Long get() = rtt.microseconds.inWholeMilliseconds
+}
 
 class ClockSynchronizer {
+    private val logger = Logger.withTag("ClockSync")
+
     // Shared monotonic time base — created once so MessageDispatcher and AudioStreamManager
     // both read from the same epoch, keeping currentLocalTime in the same domain used
     // by the Kalman-smoothed offset.
@@ -42,6 +49,12 @@ class ClockSynchronizer {
 
     @Volatile
     private var quality: SyncQuality = SyncQuality.LOST
+        set(value) {
+            if (value != field) {
+                logger.i { "Clock sync quality: $field -> $value (rtt=${getStats().rttMs}ms)" }
+            }
+            field = value
+        }
     private var lastSyncTime: Instant? = null
     private var lastSyncMicros: Long = 0
     private var sampleCount: Int = 0
