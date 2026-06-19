@@ -17,7 +17,7 @@ class LibraryCategoryConfigTest {
     }
 
     @Test
-    fun `category missing from a stored config is appended at the end, enabled`() {
+    fun `category missing from a stored config is appended at the end and enabled`() {
         // A pre-BROWSE config: every category except the newly-added one, in a custom order.
         val stored = listOf(
             pref(LibraryCategory.ALBUMS, enabled = true),

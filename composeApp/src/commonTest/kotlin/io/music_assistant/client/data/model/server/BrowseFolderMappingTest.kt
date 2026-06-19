@@ -59,7 +59,7 @@ class BrowseFolderMappingTest {
     }
 
     @Test
-    fun `the parent entry is flagged, real folders are not`() {
+    fun `the parent entry is flagged but real folders are not`() {
         assertTrue(folder(name = "..", path = "root").isParentLink)
         assertFalse(folder(name = "", path = "tidal--6rdvd8iR://tracks").isParentLink)
         assertFalse(folder(name = "Tidal", path = "tidal--6rdvd8iR://").isParentLink)
