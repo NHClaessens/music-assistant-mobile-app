@@ -31,6 +31,8 @@ import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.settings.carBulkActions
 import io.music_assistant.client.settings.carTapAction
 import io.music_assistant.client.settings.toCarDispatch
+import io.music_assistant.client.ui.compose.library.LibraryCategory
+import io.music_assistant.client.ui.compose.library.carTabCategories
 import io.music_assistant.client.utils.HasConnectionData
 import io.music_assistant.client.utils.currentTimeMillis
 import kotlinx.cinterop.BetaInteropApi
@@ -433,6 +435,27 @@ object KmpHelper : KoinComponent {
             ?: DefaultClickOption.PLAY_NOW
         val dispatch = action.toCarDispatch()
         return if (dispatchLocal(item, dispatch.option, dispatch.radioMode)) action.name else null
+    }
+
+    /**
+     * The ordered, enabled CarPlay browse-grid categories from the user's Car Tabs setting.
+     * Returns LibraryCategory.name strings (e.g. "ARTISTS", "ALBUMS") so Swift can map each
+     * to its fetcher and icon. Falls back to [carTabCategories] when no config is stored.
+     * Tracks and Genres are excluded because they are not in [carTabCategories].
+     */
+    fun carBrowseCategories(): List<String> {
+        val stored = settingsRepository.carTabsConfig.value
+            ?: return carTabCategories.map { it.name }
+        val parsed = stored.mapNotNull { pref ->
+            runCatching { LibraryCategory.valueOf(pref.name) }.getOrNull()
+                ?.takeIf { it in carTabCategories }
+                ?.let { it to pref.enabled }
+        }
+        val present = parsed.map { it.first }.toSet()
+        val missing = carTabCategories.filter { it !in present }.map { it to true }
+        return (parsed + missing)
+            .filter { (_, enabled) -> enabled }
+            .map { (category, _) -> category.name }
     }
 
     // MARK: - Library Actions (Siri)
