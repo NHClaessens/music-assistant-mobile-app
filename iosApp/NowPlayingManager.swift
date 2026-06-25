@@ -24,6 +24,9 @@ class NowPlayingManager {
     private var currentTitle: String?
     private var currentArtist: String?
     private var currentAlbum: String?
+    private var currentIsLongFormContent: Bool?
+    private var currentLongFormSeekBackSeconds: Int64?
+    private var currentLongFormSeekForwardSeconds: Int64?
 
     // MARK: - Logging
     private static let logTag = "NowPlayingManager"
@@ -111,8 +114,11 @@ class NowPlayingManager {
         artworkUrl: String?,
         duration: Double?,
         elapsedTime: Double?,
-        playbackRate: Double
+        playbackRate: Double,
+        isLongFormContent: Bool
     ) {
+        updateRemoteCommandMode(isLongFormContent: isLongFormContent)
+
         let newIdentifier = contentIdentifier(
             title: title, artist: artist, album: album, duration: duration
         )
@@ -288,6 +294,7 @@ class NowPlayingManager {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             self?.cachedArtwork = nil
             self?.updateCurrentState(title: nil, artist: nil, album: nil)
+            self?.updateRemoteCommandMode(isLongFormContent: false)
         }
     }
 
@@ -317,8 +324,10 @@ class NowPlayingManager {
         func addTarget(_ command: MPRemoteCommand, cmd: String) {
             command.isEnabled = true
             command.addTarget { [weak self] _ in
-                self?.logDebug("Remote command received: \(cmd)")
-                self?.commandHandler?(cmd)
+                guard let self = self else { return .commandFailed }
+                let resolvedCommand = self.resolveRemoteCommand(cmd)
+                self.logDebug("Remote command received: \(resolvedCommand)")
+                self.commandHandler?(resolvedCommand)
                 return .success
             }
         }
@@ -328,6 +337,10 @@ class NowPlayingManager {
         addTarget(commandCenter.togglePlayPauseCommand, cmd: "toggle_play_pause")
         addTarget(commandCenter.nextTrackCommand, cmd: "next")
         addTarget(commandCenter.previousTrackCommand, cmd: "previous")
+
+        addTarget(commandCenter.skipBackwardCommand, cmd: "seek_back")
+        addTarget(commandCenter.skipForwardCommand, cmd: "seek_forward")
+        updateRemoteCommandMode(isLongFormContent: false)
 
         commandCenter.changePlaybackPositionCommand.isEnabled = true
         commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
@@ -340,9 +353,47 @@ class NowPlayingManager {
             self?.commandHandler?("seek:\(seekPosition)")
             return .success
         }
+    }
 
-        commandCenter.skipForwardCommand.isEnabled = false
-        commandCenter.skipBackwardCommand.isEnabled = false
+    private func resolveRemoteCommand(_ command: String) -> String {
+        switch command {
+        case "seek_back":
+            guard let seconds = currentLongFormSeekBackSeconds else { return command }
+            return "seek_by:-\(seconds)"
+        case "seek_forward":
+            guard let seconds = currentLongFormSeekForwardSeconds else { return command }
+            return "seek_by:\(seconds)"
+        default:
+            return command
+        }
+    }
+
+    private func updateRemoteCommandMode(isLongFormContent: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  self.currentIsLongFormContent != isLongFormContent else { return }
+            self.currentIsLongFormContent = isLongFormContent
+
+            let commandCenter = MPRemoteCommandCenter.shared()
+            commandCenter.previousTrackCommand.isEnabled = !isLongFormContent
+            commandCenter.nextTrackCommand.isEnabled = !isLongFormContent
+            commandCenter.skipBackwardCommand.isEnabled = isLongFormContent
+            commandCenter.skipForwardCommand.isEnabled = isLongFormContent
+        }
+    }
+
+    func setLongFormSeekIntervals(backSeconds: Int64, forwardSeconds: Int64) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  self.currentLongFormSeekBackSeconds != backSeconds ||
+                  self.currentLongFormSeekForwardSeconds != forwardSeconds else { return }
+            self.currentLongFormSeekBackSeconds = backSeconds
+            self.currentLongFormSeekForwardSeconds = forwardSeconds
+
+            let commandCenter = MPRemoteCommandCenter.shared()
+            commandCenter.skipBackwardCommand.preferredIntervals = [NSNumber(value: backSeconds)]
+            commandCenter.skipForwardCommand.preferredIntervals = [NSNumber(value: forwardSeconds)]
+        }
     }
 
     private func loadArtwork(urlString: String, completion: @escaping (MPMediaItemArtwork?) -> Void) -> Cancellable {

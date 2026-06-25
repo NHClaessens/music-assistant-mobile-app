@@ -27,6 +27,7 @@ class NowPlayingSnapshotDedupTest {
         duration = 240.0,
         elapsedTime = 30.0,
         isPlaying = true,
+        isLongFormContent = false,
     )
 
     @Test

@@ -50,8 +50,11 @@ interface PlatformAudioPlayer {
         duration: Double?,
         elapsedTime: Double?,
         playbackRate: Double,
+        isLongFormContent: Boolean,
     )
     fun clearNowPlaying()
+
+    fun setLongFormSeekIntervals(backSeconds: Long, forwardSeconds: Long)
 
     // Remote command handler (set by Kotlin to receive play/pause/next/prev events)
     fun setRemoteCommandHandler(handler: RemoteCommandHandler?)

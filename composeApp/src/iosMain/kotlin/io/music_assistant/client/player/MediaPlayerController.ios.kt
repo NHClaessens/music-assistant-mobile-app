@@ -90,6 +90,7 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
         duration: Double?,
         elapsedTime: Double?,
         playbackRate: Double,
+        isLongFormContent: Boolean,
     ) {
         PlatformPlayerProvider.player?.updateNowPlaying(
             title,
@@ -99,11 +100,16 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
             duration,
             elapsedTime,
             playbackRate,
+            isLongFormContent,
         )
     }
 
     actual fun clearNowPlaying() {
         PlatformPlayerProvider.player?.clearNowPlaying()
+    }
+
+    actual fun setLongFormSeekIntervals(backSeconds: Long, forwardSeconds: Long) {
+        PlatformPlayerProvider.player?.setLongFormSeekIntervals(backSeconds, forwardSeconds)
     }
 
     fun setRemoteCommandHandler(handler: RemoteCommandHandler?) {

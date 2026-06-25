@@ -556,12 +556,17 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
         duration: Double?,
         elapsedTime: Double?,
         playbackRate: Double,
+        isLongFormContent: Boolean,
     ) {
         // Android handles Now Playing via MediaSession, not implemented here
     }
 
     actual fun clearNowPlaying() {
         // Android handles Now Playing via MediaSession, not implemented here
+    }
+
+    actual fun setLongFormSeekIntervals(backSeconds: Long, forwardSeconds: Long) {
+        // Android handles seek intervals via MediaSession custom actions, not here
     }
 
     actual fun release() {

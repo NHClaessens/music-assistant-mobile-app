@@ -21,6 +21,7 @@ import io.music_assistant.client.data.model.client.isBefore
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.items.image
+import io.music_assistant.client.data.model.client.items.isLongFormSpokenContent
 import io.music_assistant.client.data.model.server.DspConfig
 import io.music_assistant.client.data.model.server.DspConfigPreset
 import io.music_assistant.client.data.model.server.ProviderManifest
@@ -44,6 +45,7 @@ import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.Timings
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.StaleReason
+import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import io.music_assistant.client.ui.compose.common.icons.BookshelfIcon
@@ -274,6 +276,11 @@ class MainDataSource(
     private var updateJob: Job? = null
 
     init {
+        mediaPlayerController.setLongFormSeekIntervals(
+            LongFormSeekDefaults.BACK_SECONDS,
+            LongFormSeekDefaults.FORWARD_SECONDS,
+        )
+
         // Re-fetch server players/queues after Sendspin registers (state → Ready).
         launch {
             localPlayerController.needsServerRefresh.collect { updatePlayersAndQueues() }
@@ -689,6 +696,7 @@ class MainDataSource(
                             } ?: pd.queueInfo.elapsedTime,
                             isPlaying = pd.player.isPlaying,
                             isPositionFrozen = positionTracker.isFrozenUntilConfirmed(pd.queueInfo.id),
+                            isLongFormContent = track.isLongFormSpokenContent,
                         )
                     }
                 }
@@ -704,6 +712,7 @@ class MainDataSource(
                             duration = snapshot.duration,
                             elapsedTime = snapshot.elapsedTime,
                             playbackRate = if (snapshot.isPlaying && !snapshot.isPositionFrozen) 1.0 else 0.0,
+                            isLongFormContent = snapshot.isLongFormContent,
                         )
                     }
                 }
@@ -738,6 +747,7 @@ class MainDataSource(
             val elapsedTime: Double?,
             val isPlaying: Boolean,
             val isPositionFrozen: Boolean = false,
+            val isLongFormContent: Boolean,
         ) : NowPlayingSnapshot
 
         companion object {
@@ -773,6 +783,7 @@ class MainDataSource(
                 if (a.duration != b.duration) return false
                 if (a.isPlaying != b.isPlaying) return false
                 if (a.isPositionFrozen != b.isPositionFrozen) return false
+                if (a.isLongFormContent != b.isLongFormContent) return false
                 val ae = a.elapsedTime
                 val be = b.elapsedTime
                 return when {

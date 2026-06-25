@@ -502,6 +502,10 @@ class LocalPlayerController(
                             command.removePrefix("seek:").toDoubleOrNull()?.let { position ->
                                 handleLocalCommand(playerData, PlayerAction.SeekTo(position.toLong()))
                             }
+                        } else if (command.startsWith("seek_by:")) {
+                            command.removePrefix("seek_by:").toLongOrNull()?.let { offset ->
+                                handleLocalCommand(playerData, PlayerAction.SeekBy(offset))
+                            }
                         } else {
                             log.w { "Unknown remote command: $command" }
                         }
