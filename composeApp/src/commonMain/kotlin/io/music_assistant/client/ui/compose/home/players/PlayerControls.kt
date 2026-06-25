@@ -26,9 +26,9 @@ import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.Audiobook
+import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.isLongFormSpokenContent
 import io.music_assistant.client.ui.alphaOn
-import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.icons.PauseIcon
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
