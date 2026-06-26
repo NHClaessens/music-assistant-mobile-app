@@ -36,6 +36,11 @@ interface PlayableItem {
 val PlayableItem?.isLongFormSpokenContent: Boolean
     get() = this is Audiobook || this is PodcastEpisode
 
+object LongFormSeekDefaults {
+    const val BACK_SECONDS = 10L
+    const val FORWARD_SECONDS = 30L
+}
+
 /**
  * Items whose played/unplayed state can be marked on the server. Retains the original
  * [source] DTO so it can be echoed back verbatim — the server's `music/mark_played`

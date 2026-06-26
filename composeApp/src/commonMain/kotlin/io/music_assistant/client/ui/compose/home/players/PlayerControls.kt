@@ -26,6 +26,7 @@ import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.Audiobook
+import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.isLongFormSpokenContent
 import io.music_assistant.client.ui.alphaOn
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
@@ -81,7 +82,7 @@ fun PlayerControls(
                         tint = tint,
                         size = smallButtonSize,
                         enabled = playerEnabled && buttonsEnabled,
-                    ) { playerAction(playerData, PlayerAction.SeekBy(-10)) }
+                    ) { playerAction(playerData, PlayerAction.SeekBy(-LongFormSeekDefaults.BACK_SECONDS)) }
                 } else {
                     ActionButton(
                         icon = if (it.shuffleEnabled) {
@@ -157,7 +158,7 @@ fun PlayerControls(
                         tint = tint,
                         size = smallButtonSize,
                         enabled = playerEnabled && buttonsEnabled,
-                    ) { playerAction(playerData, PlayerAction.SeekBy(30)) }
+                    ) { playerAction(playerData, PlayerAction.SeekBy(LongFormSeekDefaults.FORWARD_SECONDS)) }
                 } else {
                     val repeatMode = it.repeatMode
                     ActionButton(

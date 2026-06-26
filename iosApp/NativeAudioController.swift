@@ -423,7 +423,8 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         artworkUrl: String?,
         duration: KotlinDouble?,
         elapsedTime: KotlinDouble?,
-        playbackRate: Double
+        playbackRate: Double,
+        isLongFormContent: Bool
     ) {
         NowPlayingManager.shared.updateNowPlayingInfo(
             title: title,
@@ -432,7 +433,15 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
             artworkUrl: artworkUrl,
             duration: duration?.doubleValue,
             elapsedTime: elapsedTime?.doubleValue,
-            playbackRate: playbackRate
+            playbackRate: playbackRate,
+            isLongFormContent: isLongFormContent
+        )
+    }
+
+    func setLongFormSeekIntervals(backSeconds: Int64, forwardSeconds: Int64) {
+        NowPlayingManager.shared.setLongFormSeekIntervals(
+            backSeconds: backSeconds,
+            forwardSeconds: forwardSeconds
         )
     }
 

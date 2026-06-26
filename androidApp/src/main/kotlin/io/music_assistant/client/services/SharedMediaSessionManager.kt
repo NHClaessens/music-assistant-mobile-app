@@ -25,6 +25,7 @@ import io.music_assistant.client.data.MainDataSource
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.AppMediaItem
+import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import kotlinx.coroutines.CoroutineScope
@@ -292,8 +293,8 @@ class SharedMediaSessionManager(
 
             override fun onCustomAction(action: String, extras: Bundle?) {
                 when (action) {
-                    "ACTION_SEEK_BACK" -> act(PlayerAction.SeekBy(-10))
-                    "ACTION_SEEK_FORWARD" -> act(PlayerAction.SeekBy(30))
+                    "ACTION_SEEK_BACK" -> act(PlayerAction.SeekBy(-LongFormSeekDefaults.BACK_SECONDS))
+                    "ACTION_SEEK_FORWARD" -> act(PlayerAction.SeekBy(LongFormSeekDefaults.FORWARD_SECONDS))
                     "ACTION_SWITCH_PLAYER" -> dataSource.switchSessionPlayer()
                     "ACTION_TOGGLE_SHUFFLE" -> currentPlayer()?.let { pd ->
                         pd.queueInfo?.let {

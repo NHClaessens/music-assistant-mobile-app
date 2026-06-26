@@ -61,9 +61,12 @@ expect class MediaPlayerController(platformContext: PlatformContext) {
         duration: Double?,
         elapsedTime: Double?,
         playbackRate: Double,
+        isLongFormContent: Boolean,
     )
 
     fun clearNowPlaying()
+
+    fun setLongFormSeekIntervals(backSeconds: Long, forwardSeconds: Long)
 }
 
 expect class PlatformContext
