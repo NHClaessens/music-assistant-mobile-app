@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -47,7 +47,7 @@ import io.music_assistant.client.ui.compose.common.items.PodcastWithMenu
 import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.RadioWithMenu
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
-import io.music_assistant.client.ui.compose.common.items.lazyListKey
+import io.music_assistant.client.ui.compose.common.items.lazyListOccurrenceKeys
 import io.music_assistant.client.utils.gridItemMinSize
 
 @Composable
@@ -67,6 +67,8 @@ fun AdaptiveMediaGrid(
     contentPadding: PaddingValues,
 ) {
     val isRow = viewMode == ViewMode.LIST
+    val itemKeys = remember(items) { items.lazyListOccurrenceKeys() }
+
     // Detect when we're near the end and trigger load more
     val shouldLoadMore by remember {
         derivedStateOf {
@@ -93,15 +95,15 @@ fun AdaptiveMediaGrid(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        items(
+        itemsIndexed(
             items = items,
-            key = { it.lazyListKey() },
+            key = { index, _ -> itemKeys[index] },
             span = if (isRow) {
-                { GridItemSpan(maxLineSpan) }
+                { _, _ -> GridItemSpan(maxLineSpan) }
             } else {
                 null
             },
-        ) { item ->
+        ) { _, item ->
             when (item) {
                 is Artist -> ArtistWithMenu(
                     item = item,

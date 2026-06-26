@@ -3,6 +3,7 @@ package io.music_assistant.client.ui.compose.common.items
 import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Artist
+import io.music_assistant.client.data.model.client.items.PlayableItem
 import io.music_assistant.client.data.model.client.items.RecommendationFolder
 import io.music_assistant.client.data.model.client.items.Track
 import kotlin.test.Test
@@ -88,6 +89,50 @@ class LazyListKeysTest {
         val a = track(provider = "apple_music", itemId = "xyz")
         val b = track(provider = "apple", itemId = "music_xyz")
         assertNotEquals(a.lazyListKey(), b.lazyListKey())
+    }
+
+    @Test
+    fun `occurrence keys distinguish duplicate canonical items`() {
+        val duplicate = track(provider = "library", itemId = "same")
+        val keys = listOf<AppMediaItem>(duplicate, duplicate).lazyListOccurrenceKeys()
+
+        assertEquals(2, keys.distinct().size)
+        assertEquals(duplicate.lazyListKey() to 0, keys[0])
+        assertEquals(duplicate.lazyListKey() to 1, keys[1])
+    }
+
+    @Test
+    fun `occurrence keys do not shift unrelated items after insertion`() {
+        val a = track(provider = "library", itemId = "a")
+        val b = track(provider = "library", itemId = "b")
+        val c = track(provider = "library", itemId = "c")
+        val inserted = track(provider = "library", itemId = "inserted")
+
+        val originalKeysById = listOf<AppMediaItem>(a, b, c)
+            .zip(listOf<AppMediaItem>(a, b, c).lazyListOccurrenceKeys())
+            .associate { (item, key) -> item.itemId to key }
+        val insertedKeysById = listOf<AppMediaItem>(inserted, a, b, c)
+            .zip(listOf<AppMediaItem>(inserted, a, b, c).lazyListOccurrenceKeys())
+            .associate { (item, key) -> item.itemId to key }
+
+        assertEquals(originalKeysById["a"], insertedKeysById["a"])
+        assertEquals(originalKeysById["b"], insertedKeysById["b"])
+        assertEquals(originalKeysById["c"], insertedKeysById["c"])
+    }
+
+    @Test
+    fun `playable occurrence keys distinguish duplicate items`() {
+        // Exercises the PlayableItem-typed overload used by PlayablesTabContent.
+        // Duplicate playable items must still get distinct keys (same canonical
+        // key, different occurrence ordinal) without an unexplained cast at the
+        // call site.
+        val duplicate: PlayableItem = track(provider = "library", itemId = "same")
+        val keys = listOf(duplicate, duplicate).lazyListOccurrenceKeys()
+
+        assertEquals(2, keys.distinct().size)
+        assertEquals(keys[0].first, keys[1].first)
+        assertEquals(0, keys[0].second)
+        assertEquals(1, keys[1].second)
     }
 
     private fun track(provider: String, itemId: String): Track = Track(

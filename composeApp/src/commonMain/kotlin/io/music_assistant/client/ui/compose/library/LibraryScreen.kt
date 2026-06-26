@@ -105,7 +105,10 @@ private fun LibraryGrid(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = paddingValues,
     ) {
-        items(libraryCategories) {
+        items(
+            items = libraryCategories,
+            key = { it.name },
+        ) {
             GridButton(
                 modifier = Modifier.fillMaxWidth().height(width / ITEM_HEIGHT_RATIO),
                 text = stringResource(it.stringResource()),
