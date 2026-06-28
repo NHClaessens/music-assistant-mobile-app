@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,30 +45,32 @@ fun FloatingBar(
     val padding by animateDpAsState(if (expanded) 0.dp else 8.dp)
     val paddingValues = PaddingValues(padding)
 
-    Box(
-        modifier = Modifier
-            .testTag(FloatingBarSemantics.TAG)
-            .padding(paddingValues)
-            .clip(RoundedCornerShape(clip))
-            .fillMaxWidth()
-            .let {
-                if (expanded) {
-                    it.fillMaxHeight()
-                } else {
-                    it.wrapContentHeight().clickable { onExpand(true) }
+    Surface {
+        Box(
+            modifier = Modifier
+                .testTag(FloatingBarSemantics.TAG)
+                .padding(paddingValues)
+                .clip(RoundedCornerShape(clip))
+                .fillMaxWidth()
+                .let {
+                    if (expanded) {
+                        it.fillMaxHeight()
+                    } else {
+                        it.wrapContentHeight().clickable { onExpand(true) }
+                    }
                 }
-            }
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-    ) {
-        Column {
-            val contentPadding = if (expanded) {
-                val windowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Bottom)
-                windowInsets.asPaddingValues()
-            } else {
-                PaddingValues()
-            }
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        ) {
+            Column {
+                val contentPadding = if (expanded) {
+                    val windowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Bottom)
+                    windowInsets.asPaddingValues()
+                } else {
+                    PaddingValues()
+                }
 
-            content(expanded, contentPadding)
+                content(expanded, contentPadding)
+            }
         }
     }
 }
