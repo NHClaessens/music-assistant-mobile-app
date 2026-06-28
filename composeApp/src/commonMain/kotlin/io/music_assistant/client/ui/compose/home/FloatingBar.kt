@@ -32,12 +32,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
 fun FloatingBar(
-    collapsedBottomPadding: Dp = 0.dp,
     expanded: Boolean = false,
     onExpand: (Boolean) -> Unit = {},
     content: @Composable (expanded: Boolean, contentPadding: PaddingValues) -> Unit,
@@ -46,14 +44,8 @@ fun FloatingBar(
     val padding by animateDpAsState(if (expanded) 0.dp else 8.dp)
     val paddingValues = PaddingValues(padding)
 
-    val modifier = if (expanded) {
-        Modifier
-    } else {
-        Modifier.padding(bottom = collapsedBottomPadding)
-    }
-
     Box(
-        modifier = modifier
+        modifier = Modifier
             .testTag(FloatingBarSemantics.TAG)
             .padding(paddingValues)
             .clip(RoundedCornerShape(clip))

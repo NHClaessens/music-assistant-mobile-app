@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -62,7 +63,7 @@ import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategory
 import io.music_assistant.client.ui.compose.library.LibraryScreen
 import io.music_assistant.client.ui.compose.library.LibraryScreenState
-import io.music_assistant.client.ui.compose.nav.AdaptiveNavigationScaffold
+import io.music_assistant.client.ui.compose.nav.AdaptiveNavigationBarLayout
 import io.music_assistant.client.ui.compose.nav.BackHandler
 import io.music_assistant.client.ui.compose.nav.ConditionalBackNavDisplay
 import io.music_assistant.client.ui.compose.nav.MultiBackStack
@@ -225,16 +226,14 @@ fun MainNavigationRoot(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AdaptiveNavigationScaffold(
+        AdaptiveNavigationBarLayout(
             showNavBar = !playerExpanded,
             navigationItems = navigationItems,
         ) { scaffoldContentPadding ->
-            val bottomPadding = scaffoldContentPadding.calculateBottomPadding()
-
             FloatingBarLayout(
+                modifier = Modifier.padding(scaffoldContentPadding),
                 floatingBar = {
                     FloatingBar(
-                        collapsedBottomPadding = bottomPadding,
                         expanded = playerExpanded,
                         onExpand = onExpandPlayer,
                         content = { expanded, contentPadding ->
