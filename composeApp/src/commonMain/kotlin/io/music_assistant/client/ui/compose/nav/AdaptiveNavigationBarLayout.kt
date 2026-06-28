@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import androidx.window.core.layout.WindowSizeClass
@@ -34,20 +35,22 @@ import io.music_assistant.client.utils.WindowClass
 @Composable
 fun AdaptiveNavigationBarLayout(
     navigationItems: List<NavigationItem>,
-    showNavBar: Boolean = true,
+    showNavigation: Boolean = true,
+    navigationBarHeight: Dp = 88.dp,
+    navigationRailWidth: Dp = 80.dp,
     content: @Composable BoxScope.(contentPadding: PaddingValues) -> Unit,
 ) {
     val isExpandedScreen = WindowClass.isAtLeastExpanded()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val showRail = showNavBar && isExpandedScreen
-        val showBar = showNavBar && !isExpandedScreen
+        val showRail = showNavigation && isExpandedScreen
+        val showBar = showNavigation && !isExpandedScreen
 
         content(
             if (showRail) {
-                PaddingValues(start = 80.dp)
+                PaddingValues(start = navigationRailWidth)
             } else if (showBar) {
-                PaddingValues(bottom = 88.dp)
+                PaddingValues(bottom = navigationBarHeight)
             } else {
                 PaddingValues()
             },
@@ -55,7 +58,7 @@ fun AdaptiveNavigationBarLayout(
 
         if (showRail) {
             NavigationRail(
-                modifier = Modifier.width(80.dp),
+                modifier = Modifier.width(navigationRailWidth),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 navigationItems.forEach {
@@ -68,11 +71,9 @@ fun AdaptiveNavigationBarLayout(
                     )
                 }
             }
-        }
-
-        if (showBar) {
+        } else if (showBar) {
             NavigationBar(
-                modifier = Modifier.align(Alignment.BottomCenter).height(88.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).height(navigationBarHeight),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 navigationItems.forEach {

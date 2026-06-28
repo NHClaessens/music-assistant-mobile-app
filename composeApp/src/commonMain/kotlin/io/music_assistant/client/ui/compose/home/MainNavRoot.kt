@@ -227,7 +227,7 @@ fun MainNavigationRoot(
 
     Box(modifier = Modifier.fillMaxSize()) {
         AdaptiveNavigationBarLayout(
-            showNavBar = !playerExpanded,
+            showNavigation = !playerExpanded,
             navigationItems = navigationItems,
         ) { scaffoldContentPadding ->
             FloatingBarLayout(
