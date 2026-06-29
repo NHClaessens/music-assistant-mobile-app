@@ -3,8 +3,10 @@ package io.music_assistant.client.ui.compose.nav
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -14,12 +16,13 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import androidx.window.core.layout.WindowSizeClass
@@ -30,52 +33,58 @@ import io.music_assistant.client.utils.WindowClass
  * instead on expanded and larger.
  */
 @Composable
-fun AdaptiveNavigationScaffold(
+fun AdaptiveNavigationBarLayout(
     navigationItems: List<NavigationItem>,
-    showNavBar: Boolean = true,
+    showNavigation: Boolean = true,
+    navigationBarHeight: Dp = 88.dp,
+    navigationRailWidth: Dp = 80.dp,
     content: @Composable BoxScope.(contentPadding: PaddingValues) -> Unit,
 ) {
     val isExpandedScreen = WindowClass.isAtLeastExpanded()
 
-    Scaffold(
-        bottomBar = {
-            if (showNavBar && !isExpandedScreen) {
-                NavigationBar(
-                    modifier = Modifier.height(88.dp),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ) {
-                    navigationItems.forEach {
-                        NavigationBarItem(
-                            selected = it.selected,
-                            onClick = it.onClick,
-                            icon = {
-                                Icon(it.icon, contentDescription = it.label)
-                            },
-                        )
-                    }
-                }
-            }
-        },
-    ) { contentPadding ->
-        Row {
-            if (showNavBar && isExpandedScreen) {
-                NavigationRail(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ) {
-                    navigationItems.forEach {
-                        NavigationRailItem(
-                            it.selected,
-                            it.onClick,
-                            icon = {
-                                Icon(it.icon, contentDescription = it.label)
-                            },
-                        )
-                    }
-                }
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        val showRail = showNavigation && isExpandedScreen
+        val showBar = showNavigation && !isExpandedScreen
 
-            Box {
-                content(contentPadding)
+        content(
+            if (showRail) {
+                PaddingValues(start = navigationRailWidth)
+            } else if (showBar) {
+                PaddingValues(bottom = navigationBarHeight)
+            } else {
+                PaddingValues()
+            },
+        )
+
+        if (showRail) {
+            NavigationRail(
+                modifier = Modifier.width(navigationRailWidth),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                navigationItems.forEach {
+                    NavigationRailItem(
+                        selected = it.selected,
+                        onClick = it.onClick,
+                        icon = {
+                            Icon(it.icon, contentDescription = it.label)
+                        },
+                    )
+                }
+            }
+        } else if (showBar) {
+            NavigationBar(
+                modifier = Modifier.align(Alignment.BottomCenter).height(navigationBarHeight),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                navigationItems.forEach {
+                    NavigationBarItem(
+                        selected = it.selected,
+                        onClick = it.onClick,
+                        icon = {
+                            Icon(it.icon, contentDescription = it.label)
+                        },
+                    )
+                }
             }
         }
     }
@@ -110,8 +119,8 @@ fun <T : NavKey> MultiBackStack<T>.createNavigationItem(
 
 @Preview
 @Composable
-fun PreviewAdaptiveNavigationScaffold() {
-    AdaptiveNavigationScaffold(
+fun PreviewAdaptiveNavigationBarLayout() {
+    AdaptiveNavigationBarLayout(
         navigationItems = listOf(
             NavigationItem(
                 selected = true,
@@ -124,8 +133,11 @@ fun PreviewAdaptiveNavigationScaffold() {
                 icon = Icons.Default.Settings,
             ),
         ),
-    ) {
-        Text("Content")
+    ) { contentPadding ->
+        Text(
+            modifier = Modifier.padding(contentPadding),
+            text = "Content",
+        )
     }
 }
 
@@ -134,6 +146,6 @@ fun PreviewAdaptiveNavigationScaffold() {
     heightDp = WindowSizeClass.HEIGHT_DP_EXPANDED_LOWER_BOUND,
 )
 @Composable
-fun PreviewAdaptiveNavigationScaffoldExpanded() {
-    PreviewAdaptiveNavigationScaffold()
+fun PreviewAdaptiveNavigationBarLayoutExpanded() {
+    PreviewAdaptiveNavigationBarLayout()
 }
