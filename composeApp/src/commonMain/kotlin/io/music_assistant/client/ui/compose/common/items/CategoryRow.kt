@@ -7,12 +7,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -44,7 +45,7 @@ data class ItemCategory(
     val id: String,
     val title: DisplayString,
     val items: List<AppMediaItem>,
-    val lazyListKey: Any,
+    val lazyListKey: String,
     val itemType: MediaType? = null,
     val tag: String? = null,
 )
@@ -115,16 +116,20 @@ fun CategoryRow(
             Modifier
         }
 
+        // Recommendation rows are server-curated and can repeat canonical item
+        // Key by occurrence to avoid Compose's duplicate-key crash
+        val itemKeys = remember(mediaItems) { mediaItems.lazyListOccurrenceKeys() }
+
         LazyRow(
             modifier = modifier,
             state = rowListState,
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(
+            itemsIndexed(
                 items = mediaItems,
-                key = { it.lazyListKey() },
-                contentType = { item ->
+                key = { index, _ -> itemKeys[index] },
+                contentType = { _, item ->
                     when (item) {
                         is Track -> "Track"
                         is Artist -> "Artist"
@@ -138,7 +143,7 @@ fun CategoryRow(
                         else -> "Unknown"
                     }
                 },
-            ) { item ->
+            ) { _, item ->
                 when (item) {
                     is Artist -> ArtistWithMenu(
                         item = item,

@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -86,6 +86,8 @@ import io.music_assistant.client.ui.compose.common.items.PodcastEpisodeWithMenu
 import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.ProvideClickActions
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
+import io.music_assistant.client.ui.compose.common.items.lazyListOccurrenceKeys
+import io.music_assistant.client.ui.compose.common.items.playableLazyListOccurrenceKeys
 import io.music_assistant.client.ui.compose.common.items.supportsAddToPlaylist
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
@@ -420,7 +422,7 @@ private fun ItemContent(
                             tabsSlot = null,
                             gridState = gridState,
                         ) {
-                            fullSpanItem { InlineProgress() }
+                            fullSpanItem(DETAIL_LOADING_KEY) { InlineProgress() }
                         }
                     }
                 } else {
@@ -650,11 +652,11 @@ private fun LazyGridScope.detailHeaderItems(
     heroSlot: @Composable () -> Unit,
     tabsSlot: (@Composable () -> Unit)?,
 ) {
-    item(span = { GridItemSpan(maxLineSpan) }) {
+    fullSpanItem(DETAIL_HERO_KEY) {
         Box(modifier = Modifier.fullBleed(gridPadding)) { heroSlot() }
     }
     tabsSlot?.let { slot ->
-        item(span = { GridItemSpan(maxLineSpan) }) { slot() }
+        fullSpanItem(DETAIL_TABS_KEY) { slot() }
     }
 }
 
@@ -689,8 +691,13 @@ private fun DetailGrid(
     }
 }
 
-private fun LazyGridScope.fullSpanItem(content: @Composable () -> Unit) =
-    item(span = { GridItemSpan(maxLineSpan) }) { content() }
+private fun LazyGridScope.fullSpanItem(
+    key: String,
+    content: @Composable () -> Unit,
+) = item(
+    key = key,
+    span = { GridItemSpan(maxLineSpan) },
+) { content() }
 
 /**
  * Resolves a list tab's [state] to grid rows: Error → error message, empty (or NoData) → empty
@@ -705,7 +712,7 @@ private inline fun <T> LazyGridScope.tabListBody(
         is DataState.Data -> state.data
         is DataState.Stale -> state.data
         is DataState.Error -> {
-            fullSpanItem {
+            fullSpanItem(DETAIL_ERROR_KEY) {
                 CenteredText(
                     text = stringResource(Res.string.library_error),
                     color = MaterialTheme.colorScheme.error,
@@ -717,7 +724,7 @@ private inline fun <T> LazyGridScope.tabListBody(
         else -> emptyList()
     }
     if (data.isEmpty()) {
-        fullSpanItem { CenteredText(stringResource(Res.string.library_empty)) }
+        fullSpanItem(DETAIL_EMPTY_KEY) { CenteredText(stringResource(Res.string.library_empty)) }
     } else {
         items(data)
     }
@@ -740,16 +747,16 @@ private fun AlbumsTabContent(
     val viewMode = viewModeProvider(MediaType.ALBUM)
     DetailGrid(contentPadding, heroSlot, tabsSlot, gridState) {
         tabListBody(albumsState) { albums ->
-            items(
+            // not a @Composable scope, so remember() is unavailable here
+            val albumKeys = albums.lazyListOccurrenceKeys()
+            itemsIndexed(
                 items = albums,
+                key = { index, _ -> albumKeys[index] },
                 span = when (viewMode) {
-                    ViewMode.LIST -> {
-                        { GridItemSpan(maxLineSpan) }
-                    }
-
+                    ViewMode.LIST -> { _, _ -> GridItemSpan(maxLineSpan) }
                     ViewMode.GRID -> null
                 },
-            ) { album ->
+            ) { _, album ->
                 AlbumWithMenu(
                     item = album,
                     viewMode = viewMode,
@@ -780,16 +787,15 @@ private fun ArtistsTabContent(
     val viewMode = viewModeProvider(MediaType.ARTIST)
     DetailGrid(contentPadding, heroSlot, tabsSlot, gridState) {
         tabListBody(artistsState) { artists ->
-            items(
+            val artistKeys = artists.lazyListOccurrenceKeys()
+            itemsIndexed(
                 items = artists,
+                key = { index, _ -> artistKeys[index] },
                 span = when (viewMode) {
-                    ViewMode.LIST -> {
-                        { GridItemSpan(maxLineSpan) }
-                    }
-
+                    ViewMode.LIST -> { _, _ -> GridItemSpan(maxLineSpan) }
                     ViewMode.GRID -> null
                 },
-            ) { artist ->
+            ) { _, artist ->
                 ArtistWithMenu(
                     item = artist,
                     viewMode = viewMode,
@@ -822,42 +828,40 @@ private fun PlayablesTabContent(
     val viewMode = viewModeProvider(MediaType.TRACK)
     DetailGrid(contentPadding, heroSlot, tabsSlot, gridState) {
         tabListBody(playableItemsState) { tracks ->
-            tracks.forEachIndexed { index, track ->
-                item(
-                    span = when (viewMode) {
-                        ViewMode.LIST -> {
-                            { GridItemSpan(maxLineSpan) }
-                        }
+            val trackKeys = tracks.playableLazyListOccurrenceKeys()
+            itemsIndexed(
+                items = tracks,
+                key = { index, _ -> trackKeys[index] },
+                span = when (viewMode) {
+                    ViewMode.LIST -> { _, _ -> GridItemSpan(maxLineSpan) }
+                    ViewMode.GRID -> null
+                },
+            ) { index, track ->
+                when (track) {
+                    is Track -> TrackWithMenu(
+                        item = track,
+                        viewMode = viewMode,
+                        showTrackNumber = parentItem is Album,
+                        onPlayOption = onPlayChildClick,
+                        playlistActions = playlistActions,
+                        onRemoveFromPlaylist = if (parentItem is Playlist && parentItem.isEditable) {
+                            { onRemoveFromPlaylist(parentItem.itemId, index) }
+                        } else {
+                            null
+                        },
+                        libraryActions = libraryActions,
+                        providerIconFetcher = providerIconFetcher,
+                    )
 
-                        ViewMode.GRID -> null
-                    },
-                ) {
-                    when (track) {
-                        is Track -> TrackWithMenu(
-                            item = track,
-                            viewMode = viewMode,
-                            showTrackNumber = parentItem is Album,
-                            onPlayOption = onPlayChildClick,
-                            playlistActions = playlistActions,
-                            onRemoveFromPlaylist = if (parentItem is Playlist && parentItem.isEditable) {
-                                { onRemoveFromPlaylist(parentItem.itemId, index) }
-                            } else {
-                                null
-                            },
-                            libraryActions = libraryActions,
-                            providerIconFetcher = providerIconFetcher,
-                        )
-
-                        is PodcastEpisode -> PodcastEpisodeWithMenu(
-                            item = track,
-                            viewMode = viewMode,
-                            onPlayOption = onPlayChildClick,
-                            playlistActions = null,
-                            libraryActions = libraryActions,
-                            progressActions = progressActions,
-                            providerIconFetcher = providerIconFetcher,
-                        )
-                    }
+                    is PodcastEpisode -> PodcastEpisodeWithMenu(
+                        item = track,
+                        viewMode = viewMode,
+                        onPlayOption = onPlayChildClick,
+                        playlistActions = null,
+                        libraryActions = libraryActions,
+                        progressActions = progressActions,
+                        providerIconFetcher = providerIconFetcher,
+                    )
                 }
             }
         }
@@ -875,10 +879,10 @@ private fun ChaptersTabContent(
 ) {
     DetailGrid(contentPadding, heroSlot, tabsSlot, gridState) {
         if (chapters.isEmpty()) {
-            fullSpanItem { CenteredText(stringResource(Res.string.library_empty)) }
+            fullSpanItem(DETAIL_EMPTY_KEY) { CenteredText(stringResource(Res.string.library_empty)) }
         } else {
             chapters.forEach { chapter ->
-                fullSpanItem {
+                fullSpanItem(DETAIL_CHAPTER_KEY_PREFIX + chapter.position) {
                     ChapterRow(
                         chapter = chapter,
                         onClick = { onChapterClick(chapter.position) },
@@ -1123,3 +1127,10 @@ private fun PreviewAudiobook(isRowMode: Boolean = true) {
 private fun PreviewAudiobookGrid() {
     PreviewAudiobook(isRowMode = false)
 }
+
+private const val DETAIL_HERO_KEY = "detail:hero"
+private const val DETAIL_TABS_KEY = "detail:tabs"
+private const val DETAIL_ERROR_KEY = "detail:error"
+private const val DETAIL_EMPTY_KEY = "detail:empty"
+private const val DETAIL_LOADING_KEY = "detail:loading"
+private const val DETAIL_CHAPTER_KEY_PREFIX = "detail:chapter:"

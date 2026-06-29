@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,7 +68,7 @@ import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.ProvideClickActions
 import io.music_assistant.client.ui.compose.common.items.RadioWithMenu
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
-import io.music_assistant.client.ui.compose.common.items.lazyListKey
+import io.music_assistant.client.ui.compose.common.items.lazyListOccurrenceKeys
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
@@ -269,10 +269,11 @@ private fun SearchContent(
                             item {
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
-                            items(
+                            val itemKeys = items.lazyListOccurrenceKeys()
+                            itemsIndexed(
                                 items = items,
-                                key = { it.lazyListKey() },
-                            ) { item ->
+                                key = { index, _ -> itemKeys[index] },
+                            ) { _, item ->
                                 when (item) {
                                     is Track -> TrackWithMenu(
                                         viewMode = ViewMode.LIST,

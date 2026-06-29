@@ -13,6 +13,7 @@ import io.music_assistant.client.data.model.server.ServerMediaItem
 interface PlayableItem {
     val defaultIcon: ImageVector
     val parentName: String?
+    val mediaType: MediaType
     val itemId: String
     val displayName: String
     val version: String?
