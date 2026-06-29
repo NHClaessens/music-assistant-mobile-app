@@ -63,8 +63,8 @@ fun AdaptiveNavigationBarLayout(
             ) {
                 navigationItems.forEach {
                     NavigationRailItem(
-                        it.selected,
-                        it.onClick,
+                        selected = it.selected,
+                        onClick = it.onClick,
                         icon = {
                             Icon(it.icon, contentDescription = it.label)
                         },
