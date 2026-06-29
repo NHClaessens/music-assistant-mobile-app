@@ -146,6 +146,6 @@ fun PreviewAdaptiveNavigationBarLayout() {
     heightDp = WindowSizeClass.HEIGHT_DP_EXPANDED_LOWER_BOUND,
 )
 @Composable
-fun PreviewAdaptiveNavigationScaffoldExpanded() {
+fun PreviewAdaptiveNavigationBarLayoutExpanded() {
     PreviewAdaptiveNavigationBarLayout()
 }
