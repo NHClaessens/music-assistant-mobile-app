@@ -45,7 +45,7 @@ data class ItemCategory(
     val id: String,
     val title: DisplayString,
     val items: List<AppMediaItem>,
-    val lazyListKey: Any,
+    val lazyListKey: String,
     val itemType: MediaType? = null,
     val tag: String? = null,
 )

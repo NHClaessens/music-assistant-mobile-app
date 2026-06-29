@@ -113,10 +113,9 @@ fun AddToPlaylistDialog(
                     } else {
                         items(
                             items = playlists,
-                            key = { p -> p.lazyListKey() },
+                            key = { it.lazyListKey() },
                         ) { playlist ->
-                            val isHighlighted =
-                                playlist.lazyListKey() == highlighted?.lazyListKey()
+                            val isHighlighted = playlist.lazyListKey() == highlighted?.lazyListKey()
                             TextButton(
                                 onClick = {
                                     playlistActions.addToPlaylist(item.uri, playlist)

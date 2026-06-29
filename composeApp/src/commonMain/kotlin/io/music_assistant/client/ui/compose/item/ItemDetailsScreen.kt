@@ -87,6 +87,7 @@ import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.ProvideClickActions
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
 import io.music_assistant.client.ui.compose.common.items.lazyListOccurrenceKeys
+import io.music_assistant.client.ui.compose.common.items.playableLazyListOccurrenceKeys
 import io.music_assistant.client.ui.compose.common.items.supportsAddToPlaylist
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
@@ -651,17 +652,11 @@ private fun LazyGridScope.detailHeaderItems(
     heroSlot: @Composable () -> Unit,
     tabsSlot: (@Composable () -> Unit)?,
 ) {
-    item(
-        key = DETAIL_HERO_KEY,
-        span = { GridItemSpan(maxLineSpan) },
-    ) {
+    fullSpanItem(DETAIL_HERO_KEY) {
         Box(modifier = Modifier.fullBleed(gridPadding)) { heroSlot() }
     }
     tabsSlot?.let { slot ->
-        item(
-            key = DETAIL_TABS_KEY,
-            span = { GridItemSpan(maxLineSpan) },
-        ) { slot() }
+        fullSpanItem(DETAIL_TABS_KEY) { slot() }
     }
 }
 
@@ -703,13 +698,6 @@ private fun LazyGridScope.fullSpanItem(
     key = key,
     span = { GridItemSpan(maxLineSpan) },
 ) { content() }
-
-private const val DETAIL_HERO_KEY = "detail:hero"
-private const val DETAIL_TABS_KEY = "detail:tabs"
-private const val DETAIL_ERROR_KEY = "detail:error"
-private const val DETAIL_EMPTY_KEY = "detail:empty"
-private const val DETAIL_LOADING_KEY = "detail:loading"
-private const val DETAIL_CHAPTER_KEY_PREFIX = "detail:chapter:"
 
 /**
  * Resolves a list tab's [state] to grid rows: Error → error message, empty (or NoData) → empty
@@ -765,10 +753,7 @@ private fun AlbumsTabContent(
                 items = albums,
                 key = { index, _ -> albumKeys[index] },
                 span = when (viewMode) {
-                    ViewMode.LIST -> {
-                        { _, _ -> GridItemSpan(maxLineSpan) }
-                    }
-
+                    ViewMode.LIST -> { _, _ -> GridItemSpan(maxLineSpan) }
                     ViewMode.GRID -> null
                 },
             ) { _, album ->
@@ -807,10 +792,7 @@ private fun ArtistsTabContent(
                 items = artists,
                 key = { index, _ -> artistKeys[index] },
                 span = when (viewMode) {
-                    ViewMode.LIST -> {
-                        { _, _ -> GridItemSpan(maxLineSpan) }
-                    }
-
+                    ViewMode.LIST -> { _, _ -> GridItemSpan(maxLineSpan) }
                     ViewMode.GRID -> null
                 },
             ) { _, artist ->
@@ -846,15 +828,12 @@ private fun PlayablesTabContent(
     val viewMode = viewModeProvider(MediaType.TRACK)
     DetailGrid(contentPadding, heroSlot, tabsSlot, gridState) {
         tabListBody(playableItemsState) { tracks ->
-            val trackKeys = tracks.lazyListOccurrenceKeys()
+            val trackKeys = tracks.playableLazyListOccurrenceKeys()
             itemsIndexed(
                 items = tracks,
                 key = { index, _ -> trackKeys[index] },
                 span = when (viewMode) {
-                    ViewMode.LIST -> {
-                        { _, _ -> GridItemSpan(maxLineSpan) }
-                    }
-
+                    ViewMode.LIST -> { _, _ -> GridItemSpan(maxLineSpan) }
                     ViewMode.GRID -> null
                 },
             ) { index, track ->
@@ -1148,3 +1127,10 @@ private fun PreviewAudiobook(isRowMode: Boolean = true) {
 private fun PreviewAudiobookGrid() {
     PreviewAudiobook(isRowMode = false)
 }
+
+private const val DETAIL_HERO_KEY = "detail:hero"
+private const val DETAIL_TABS_KEY = "detail:tabs"
+private const val DETAIL_ERROR_KEY = "detail:error"
+private const val DETAIL_EMPTY_KEY = "detail:empty"
+private const val DETAIL_LOADING_KEY = "detail:loading"
+private const val DETAIL_CHAPTER_KEY_PREFIX = "detail:chapter:"
