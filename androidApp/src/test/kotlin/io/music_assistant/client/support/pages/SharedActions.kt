@@ -21,6 +21,8 @@ import io.music_assistant.client.ui.compose.home.FloatingBarSemantics
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_pause
 import musicassistantclient.composeapp.generated.resources.action_play
+import musicassistantclient.composeapp.generated.resources.banner_no_network
+import musicassistantclient.composeapp.generated.resources.banner_reconnecting
 import musicassistantclient.composeapp.generated.resources.cd_current_player
 import musicassistantclient.composeapp.generated.resources.cd_playing
 import musicassistantclient.composeapp.generated.resources.nav_home
@@ -179,4 +181,24 @@ fun <T : ComposePage> T.expandPlayer(
 ): ExpandedPlayerPage {
     composeTestRule.onNodeWithTag(FloatingBarSemantics.TAG).performClick()
     return ExpandedPlayerPage(name, playing, item, composeTestRule).assertOnPage()
+}
+
+fun <T : ComposePage> T.assertReconnectingBanner(showing: Boolean): T {
+    if (showing) {
+        composeTestRule.onNodeWithText(Res.string.banner_reconnecting.get(1)).assertIsDisplayed()
+    } else {
+        composeTestRule.onNodeWithText(Res.string.banner_reconnecting.get(1)).assertIsNotDisplayed()
+    }
+
+    return this
+}
+
+fun <T : ComposePage> T.assertNoNetworkBanner(showing: Boolean): T {
+    if (showing) {
+        composeTestRule.onNodeWithText(Res.string.banner_no_network.get()).assertIsDisplayed()
+    } else {
+        composeTestRule.onNodeWithText(Res.string.banner_no_network.get()).assertIsNotDisplayed()
+    }
+
+    return this
 }

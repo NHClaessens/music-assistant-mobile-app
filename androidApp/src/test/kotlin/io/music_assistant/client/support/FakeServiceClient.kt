@@ -47,6 +47,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 class FakeServiceClient(private val settingsRepository: SettingsRepository) : ServiceClient {
     private var legacyVersion: LegacyVersion? = null
     private var requestErrors: Boolean = false
+    private var connectionError: Exception? = null
 
     private val uniqueIdGenerator = UniqueIdGenerator()
 
@@ -573,16 +574,21 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
     }
 
     override fun connect(connection: ConnectionInfo) {
-        settingsRepository.updateConnectionInfo(connection)
-        val connectionData = ConnectionData(
-            serverInfo = ServerInfo(
-                serverVersion = "fake",
-                schemaVersion = -1,
-                baseUrl = "http://homeassistant.example",
-            ),
-        )
-        _sessionState.value = SessionState.Connected.Direct(connection, connectionData)
-        _serverBaseUrl.value = connectionData.serverInfo?.baseUrl
+        if (connectionError == null) {
+            val connectionData = ConnectionData(
+                serverInfo = ServerInfo(
+                    serverVersion = "fake",
+                    schemaVersion = -1,
+                    baseUrl = "http://homeassistant.example",
+                ),
+            )
+            _sessionState.value = SessionState.Connected.Direct(connection, connectionData)
+            _serverBaseUrl.value = connectionData.serverInfo?.baseUrl
+            settingsRepository.updateConnectionInfo(connection)
+        } else {
+            _sessionState.value = SessionState.Disconnected.Error(connectionError)
+            _serverBaseUrl.value = null
+        }
     }
 
     override fun connectWebRTC(remoteId: RemoteId) {
@@ -683,8 +689,48 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         this.legacyVersion = version
     }
 
-    fun setConnected(connected: Boolean) {
-        if (connected) {
+    fun setReconnecting(reconnecting: Boolean) {
+        if (reconnecting) {
+            _sessionState.update {
+                when (it) {
+                    is SessionState.Connected.Direct -> {
+                        SessionState.Reconnecting.Direct(
+                            attempt = 1,
+                            connectionInfo = it.connectionInfo,
+                            connectionData = it.connectionData,
+                        )
+                    }
+
+                    else -> error("Unhandled SessionState: $it")
+                }
+            }
+        } else {
+            _sessionState.update {
+                when (it) {
+                    is SessionState.Reconnecting.Direct -> {
+                        SessionState.Connected.Direct(
+                            connectionInfo = it.connectionInfo,
+                            connectionData = it.connectionData,
+                        )
+                    }
+
+                    else -> error("Unhandled SessionState: $it")
+                }
+            }
+        }
+    }
+
+    fun setConnectionError(error: Exception?) {
+        this.connectionError = error
+
+        if (error != null) {
+            _sessionState.value = SessionState.Disconnected.Error(error)
+            _serverBaseUrl.value = null
+        }
+    }
+
+    fun setNetworkAvailable(available: Boolean) {
+        if (available) {
             _sessionState.update {
                 when (it) {
                     is SessionState.Reconnecting.Direct -> {
@@ -705,6 +751,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                             attempt = 1,
                             connectionInfo = it.connectionInfo,
                             connectionData = it.connectionData,
+                            isOnline = false,
                         )
                     }
 

@@ -36,6 +36,7 @@ sealed class SessionState {
      */
     sealed class Reconnecting : SessionState(), HasConnectionData {
         abstract val attempt: Int
+        abstract val isOnline: Boolean
 
         /**
          * Reconnecting via direct WebSocket connection.
@@ -44,6 +45,7 @@ sealed class SessionState {
             override val attempt: Int,
             val connectionInfo: ConnectionInfo,
             override val connectionData: ConnectionData = ConnectionData(),
+            override val isOnline: Boolean = true,
         ) : Reconnecting()
 
         /**
@@ -53,6 +55,7 @@ sealed class SessionState {
             override val attempt: Int,
             val remoteId: RemoteId,
             override val connectionData: ConnectionData = ConnectionData(),
+            override val isOnline: Boolean = true,
         ) : Reconnecting()
     }
 

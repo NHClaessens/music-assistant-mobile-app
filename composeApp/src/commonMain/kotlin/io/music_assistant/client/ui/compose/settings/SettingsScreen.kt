@@ -526,6 +526,15 @@ private fun ConnectionMethodTabs(
                 )
             }
         }
+
+        val error = (sessionState as? SessionState.Disconnected.Error)?.reason?.message
+        if (error != null) {
+            Text(
+                error,
+                modifier = Modifier.padding(top = 8.dp),
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 
     if (showHistoryDialog) {

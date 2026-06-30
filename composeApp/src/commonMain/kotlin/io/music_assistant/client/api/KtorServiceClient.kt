@@ -682,7 +682,7 @@ class KtorServiceClient(
                 SessionState.Connected.Direct(connection, data)
             },
             createReconnecting = { attempt, data ->
-                SessionState.Reconnecting.Direct(attempt, connection, data)
+                SessionState.Reconnecting.Direct(attempt, connection, data, isOnline = networkMonitor.isAvailable.value)
             },
             backgroundInfo = { BackgroundedConnectionInfo.Direct(connection) },
             onFreshConnect = {
@@ -736,7 +736,7 @@ class KtorServiceClient(
             transport = webrtcTransport,
             createConnected = { data -> SessionState.Connected.WebRTC(remoteId, data) },
             createReconnecting = { attempt, data ->
-                SessionState.Reconnecting.WebRTC(attempt, remoteId, data)
+                SessionState.Reconnecting.WebRTC(attempt, remoteId, data, isOnline = networkMonitor.isAvailable.value)
             },
             backgroundInfo = { BackgroundedConnectionInfo.WebRTC(remoteId) },
             onFreshConnect = {

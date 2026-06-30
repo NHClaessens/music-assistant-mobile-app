@@ -24,11 +24,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.music_assistant.client.api.ServiceClient
-import io.music_assistant.client.utils.NetworkMonitor
+import io.music_assistant.client.ui.Timings
+import io.music_assistant.client.ui.compose.common.BannerState.NoNetwork
+import io.music_assistant.client.ui.compose.common.BannerState.Reconnecting
 import io.music_assistant.client.utils.SessionState
 import kotlinx.coroutines.delay
-import musicassistantclient.composeapp.generated.resources.*
 import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.banner_no_network
+import musicassistantclient.composeapp.generated.resources.banner_reconnecting
+import musicassistantclient.composeapp.generated.resources.common_cancel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
@@ -38,14 +42,12 @@ import org.koin.compose.koinInject
 @Composable
 fun ConnectionStatusBanner(
     modifier: Modifier = Modifier,
-    delay: Long = 3000,
+    delay: Long = Timings.UI_RETRY_DEBOUNCE,
 ) {
     val serviceClient: ServiceClient = koinInject()
-    val networkMonitor: NetworkMonitor = koinInject()
     val sessionState by serviceClient.sessionState.collectAsStateWithLifecycle()
-    val isOnline by networkMonitor.isAvailable.collectAsStateWithLifecycle()
 
-    val bannerState = reconnectionBannerState(sessionState, isOnline)
+    val bannerState = reconnectionBannerState(sessionState)
 
     // Delay visibility to not spam in cases reconnecting is fast
     var isVisible by remember { mutableStateOf(false) }
@@ -84,10 +86,13 @@ internal sealed interface BannerState {
 }
 
 // While reconnecting, offline means the loop is parked waiting for network, not retrying.
-internal fun reconnectionBannerState(sessionState: SessionState, isOnline: Boolean): BannerState? =
+internal fun reconnectionBannerState(sessionState: SessionState): BannerState? =
     when (sessionState) {
-        is SessionState.Reconnecting ->
-            if (isOnline) BannerState.Reconnecting(sessionState.attempt) else BannerState.NoNetwork
+        is SessionState.Reconnecting -> if (sessionState.isOnline) {
+            Reconnecting(sessionState.attempt)
+        } else {
+            NoNetwork
+        }
 
         else -> null
     }
