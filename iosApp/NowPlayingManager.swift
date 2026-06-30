@@ -27,6 +27,7 @@ class NowPlayingManager {
     private var currentIsLongFormContent: Bool?
     private var currentLongFormSeekBackSeconds: Int64?
     private var currentLongFormSeekForwardSeconds: Int64?
+    private var currentAudioSessionMode: AVAudioSession.Mode?
 
     // MARK: - Logging
     private static let logTag = "NowPlayingManager"
@@ -44,11 +45,13 @@ class NowPlayingManager {
     /// Sets the category only — does NOT activate. Activation interrupts other
     /// apps, so doing it at launch claims audio from whatever is already playing.
     /// Deferred to `activatePlayback()`, driven by real playback.
-    private func configureAudioSession() {
+    private func configureAudioSession(mode: AVAudioSession.Mode = .default) {
+        guard currentAudioSessionMode != mode else { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [])
-            logDebug("Audio session category configured")
+            try session.setCategory(.playback, mode: mode, options: [])
+            currentAudioSessionMode = mode
+            logDebug("Audio session category configured: mode=\(mode.rawValue)")
         } catch {
             logError("Failed to configure audio session: \(error)")
         }
@@ -117,6 +120,7 @@ class NowPlayingManager {
         playbackRate: Double,
         isLongFormContent: Bool
     ) {
+        configureAudioSession(mode: isLongFormContent ? .spokenAudio : .default)
         updateRemoteCommandMode(isLongFormContent: isLongFormContent)
 
         let newIdentifier = contentIdentifier(
@@ -290,6 +294,7 @@ class NowPlayingManager {
     /// Clears the Now Playing info
     func clearNowPlayingInfo() {
         logInfo("Clearing Now Playing info")
+        configureAudioSession(mode: .default)
         DispatchQueue.main.async { [weak self] in
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             self?.cachedArtwork = nil
