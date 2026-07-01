@@ -1184,15 +1184,14 @@ class KtorServiceClient(
                     if (request.command != APICommands.AUTH_LOGOUT &&
                         sessionState !is SessionState.Connecting &&
                         sessionState !is SessionState.Reconnecting &&
-                        transportState !is TransportState.Reconnecting
+                        transportState !is TransportState.Reconnecting &&
+                        !reconnectFromCurrent("send failed: ${e.message}")
                     ) {
-                        if (!reconnectFromCurrent("send failed: ${e.message}")) {
-                            disconnect(
-                                SessionState.Disconnected.Error(
-                                    Exception("Error sending command: ${e.message}"),
-                                ),
-                            )
-                        }
+                        disconnect(
+                            SessionState.Disconnected.Error(
+                                Exception("Error sending command: ${e.message}"),
+                            ),
+                        )
                     }
                 }
             }
