@@ -1175,11 +1175,23 @@ class KtorServiceClient(
                     logger.e(e) { "sendRequest[$msgId] cmd=$cmd send FAILED" }
                     rpcEngine.removeCallback(msgId)
                     continuation.resume(Result.failure(e))
-                    // Don't trigger full disconnect if transport is already reconnecting —
-                    // its own loop will surface the error via TransportState.Failed.
+                    // A send failure is definitive liveness evidence: the high-level
+                    // Connected/Authenticated state can lag behind a closed WebRTC data channel.
+                    // Kick a fresh reconnect so callers that queue on failure are replayed when
+                    // the transport returns. Logout is user-intent teardown; never resurrect it.
+                    val sessionState = _sessionState.value
                     val transportState = transport?.state?.value
-                    if (transportState !is TransportState.Reconnecting) {
-                        disconnect(SessionState.Disconnected.Error(Exception("Error sending command: ${e.message}")))
+                    val canStartReconnect = request.command != APICommands.AUTH_LOGOUT &&
+                        sessionState !is SessionState.Connecting &&
+                        sessionState !is SessionState.Reconnecting &&
+                        transportState !is TransportState.Reconnecting
+                    val reconnectStarted = canStartReconnect && reconnectFromCurrent("send failed: ${e.message}")
+                    if (canStartReconnect && !reconnectStarted) {
+                        disconnect(
+                            SessionState.Disconnected.Error(
+                                Exception("Error sending command: ${e.message}"),
+                            ),
+                        )
                     }
                 }
             }
