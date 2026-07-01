@@ -1181,12 +1181,12 @@ class KtorServiceClient(
                     // the transport returns. Logout is user-intent teardown; never resurrect it.
                     val sessionState = _sessionState.value
                     val transportState = transport?.state?.value
-                    if (request.command != APICommands.AUTH_LOGOUT &&
+                    val canStartReconnect = request.command != APICommands.AUTH_LOGOUT &&
                         sessionState !is SessionState.Connecting &&
                         sessionState !is SessionState.Reconnecting &&
-                        transportState !is TransportState.Reconnecting &&
-                        !reconnectFromCurrent("send failed: ${e.message}")
-                    ) {
+                        transportState !is TransportState.Reconnecting
+                    val reconnectStarted = canStartReconnect && reconnectFromCurrent("send failed: ${e.message}")
+                    if (canStartReconnect && !reconnectStarted) {
                         disconnect(
                             SessionState.Disconnected.Error(
                                 Exception("Error sending command: ${e.message}"),
