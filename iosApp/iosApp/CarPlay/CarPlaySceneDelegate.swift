@@ -431,9 +431,9 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    /// Type-aware dispatch: container items (Artist, Album, Playlist) drill
-    /// in to their contained items; leaf items (Track, RadioStation, Podcast,
-    /// Audiobook, PodcastEpisode) play and push Now Playing.
+    /// Type-aware dispatch: container items (Artist, Album, Playlist, Podcast) drill
+    /// in to their contained items; leaf items (Track, RadioStation, Audiobook,
+    /// PodcastEpisode) play and push Now Playing.
     private func handleItemSelection(_ item: CPSelectableListItem) {
         // Drop offline taps with a visible alert.
         guard isReady else { showOfflineAlert(); return }
@@ -448,10 +448,12 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             pushTracksForAlbum(album)
         } else if let playlist = mediaItem as? Playlist {
             pushTracksForPlaylist(playlist)
+        } else if let podcast = mediaItem as? Podcast {
+            pushEpisodesForPodcast(podcast)
         } else {
-            // Track / RadioStation / Podcast / Audiobook / PodcastEpisode — leaf items run the
-            // per-kind configured tap action. Only push Now Playing when it actually starts
-            // playback (a configured "add to queue" tap is non-disruptive).
+            // Track / RadioStation / Audiobook / PodcastEpisode — leaf items run the per-kind
+            // configured tap action. Only push Now Playing when it actually starts playback
+            // (a configured "add to queue" tap is non-disruptive).
             let dispatched = CarPlayContentManager.shared.playWithDefault(mediaItem)
             if let name = dispatched, Self.actionStartsPlayback(name) {
                 playAndShowNowPlaying()
@@ -503,6 +505,15 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             bulkActionParent: playlist
         ) { completion in
             CarPlayContentManager.shared.fetchTracksForPlaylist(playlist, completion: completion)
+        }
+    }
+
+    private func pushEpisodesForPodcast(_ podcast: Podcast) {
+        pushDrilldown(
+            title: podcast.displayName,
+            bulkActionParent: podcast
+        ) { completion in
+            CarPlayContentManager.shared.fetchEpisodesForPodcast(podcast, completion: completion)
         }
     }
 

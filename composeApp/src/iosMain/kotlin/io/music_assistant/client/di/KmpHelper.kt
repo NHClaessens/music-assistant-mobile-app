@@ -16,10 +16,15 @@ import io.music_assistant.client.data.MainDataSource
 import io.music_assistant.client.data.executeLocalPlayerDispatch
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.QueueOption
+import io.music_assistant.client.data.model.client.SortConfig
+import io.music_assistant.client.data.model.client.SubItemContext
+import io.music_assistant.client.data.model.client.clientSorted
 import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Artist
 import io.music_assistant.client.data.model.client.items.Playlist
+import io.music_assistant.client.data.model.client.items.Podcast
+import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RecommendationFolder
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.toItemKind
@@ -363,6 +368,27 @@ object KmpHelper : KoinComponent {
                 ),
             ).getOrNull()
                 ?.filterIsInstance<Track>()
+                ?: emptyList()
+        }
+    }
+
+    fun fetchEpisodesByPodcast(
+        podcast: Podcast,
+        completion: (List<AppMediaItem>?) -> Unit,
+    ) {
+        launchFetch("episodesByPodcast:${podcast.itemId}", completion) {
+            mediaItemRepository.fetchMediaItems(
+                Request.Podcast.getEpisodes(
+                    itemId = podcast.itemId,
+                    providerInstanceIdOrDomain = podcast.provider,
+                    inLibraryOnly = false,
+                ),
+            ).getOrNull()
+                ?.filterIsInstance<PodcastEpisode>()
+                ?.clientSorted(
+                    SortConfig.defaultFor(SubItemContext.PODCAST_EPISODES),
+                    SubItemContext.PODCAST_EPISODES,
+                )
                 ?: emptyList()
         }
     }

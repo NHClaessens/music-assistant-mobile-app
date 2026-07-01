@@ -133,6 +133,15 @@ class CarPlayContentManager {
         }
     }
 
+    func fetchEpisodesForPodcast(
+        _ podcast: Podcast,
+        completion: @escaping ([CPListItem]?) -> Void
+    ) {
+        KmpHelper.shared.fetchEpisodesByPodcast(podcast: podcast) { items in
+            completion(self.mapItems(items))
+        }
+    }
+
     // MARK: - Action Handling
 
     func playItem(_ item: AppMediaItem) {
@@ -199,6 +208,8 @@ class CarPlayContentManager {
             iconName = "music.note.list"
         } else if item is Artist {
             iconName = "person.2.crop.square.stack"
+        } else if item is Podcast {
+            iconName = "antenna.radiowaves.left.and.right"
         } else {
             iconName = "music.note"
         }
