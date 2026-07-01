@@ -10,5 +10,5 @@ data class ServerUser(
 
 @Serializable
 data class ServerUserPreferences(
-    @SerialName("sidebar.shortcuts") val shortcuts: List<String>,
+    @SerialName("sidebar.shortcuts") val shortcuts: List<String> = emptyList(),
 )
