@@ -382,14 +382,14 @@ private fun ItemList(
         ) {
             // Content area
             Box(modifier = Modifier.fillMaxSize()) {
-                when (val dataState = dataState) {
+                when (val currentDataState = dataState) {
                     is DataState.Loading -> LoadingState()
                     is DataState.Error -> ErrorState()
                     is DataState.NoData -> EmptyState(searchQuery, onGlobalSearch)
                     is DataState.Stale,
                     is DataState.Data,
                         -> {
-                        val items = dataState.dataOrNull.orEmpty()
+                        val items = currentDataState.dataOrNull.orEmpty()
                         if (items.isEmpty()) {
                             EmptyState(searchQuery, onGlobalSearch)
                         } else {

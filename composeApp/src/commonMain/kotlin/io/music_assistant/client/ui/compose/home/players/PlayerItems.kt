@@ -335,7 +335,7 @@ fun FullPlayerItem(
                             },
                         )
                         .alphaOn(currentMedia?.title != null),
-                    text = subtitle ?: "", // TODO take from currentItem?
+                    text = subtitle.orEmpty(), // TODO take from currentItem?
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

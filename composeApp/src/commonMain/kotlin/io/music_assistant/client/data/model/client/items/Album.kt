@@ -23,6 +23,6 @@ data class Album(
     override val mediaType: MediaType = MediaType.ALBUM
     override val canStartRadio: Boolean = true
     override val displayName =
-        "${name}${version?.trim()?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}"
+        "${name}${version?.trim()?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()}"
     override val subtitle = artists.joinToString(separator = ", ") { it.displayName }
 }

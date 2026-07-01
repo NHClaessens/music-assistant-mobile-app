@@ -125,7 +125,7 @@ class KtorServiceClient(
 
     private var backgroundedConnectionInfo: BackgroundedConnectionInfo? = null
 
-    private var _sessionState: MutableStateFlow<SessionState> =
+    private val _sessionState: MutableStateFlow<SessionState> =
         MutableStateFlow(SessionState.Disconnected.Initial)
     override val sessionState = _sessionState.asStateFlow()
 

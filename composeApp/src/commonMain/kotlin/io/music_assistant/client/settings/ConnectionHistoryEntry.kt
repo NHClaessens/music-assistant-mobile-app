@@ -28,7 +28,7 @@ data class ConnectionHistoryEntry(
     val displayAddress: String
         get() = when (type) {
             ConnectionType.DIRECT -> "${if (isTls == true) "wss" else "ws"}://$host:$port"
-            ConnectionType.WEBRTC -> remoteId ?: ""
+            ConnectionType.WEBRTC -> remoteId.orEmpty()
         }
 }
 

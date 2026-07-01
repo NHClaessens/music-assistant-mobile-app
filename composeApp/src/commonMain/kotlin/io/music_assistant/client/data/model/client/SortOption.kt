@@ -112,22 +112,27 @@ fun <T> List<T>.clientSorted(option: SortOption, context: SubItemContext? = null
             }
         }
         SortField.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) {
-            (it as? AppMediaItem)?.sortName ?: (it as? AppMediaItem)?.displayName
-                ?: (it as? PlayableItem)?.displayName ?: ""
+            (
+                (it as? AppMediaItem)?.sortName ?: (it as? AppMediaItem)?.displayName
+                ?: (it as? PlayableItem)?.displayName
+            ).orEmpty()
         }
         SortField.DURATION -> compareBy { (it as? PlayableItem)?.duration ?: 0.0 }
         SortField.YEAR -> compareBy { (it as? Album)?.year ?: 0 }
         SortField.RELEASE_DATE -> compareBy(String.CASE_INSENSITIVE_ORDER) {
-            (it as? PodcastEpisode)?.releaseDate ?: ""
+            (it as? PodcastEpisode)?.releaseDate.orEmpty()
         }
         SortField.ARTIST_NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) {
-            (it as? Track)?.artists?.firstOrNull()?.displayName
+            (
+                (it as? Track)?.artists?.firstOrNull()?.displayName
                 ?: (it as? Album)?.artists?.firstOrNull()?.displayName
-                ?: ""
+            ).orEmpty()
         }
         else -> compareBy(String.CASE_INSENSITIVE_ORDER) {
-            (it as? AppMediaItem)?.sortName ?: (it as? AppMediaItem)?.displayName
-                ?: (it as? PlayableItem)?.displayName ?: ""
+            (
+                (it as? AppMediaItem)?.sortName ?: (it as? AppMediaItem)?.displayName
+                ?: (it as? PlayableItem)?.displayName
+            ).orEmpty()
         }
     }
     return if (option.descending) sortedWith(comparator.reversed()) else sortedWith(comparator)

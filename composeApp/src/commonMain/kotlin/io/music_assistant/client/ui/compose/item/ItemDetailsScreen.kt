@@ -528,7 +528,7 @@ private fun TabsBar(
                     onClick = { onTabSelected(i) },
                     text = {
                         Text(
-                            text = tab.stringResource()?.let { stringResource(it) } ?: "",
+                            text = tab.stringResource()?.let { stringResource(it) }.orEmpty(),
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                             color = controlTint,
                         )
@@ -875,7 +875,7 @@ private fun PlayablesTabContent(
             if (sectionByDisc) {
                 tracks.forEachIndexed { index, track ->
                     // Gate guarantees a non-null disc; Original sort keeps discs contiguous.
-                    val disc = (track as Track).discNumber!!
+                    val disc = (track as? Track)?.discNumber ?: return@forEachIndexed
                     val prevDisc = (tracks.getOrNull(index - 1) as? Track)?.discNumber
                     if (index == 0 || disc != prevDisc) {
                         fullSpanItem("disc-header-$disc") { DiscHeader(disc) }

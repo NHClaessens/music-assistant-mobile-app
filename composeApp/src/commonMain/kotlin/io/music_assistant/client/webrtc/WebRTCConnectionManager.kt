@@ -212,9 +212,12 @@ class WebRTCConnectionManager(
      */
     private suspend fun handleConnected(message: SignalingMessage.Connected) {
         logger.i { "Connected. ICE servers: ${message.iceServers.size}" }
+        val remoteId = checkNotNull(currentRemoteId) {
+            "Missing remote ID for WebRTC connection"
+        }
         currentSessionId = message.sessionId
         _connectionState.value =
-            WebRTCConnectionState.NegotiatingPeerConnection(message.sessionId ?: "")
+            WebRTCConnectionState.NegotiatingPeerConnection(message.sessionId.orEmpty())
 
         // Cancel timeout - we got the connected message
         connectionTimeoutJob?.cancel()
@@ -236,8 +239,8 @@ class WebRTCConnectionManager(
                         logger.d { "ICE candidate gathered, sending to signaling server" }
                         signalingClient.sendMessage(
                             SignalingMessage.IceCandidate(
-                                remoteId = currentRemoteId!!.rawId,
-                                sessionId = message.sessionId ?: "",
+                                remoteId = remoteId.rawId,
+                                sessionId = message.sessionId.orEmpty(),
                                 data = candidate,
                             ),
                         )
@@ -255,7 +258,7 @@ class WebRTCConnectionManager(
                         // If server creates "ma-api" channel, use it (replaces client-created one)
                         if (channel.label == "ma-api") {
                             logger.i { "Server created ma-api channel - using it for communication" }
-                            setupDataChannel(channel, message.sessionId ?: "")
+                            setupDataChannel(channel, message.sessionId.orEmpty(), remoteId)
                         }
                     }
                 } catch (e: Exception) {
@@ -341,7 +344,7 @@ class WebRTCConnectionManager(
                 ordered = true,
                 maxRetransmits = -1,  // unlimited retransmits for reliability
             )
-            setupDataChannel(channel, message.sessionId ?: "")
+            setupDataChannel(channel, message.sessionId.orEmpty(), remoteId)
 
             logger.d { "Creating sendspin data channel" }
             // sendspin: fully reliable + ordered (same as ma-api). `maxRetransmits=0`
@@ -361,14 +364,14 @@ class WebRTCConnectionManager(
             logger.d { "Sending SDP offer" }
             signalingClient.sendMessage(
                 SignalingMessage.Offer(
-                    remoteId = currentRemoteId!!.rawId,
-                    sessionId = message.sessionId ?: "",
+                    remoteId = remoteId.rawId,
+                    sessionId = message.sessionId.orEmpty(),
                     data = offer,
                 ),
             )
 
             _connectionState.value =
-                WebRTCConnectionState.GatheringIceCandidates(message.sessionId ?: "")
+                WebRTCConnectionState.GatheringIceCandidates(message.sessionId.orEmpty())
         } catch (e: Exception) {
             logger.e(e) { "Failed to initialize peer connection" }
             _connectionState.value = WebRTCConnectionState.Error(
@@ -457,7 +460,7 @@ class WebRTCConnectionManager(
     /**
      * Set up the ma-api data channel: message listener and state monitoring.
      */
-    private fun setupDataChannel(channel: DataChannelWrapper, sessionId: String) {
+    private fun setupDataChannel(channel: DataChannelWrapper, sessionId: String, remoteId: RemoteId) {
         // Cleanup previous channel if exists (reconnection edge case)
         messageListenerJob?.cancel()
         dataChannelStateJob?.cancel()
@@ -486,7 +489,7 @@ class WebRTCConnectionManager(
                     if (state == DataChannelState.Open) {
                         _connectionState.value = WebRTCConnectionState.Connected(
                             sessionId = sessionId,
-                            remoteId = currentRemoteId!!,
+                            remoteId = remoteId,
                         )
                     }
                 }
