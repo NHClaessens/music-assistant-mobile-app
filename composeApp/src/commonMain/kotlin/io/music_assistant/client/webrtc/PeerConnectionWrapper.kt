@@ -154,7 +154,7 @@ class PeerConnectionWrapper : KoinComponent {
         pc.addIceCandidate(
             WebRtc.IceCandidate(
                 candidate = candidate.candidate,
-                sdpMid = candidate.sdpMid ?: "",
+                sdpMid = candidate.sdpMid.orEmpty(),
                 sdpMLineIndex = candidate.sdpMLineIndex ?: 0,
             ),
         )

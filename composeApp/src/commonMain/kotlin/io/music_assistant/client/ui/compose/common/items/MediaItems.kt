@@ -787,7 +787,7 @@ private fun GridPlayableItemLabels(item: PlayableItem) {
     Text(
         text = "${item.displayName}${
             item.version
-                ?.trim()?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
+                ?.trim()?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
         }",
         style = MaterialTheme.typography.bodyMedium,
         maxLines = 1,

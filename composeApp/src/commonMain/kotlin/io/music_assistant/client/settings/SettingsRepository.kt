@@ -47,7 +47,7 @@ class SettingsRepository(
 
     fun updateConnectionInfo(connectionInfo: ConnectionInfo?) {
         if (connectionInfo != this._connectionInfo.value) {
-            settings.putString("host", connectionInfo?.host ?: "")
+            settings.putString("host", connectionInfo?.host.orEmpty())
             settings.putInt("port", connectionInfo?.port ?: 0)
             settings.putBoolean("isTls", connectionInfo?.isTls == true)
             _connectionInfo.update { connectionInfo }

@@ -5,7 +5,6 @@
 package io.music_assistant.client.player.sendspin
 
 import co.touchlab.kermit.Logger
-import kotlin.concurrent.Volatile
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.ExperimentalTime

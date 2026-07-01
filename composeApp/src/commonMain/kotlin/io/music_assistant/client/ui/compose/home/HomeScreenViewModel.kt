@@ -333,11 +333,11 @@ class HomeScreenViewModel(
     fun queueAction(action: QueueAction) = dataSource.queueAction(action)
     fun onPlayersSortChanged(newSort: List<String>) = dataSource.onPlayersSortChanged(newSort)
     fun openPlayerSettings(id: String) = settings.connectionInfo.value?.webUrl?.let { url ->
-        onOpenExternalLink("$url/?code=${currentServerToken() ?: ""}#/settings/editplayer/$id")
+        onOpenExternalLink("$url/?code=${currentServerToken().orEmpty()}#/settings/editplayer/$id")
     }
 
     fun openPlayerDspSettings(id: String) = settings.connectionInfo.value?.webUrl?.let { url ->
-        onOpenExternalLink("$url/?code=${currentServerToken() ?: ""}#/settings/editplayer/$id/dsp")
+        onOpenExternalLink("$url/?code=${currentServerToken().orEmpty()}#/settings/editplayer/$id/dsp")
     }
 
     private fun currentServerToken(): String? = when (val state = apiClient.sessionState.value) {

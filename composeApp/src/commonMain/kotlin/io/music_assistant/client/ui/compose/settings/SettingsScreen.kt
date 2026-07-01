@@ -897,7 +897,7 @@ private fun ServerInfoSection(
                 text = stringResource(
                     Res.string.settings_version_info,
                     server.serverVersion ?: "",
-                    server.schemaVersion?.toString() ?: "",
+                    server.schemaVersion?.toString().orEmpty(),
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
