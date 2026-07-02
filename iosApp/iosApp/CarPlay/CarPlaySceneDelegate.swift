@@ -28,11 +28,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private weak var libraryTemplate: CPListTemplate?
     private weak var libraryBrowseSection: CPListSection?
 
-    // One-shot subscription that pushes Now Playing the first time
-    // local-player state becomes non-null after `setupTemplates()` runs.
-    // Cancelled either on first push or on disconnect.
-    private var initialPushSubscription: Cancellable?
-
     /// Monotonic id for in-flight Library recommendation fetches so a slow
     /// first attempt (fired before auth) can't overwrite a faster second
     /// attempt (fired by `refreshLibraryOnReconnect` once readiness flipped).
@@ -76,8 +71,6 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         // callbacks racing with a nil interfaceController.
         readinessSubscription?.cancel()
         readinessSubscription = nil
-        initialPushSubscription?.cancel()
-        initialPushSubscription = nil
         libraryTemplate = nil
         libraryBrowseSection = nil
         self.interfaceController = nil
@@ -141,33 +134,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         interfaceController.presentTemplate(alert, animated: true, completion: nil)
     }
 
-    /// Pushes Library root and arms a one-shot Now Playing push for when
-    /// the local player gains a track (subscription-based because the
-    /// local-player value is cleared on backgrounded disconnect).
+    /// Set Library as the initial home screen / Root
     private func setupTemplates() {
         guard let strings = strings else { return }
         let libraryTemplate = createLibraryTemplate(strings)
-        interfaceController?.setRootTemplate(libraryTemplate, animated: true) { [weak self] _, _ in
-            self?.subscribeToLocalPlayerForInitialPush()
-        }
-    }
-
-    private func subscribeToLocalPlayerForInitialPush() {
-        // No lock needed — KmpHelper.mainScope is pinned to Dispatchers.Main.
-        var hasPushed = false
-        initialPushSubscription = KmpHelper.shared.observeLocalPlayerPresence { [weak self] present in
-            guard let self = self, !hasPushed, present.boolValue else { return }
-            // If the user has navigated past Library root, pushing Now
-            // Playing on top of their drilldown would be jarring. Identity
-            // comparison is safe because we hold a weak reference to the
-            // same template instance set as root.
-            if self.interfaceController?.topTemplate === self.libraryTemplate {
-                self.pushNowPlayingTemplate(animated: false)
-            }
-            hasPushed = true
-            self.initialPushSubscription?.cancel()
-            self.initialPushSubscription = nil
-        }
+        interfaceController?.setRootTemplate(libraryTemplate, animated: true, completion: logTemplateError)
     }
 
     // MARK: - UI Construction
