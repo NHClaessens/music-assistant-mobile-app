@@ -38,6 +38,14 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     /// attempt (fired by `refreshLibraryOnReconnect` once readiness flipped).
     private var recommendationsFetchGen: Int = 0
 
+    /// Shared completion handler for CarPlay template operations.
+    private let logTemplateError: (Bool, Error?) -> Void = { _, error in
+        if let error = error {
+            os_log("CP: template error: %{public}@",
+                   log: cpLog, type: .error, "\(error)")
+        }
+    }
+
     // MARK: - CPTemplateApplicationSceneDelegate
 
     func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {
@@ -154,11 +162,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             // comparison is safe because we hold a weak reference to the
             // same template instance set as root.
             if self.interfaceController?.topTemplate === self.libraryTemplate {
-                self.interfaceController?.pushTemplate(
-                    CPNowPlayingTemplate.shared,
-                    animated: false,
-                    completion: nil
-                )
+                self.pushNowPlayingTemplate(animated: false)
             }
             hasPushed = true
             self.initialPushSubscription?.cancel()
@@ -331,7 +335,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                     }
                     if index < displayItems.count {
                         CarPlayContentManager.shared.playItem(displayItems[index])
-                        self.interfaceController?.pushTemplate(CPNowPlayingTemplate.shared, animated: true, completion: nil)
+                        self.pushNowPlayingTemplate(animated: true)
                     }
                     completion()
                 }
@@ -355,6 +359,36 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     }
 
     // MARK: - Navigation Helpers
+
+    /// Centralize template pushes to keep track of how many we have and not go
+    /// over five, a hard-coded CarPlay limit
+    private func safePushTemplate(_ template: CPTemplate, animated: Bool) {
+        guard let interfaceController = interfaceController else { return }
+        if interfaceController.templates.count >= 5 {
+            interfaceController.popToRootTemplate(animated: false) { [weak interfaceController] _, _ in
+                interfaceController?.pushTemplate(template, animated: animated, completion: self.logTemplateError)
+            }
+            return
+        }
+        interfaceController.pushTemplate(template, animated: animated, completion: logTemplateError)
+    }
+
+    /// Safely navigate to the singleton `CPNowPlayingTemplate`
+    private func pushNowPlayingTemplate(animated: Bool) {
+        guard let interfaceController = interfaceController else { return }
+        if interfaceController.topTemplate === CPNowPlayingTemplate.shared {
+            return
+        }
+        if interfaceController.templates.contains(where: { $0 === CPNowPlayingTemplate.shared }) {
+            interfaceController.pop(
+                to: CPNowPlayingTemplate.shared,
+                animated: animated,
+                completion: logTemplateError
+            )
+            return
+        }
+        safePushTemplate(CPNowPlayingTemplate.shared, animated: animated)
+    }
 
     private func pushBrowseGrid() {
         // Gate at entry. The grid template's category fetchers would otherwise
@@ -389,7 +423,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             }
         }
         let gridTemplate = CPGridTemplate(title: strings.browse, gridButtons: buttons)
-        self.interfaceController?.pushTemplate(gridTemplate, animated: true, completion: nil)
+        self.safePushTemplate(gridTemplate, animated: true)
     }
 
     /// Mirrors `pushDrilldown`'s shape but targets the simpler
@@ -403,7 +437,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let loadingItem = CPListItem(text: strings.loading, detailText: nil)
         template.updateSections([CPListSection(items: [loadingItem])])
 
-        self.interfaceController?.pushTemplate(template, animated: true, completion: nil)
+        self.safePushTemplate(template, animated: true)
 
         fetcher { [weak self] items in
             guard let self = self else { return }
@@ -456,25 +490,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             // (a configured "add to queue" tap is non-disruptive).
             let dispatched = CarPlayContentManager.shared.playWithDefault(mediaItem)
             if let name = dispatched, Self.actionStartsPlayback(name) {
-                playAndShowNowPlaying()
+                pushNowPlayingTemplate(animated: true)
             }
-        }
-    }
-
-    /// `popToRoot` first, then push Now Playing — CarPlay caps the template
-    /// stack at 5, and Browse → Category → Artist → Albums → Tracks already
-    /// fills it. A naive push from the leaf crashes with a hierarchy-depth
-    /// exception.
-    private func playAndShowNowPlaying() {
-        guard let interfaceController = interfaceController else { return }
-        os_log("CP: playAndShowNowPlaying — popToRoot then push NowPlaying",
-               log: cpLog, type: .default)
-        interfaceController.popToRootTemplate(animated: false) { [weak self] _, _ in
-            self?.interfaceController?.pushTemplate(
-                CPNowPlayingTemplate.shared,
-                animated: true,
-                completion: nil
-            )
         }
     }
 
@@ -528,7 +545,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let template = CPListTemplate(title: title, sections: [])
         let loadingItem = CPListItem(text: strings.loading, detailText: nil)
         template.updateSections([CPListSection(items: [loadingItem])])
-        self.interfaceController?.pushTemplate(template, animated: true, completion: nil)
+        self.safePushTemplate(template, animated: true)
 
         fetcher { [weak self] items in
             guard let self = self else { return }
@@ -571,7 +588,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         // Push Now Playing only for actions that start playback; queue-additive actions are
         // non-disruptive so the user stays on the drilldown to keep stacking adds.
         if dispatched && Self.actionStartsPlayback(actionName) {
-            playAndShowNowPlaying()
+            pushNowPlayingTemplate(animated: true)
         }
     }
 
