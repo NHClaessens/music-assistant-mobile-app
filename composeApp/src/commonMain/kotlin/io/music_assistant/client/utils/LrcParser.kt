@@ -51,6 +51,8 @@ object LrcParser {
             2 -> frac.toInt() * 10
             else -> frac.take(3).toInt()
         }
-        return min.toLong() * 60_000 + sec.toLong() * 1_000 + fractionMs
+        return min.toLong() * MS_IN_MINUTE + sec.toLong() * 1_000 + fractionMs
     }
 }
+
+private const val MS_IN_MINUTE = 60_000L

@@ -54,7 +54,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,7 +74,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.client.Lyrics
@@ -108,6 +106,7 @@ import io.music_assistant.client.ui.compose.home.HomeScreenViewModel
 import io.music_assistant.client.ui.compose.home.HorizontalPagerIndicator
 import io.music_assistant.client.ui.compose.home.Queue
 import io.music_assistant.client.ui.inactive
+import io.music_assistant.client.utils.LrcParser
 import io.music_assistant.client.utils.WindowClass
 import io.music_assistant.client.utils.conditional
 import kotlinx.coroutines.flow.Flow
@@ -131,7 +130,6 @@ import musicassistantclient.composeapp.generated.resources.queue_clear
 import musicassistantclient.composeapp.generated.resources.queue_no_other_players
 import musicassistantclient.composeapp.generated.resources.queue_transfer
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -162,9 +160,6 @@ fun PlayersPager(
         }
 
         val colorsSource = rememberExtractedColorsSource()
-        // One shared VM: only the current page drives it (see ExpandedPlayerPage),
-        // so lyrics track the displayed player.
-        val lyricsViewModel: LyricsViewModel = koinViewModel()
 
         val playerAction1 =
             { data: PlayerData, action: PlayerAction ->
@@ -275,10 +270,19 @@ fun PlayersPager(
                         // fetch (and the button) track the player currently on screen.
                         val currentTrack = player.queueInfo?.currentItem?.track as? Track
                         val isCurrentPage = page == playerPagerState.currentPage
-                        LaunchedEffect(isCurrentPage, currentTrack) {
-                            if (isCurrentPage) lyricsViewModel.onDisplayedTrackChanged(currentTrack)
+
+                        val lyrics = currentTrack?.metadata?.let { metadata ->
+                            val plain = metadata.lyrics
+                            val lrc = metadata.lrcLyrics
+                            when {
+                                !lrc.isNullOrBlank() ->
+                                    LrcParser.parse(lrc).takeIf { it.isNotEmpty() }
+                                        ?.let { Lyrics.Synced(it) }
+                                        ?: Lyrics.Plain(lrc)
+                                !plain.isNullOrBlank() -> Lyrics.Plain(plain)
+                                else -> null
+                            }
                         }
-                        val lyrics by lyricsViewModel.lyrics.collectAsStateWithLifecycle()
                         var sheetLyrics by remember(currentTrack) { mutableStateOf<Lyrics?>(null) }
                         if (!expanded) {
                             CollapsedPlayerPage(

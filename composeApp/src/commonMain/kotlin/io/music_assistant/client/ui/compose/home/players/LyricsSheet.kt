@@ -79,7 +79,7 @@ fun LyricsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.8f)
+                .fillMaxHeight(LYRICS_BOTTOM_SHEET_HEIGHT)
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                 .background(
                     brush = Brush.verticalGradient(
@@ -231,3 +231,5 @@ private fun SyncedLyrics(
         }
     }
 }
+
+private const val LYRICS_BOTTOM_SHEET_HEIGHT = 0.8f

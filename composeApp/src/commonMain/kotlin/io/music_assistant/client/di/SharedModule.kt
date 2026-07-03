@@ -13,7 +13,6 @@ import io.music_assistant.client.data.PlayerRequestFactory
 import io.music_assistant.client.data.factory.MediaItemFactory
 import io.music_assistant.client.data.factory.PlayerFactory
 import io.music_assistant.client.data.factory.QueueFactory
-import io.music_assistant.client.data.repository.LyricsRepository
 import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.imageloader.ImageCacheInvalidator
 import io.music_assistant.client.logging.LogSharer
@@ -27,7 +26,6 @@ import io.music_assistant.client.ui.compose.common.providers.MdiCodepoints
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.home.HomeScreenViewModel
 import io.music_assistant.client.ui.compose.home.players.DspSettingsViewModel
-import io.music_assistant.client.ui.compose.home.players.LyricsViewModel
 import io.music_assistant.client.ui.compose.item.ItemDetailsViewModel
 import io.music_assistant.client.ui.compose.library.BrowseViewModel
 import io.music_assistant.client.ui.compose.library.ItemListViewModel
@@ -72,7 +70,6 @@ fun sharedModule(
         singleOf(::PlayerFactory)           // Stateless DTO → domain mapper
         singleOf(::QueueFactory)            // Stateless DTO → domain mapper (depends on MediaItemFactory)
         singleOf(::MediaItemRepository)     // Server DTO/event → client model boundary for UI
-        singleOf(::LyricsRepository)        // Per-track lyrics fetch + session cache
         singleOf(::MainDataSource)          // Singleton - held by foreground service
         singleOf(::DominantColorViewModel)  // Singleton - app-wide art-color cache
         singleOf(::MdiCodepoints)           // Singleton - MDI name->codepoint table (one-time load)
@@ -102,7 +99,6 @@ fun sharedModule(
             )
         }
         factory { DspSettingsViewModel(get()) }
-        factory { LyricsViewModel(get()) }
         factory { HomeScreenViewModel(get(), get(), get(), get()) }
         factory { SearchViewModel(get(), get(), get()) }
     }
