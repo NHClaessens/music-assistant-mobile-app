@@ -3,7 +3,6 @@ package io.music_assistant.client.api
 import io.music_assistant.client.data.factory.toLyricsRequestArg
 import io.music_assistant.client.data.factory.toMarkMediaItem
 import io.music_assistant.client.data.model.client.MediaType
-import io.music_assistant.client.data.model.client.items.Track as TrackItem
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.MarkableItem
@@ -17,6 +16,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import io.music_assistant.client.data.model.client.items.Track as TrackItem
 
 @Serializable
 data class Request @OptIn(ExperimentalUuidApi::class) constructor(

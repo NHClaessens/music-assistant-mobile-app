@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 class LyricsViewModel(
     private val repository: LyricsRepository,
 ) : ViewModel() {
-
     private val _lyrics = MutableStateFlow<Lyrics?>(null)
     val lyrics: StateFlow<Lyrics?> = _lyrics.asStateFlow()
 

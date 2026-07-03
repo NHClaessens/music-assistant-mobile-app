@@ -532,7 +532,7 @@ fun FullPlayerItem(
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                         ) {
                             Text(
-                                text = "${formatSpeed(playbackSpeed)}x",
+                                text = "${formatDecimal(snapSpeed(playbackSpeed), 2)}x",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (colors.controlTint.luminance() > 0.5f) {

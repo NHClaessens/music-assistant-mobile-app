@@ -76,6 +76,7 @@ data class ServerMetadata(
     @SerialName("style") val style: String? = null,
     @SerialName("copyright") val copyright: String? = null,
     @SerialName("lyrics") val lyrics: String? = null,
+    @SerialName("lrc_lyrics") val lrcLyrics: String? = null,
     @SerialName("label") val label: String? = null,
     // @SerialName("links") val links: List<String>? = null,
     // @SerialName("performers") val performers: List<String>? = null,

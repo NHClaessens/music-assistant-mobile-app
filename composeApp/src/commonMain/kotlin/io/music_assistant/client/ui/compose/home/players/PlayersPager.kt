@@ -72,17 +72,17 @@ import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
+import io.music_assistant.client.data.model.client.Lyrics
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
 import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueue
 import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueueTrack
-import io.music_assistant.client.data.model.client.Lyrics
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.player.sendspin.SendspinState
@@ -279,8 +279,7 @@ fun PlayersPager(
                             if (isCurrentPage) lyricsViewModel.onDisplayedTrackChanged(currentTrack)
                         }
                         val lyrics by lyricsViewModel.lyrics.collectAsStateWithLifecycle()
-                        // Snapshot at tap so a track change while reading doesn't yank the sheet.
-                        var sheetLyrics by remember { mutableStateOf<Lyrics?>(null) }
+                        var sheetLyrics by remember(currentTrack) { mutableStateOf<Lyrics?>(null) }
                         if (!expanded) {
                             CollapsedPlayerPage(
                                 isExpandedScreen = isExpandedScreen,

@@ -35,6 +35,8 @@ import musicassistantclient.composeapp.generated.resources.common_done
 import musicassistantclient.composeapp.generated.resources.playback_speed_dialog_title
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
+import kotlin.math.absoluteValue
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 private const val MIN_SPEED = 0.5
@@ -47,17 +49,23 @@ private val SLIDER_STEPS = ((MAX_SPEED - MIN_SPEED) / SPEED_STEP).roundToInt() -
 private val PRESETS = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0)
 
 /** Snaps an arbitrary speed onto the [SPEED_STEP] grid, clamped to the valid range. */
-private fun snapSpeed(value: Double): Double =
+internal fun snapSpeed(value: Double): Double =
     ((value / SPEED_STEP).roundToInt() * SPEED_STEP).coerceIn(MIN_SPEED, MAX_SPEED)
 
 /**
- * Formats a speed with two decimals, e.g. `1.00`, `1.50`, `2.25`. Works via integer
- * hundredths (not `Double.toString`) to avoid float artifacts like `0.35000000000000003`,
- * and by hand because `"%.2f"` is JVM-only — unavailable in KMP `commonMain`.
+ * Formats a decimal with given decimals after dot,
+ * because `"%.2f"` is JVM-only — unavailable in KMP `commonMain`.
  */
-internal fun formatSpeed(speed: Double): String {
-    val hundredths = (snapSpeed(speed) * 100).roundToInt()
-    return "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+internal fun formatDecimal(decimal: Double, decimalPlaces: Int): String {
+    val pow = 10.0.pow(decimalPlaces).roundToInt()
+    val multiplied = (decimal * pow).roundToInt().absoluteValue
+    return "${
+        if (decimal < 0) "-" else ""
+    }${
+        multiplied / pow
+    }.${
+        (multiplied % pow).toString().padStart(decimalPlaces, '0')
+    }"
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -84,7 +92,7 @@ fun PlaybackSpeedDialog(
                         style = MaterialTheme.typography.headlineSmall,
                     )
                     Text(
-                        text = "${formatSpeed(selected)}x",
+                        text = "${formatDecimal(snapSpeed(selected), 2)}x",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -97,7 +105,7 @@ fun PlaybackSpeedDialog(
                         FilterChip(
                             selected = abs(selected - preset) < SPEED_STEP / 2,
                             onClick = { selected = preset },
-                            label = { Text("${formatSpeed(preset)}x") },
+                            label = { Text("${formatDecimal(preset, 2)}x") },
                         )
                     }
                 }

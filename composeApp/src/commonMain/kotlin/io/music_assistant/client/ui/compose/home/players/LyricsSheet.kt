@@ -1,12 +1,14 @@
 package io.music_assistant.client.ui.compose.home.players
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -21,18 +23,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.music_assistant.client.data.model.client.LrcLine
@@ -60,6 +67,9 @@ fun LyricsSheet(
     livePositionFlow: Flow<Double>?,
     onDismiss: () -> Unit,
 ) {
+    var offsetSec by remember(lyrics) { mutableStateOf(0f) }
+    val isSynced = lyrics is Lyrics.Synced
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -81,9 +91,54 @@ fun LyricsSheet(
                 ),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Slider(
+                    value = offsetSec,
+                    onValueChange = { offsetSec = it },
+                    valueRange = -2f..2f,
+                    steps = 39,
+                    enabled = isSynced,
+                    thumb = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            if (isSynced) {
+                                Text(
+                                    text = "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            SliderDefaults.Thumb(
+                                interactionSource = remember { MutableInteractionSource() },
+                                thumbSize = DpSize(16.dp, 16.dp),
+                                enabled = isSynced,
+                            )
+
+                            if (isSynced) {
+                                Text(
+                                    text = formatDecimal(offsetSec.toDouble(), 1),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    },
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            sliderState = sliderState,
+                            thumbTrackGapSize = 0.dp,
+                            trackInsideCornerSize = 0.dp,
+                            drawStopIndicator = null,
+                            enabled = isSynced,
+                            modifier = Modifier.height(8.dp),
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                )
                 IconButton(onClick = onDismiss) {
                     Icon(
                         Icons.Default.Close,
@@ -97,9 +152,11 @@ fun LyricsSheet(
                     text = lyrics.text,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
+
                 is Lyrics.Synced -> SyncedLyrics(
                     lines = lyrics.lines,
                     livePositionFlow = livePositionFlow,
+                    offsetSec = offsetSec,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -114,7 +171,8 @@ private fun PlainLyrics(text: String, modifier: Modifier = Modifier) {
         fontSize = 30.sp,
         lineHeight = 40.sp,
         color = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
+        modifier = modifier.verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 12.dp),
     )
 }
 
@@ -122,14 +180,16 @@ private fun PlainLyrics(text: String, modifier: Modifier = Modifier) {
 private fun SyncedLyrics(
     lines: List<LrcLine>,
     livePositionFlow: Flow<Double>?,
+    offsetSec: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     val synced = livePositionFlow != null
-    val positionSec by (livePositionFlow ?: emptyFlow<Double>()).collectAsState(initial = 0.0)
-    val currentIndex = remember(lines, positionSec) {
-        if (!synced) -1
-        else {
-            val ms = (positionSec * 1000).toLong()
+    val positionSec by (livePositionFlow ?: emptyFlow()).collectAsState(initial = 0.0)
+    val currentIndex = remember(lines, positionSec, offsetSec) {
+        if (!synced) {
+            -1
+        } else {
+            val ms = ((positionSec + offsetSec) * 1000).toLong()
             lines.indexOfLast { it.timeMs <= ms }
         }
     }
@@ -141,7 +201,8 @@ private fun SyncedLyrics(
                 // Center the active line: offset it up by half the viewport minus half its height.
                 val info = listState.layoutInfo
                 val viewport = info.viewportEndOffset - info.viewportStartOffset
-                val itemSize = info.visibleItemsInfo.firstOrNull { it.index == currentIndex }?.size ?: 0
+                val itemSize =
+                    info.visibleItemsInfo.firstOrNull { it.index == currentIndex }?.size ?: 0
                 listState.animateScrollToItem(currentIndex, -(viewport / 2 - itemSize / 2))
             }
         }

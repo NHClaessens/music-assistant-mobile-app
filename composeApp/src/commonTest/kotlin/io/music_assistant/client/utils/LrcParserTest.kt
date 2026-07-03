@@ -6,7 +6,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class LrcParserTest {
-
     @Test
     fun `parses standard hundredths timestamps`() {
         val lines = LrcParser.parse(
@@ -72,12 +71,44 @@ class LrcParserTest {
             """
             [ar:Artist]
             [ti:Title]
-            [offset:250]
 
             [00:05.00]only synced line
             """.trimIndent(),
         )
         assertEquals(listOf(LrcLine(5_000, "only synced line")), lines)
+    }
+
+    @Test
+    fun `applies positive offset by shifting lines earlier`() {
+        val lines = LrcParser.parse(
+            """
+            [offset:+250]
+            [00:05.00]line
+            """.trimIndent(),
+        )
+        assertEquals(listOf(LrcLine(4_750, "line")), lines)
+    }
+
+    @Test
+    fun `applies negative offset by shifting lines later`() {
+        val lines = LrcParser.parse(
+            """
+            [offset:-1000]
+            [00:05.00]line
+            """.trimIndent(),
+        )
+        assertEquals(listOf(LrcLine(6_000, "line")), lines)
+    }
+
+    @Test
+    fun `floors offset-shifted time at zero`() {
+        val lines = LrcParser.parse(
+            """
+            [offset:+10000]
+            [00:05.00]line
+            """.trimIndent(),
+        )
+        assertEquals(listOf(LrcLine(0, "line")), lines)
     }
 
     @Test
