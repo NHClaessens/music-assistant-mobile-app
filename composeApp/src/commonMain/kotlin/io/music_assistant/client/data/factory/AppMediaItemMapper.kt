@@ -1,6 +1,7 @@
 package io.music_assistant.client.data.factory
 
 import io.music_assistant.client.data.model.client.items.MarkableItem
+import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.utils.mediaItemEchoJson
 import kotlinx.serialization.json.JsonElement
@@ -14,4 +15,14 @@ import kotlinx.serialization.json.JsonElement
  * exactly what we received.
  */
 fun MarkableItem.toMarkMediaItem(): JsonElement =
+    mediaItemEchoJson.encodeToJsonElement(ServerMediaItem.serializer(), source)
+
+/**
+ * Builds the `track` payload for `metadata/get_track_lyrics` by echoing the original
+ * server DTO back verbatim (nulls omitted), exactly like [toMarkMediaItem]. The server
+ * resolves lyrics from the full track (artists, album, duration, provider mappings) —
+ * reconstructing a minimal shape from our decomposed [Track] starves that lookup and
+ * yields empty results even when lyrics exist.
+ */
+fun Track.toLyricsRequestArg(): JsonElement =
     mediaItemEchoJson.encodeToJsonElement(ServerMediaItem.serializer(), source)

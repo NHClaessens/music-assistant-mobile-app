@@ -80,6 +80,7 @@ class MediaItemFactory(
                 trackNumber = trackNumber,
                 position = position?.takeIf { it in 0L..Int.MAX_VALUE.toLong() }?.toInt(),
                 version = version,
+                source = server,
             )
 
             MediaType.PLAYLIST -> Playlist(
@@ -213,6 +214,8 @@ class MediaItemFactory(
             images = it.images?.map(::createImageInfo).orEmpty(),
             releaseDate = it.releaseDate,
             chapters = it.chapters?.map(::createChapter).orEmpty(),
+            lyrics = it.lyrics,
+            lrcLyrics = it.lrcLyrics,
         )
     }
 

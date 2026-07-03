@@ -607,12 +607,32 @@ class LocalPlayerController(
 
                     is SendspinState.Synchronized -> {
                         localPlayerData.value?.queueInfo?.id?.let(positionTracker::confirmPlaying)
+                        confirmLocalPlaying()
                     }
 
                     is SendspinState.Reconnecting -> Unit
                     else -> Unit
                 }
             }
+        }
+    }
+
+    /**
+     * Symmetric counterpart to [pauseLocalIfPlaying]: once Sendspin confirms audio is
+     * flowing (Synchronized is the protocol's only "playing" signal — pause is
+     * stream/end, play is stream/start), reflect it in the local player's UI. Fixes the
+     * player showing paused after a server-initiated stream/start on reconnect/restart
+     * that never produced a REST PLAYING event. Only ever sets true; the false direction
+     * stays owned by pause + the starvation monitor.
+     */
+    private fun confirmLocalPlaying() {
+        cancelPendingPlayTimeout()
+        _localPlayerData.update { current ->
+            if (current == null || current.player.isPlaying) return@update current
+            current.copy(
+                player = current.player.copy(isPlaying = true),
+                pendingPlay = false,
+            )
         }
     }
 

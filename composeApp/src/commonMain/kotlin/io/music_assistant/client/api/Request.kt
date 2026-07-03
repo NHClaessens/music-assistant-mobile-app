@@ -1,5 +1,6 @@
 package io.music_assistant.client.api
 
+import io.music_assistant.client.data.factory.toLyricsRequestArg
 import io.music_assistant.client.data.factory.toMarkMediaItem
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.QueueOption
@@ -15,6 +16,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import io.music_assistant.client.data.model.client.items.Track as TrackItem
 
 @Serializable
 data class Request @OptIn(ExperimentalUuidApi::class) constructor(
@@ -543,6 +545,15 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             command = APICommands.MUSIC_BROWSE,
             args = buildJsonObject {
                 path?.let { put("path", JsonPrimitive(it)) }
+            },
+        )
+    }
+
+    data object Metadata {
+        fun getTrackLyrics(track: TrackItem) = Request(
+            command = APICommands.METADATA_GET_TRACK_LYRICS,
+            args = buildJsonObject {
+                put("track", track.toLyricsRequestArg())
             },
         )
     }

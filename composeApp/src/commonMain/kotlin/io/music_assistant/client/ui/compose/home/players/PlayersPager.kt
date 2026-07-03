@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
+import io.music_assistant.client.data.model.client.Lyrics
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
 import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueue
@@ -105,6 +106,7 @@ import io.music_assistant.client.ui.compose.home.HomeScreenViewModel
 import io.music_assistant.client.ui.compose.home.HorizontalPagerIndicator
 import io.music_assistant.client.ui.compose.home.Queue
 import io.music_assistant.client.ui.inactive
+import io.music_assistant.client.utils.LrcParser
 import io.music_assistant.client.utils.WindowClass
 import io.music_assistant.client.utils.conditional
 import kotlinx.coroutines.flow.Flow
@@ -264,6 +266,24 @@ fun PlayersPager(
                         val livePositionFlow = remember(queueId) {
                             queueId?.let { homeScreenViewModel.observePosition(it) }
                         }
+                        // Lyrics: only the displayed page drives the shared VM, so the
+                        // fetch (and the button) track the player currently on screen.
+                        val currentTrack = player.queueInfo?.currentItem?.track as? Track
+                        val isCurrentPage = page == playerPagerState.currentPage
+
+                        val lyrics = currentTrack?.metadata?.let { metadata ->
+                            val plain = metadata.lyrics
+                            val lrc = metadata.lrcLyrics
+                            when {
+                                !lrc.isNullOrBlank() ->
+                                    LrcParser.parse(lrc).takeIf { it.isNotEmpty() }
+                                        ?.let { Lyrics.Synced(it) }
+                                        ?: Lyrics.Plain(lrc)
+                                !plain.isNullOrBlank() -> Lyrics.Plain(plain)
+                                else -> null
+                            }
+                        }
+                        var sheetLyrics by remember(currentTrack) { mutableStateOf<Lyrics?>(null) }
                         if (!expanded) {
                             CollapsedPlayerPage(
                                 isExpandedScreen = isExpandedScreen,
@@ -295,9 +315,19 @@ fun PlayersPager(
                                 isQueueExpanded = isQueueExpanded,
                                 onExpandQueue = { isQueueExpanded = it },
                                 contentPadding = contentPadding,
-                                isCurrentPage = page == playerPagerState.currentPage,
+                                isCurrentPage = isCurrentPage,
                                 navigateToItem = navigateToItem,
                                 livePositionFlow = livePositionFlow,
+                                lyricsAvailable = isCurrentPage && lyrics != null,
+                                onLyricsClick = { sheetLyrics = lyrics },
+                            )
+                        }
+                        sheetLyrics?.let { shown ->
+                            LyricsSheet(
+                                lyrics = shown,
+                                colors = colors,
+                                livePositionFlow = livePositionFlow,
+                                onDismiss = { sheetLyrics = null },
                             )
                         }
                     }
@@ -382,6 +412,8 @@ private fun ExpandedPlayerPage(
     isCurrentPage: Boolean,
     navigateToItem: (AppMediaItem) -> Unit = {},
     livePositionFlow: Flow<Double>?,
+    lyricsAvailable: Boolean = false,
+    onLyricsClick: () -> Unit = {},
 ) {
     val isLargeScreen = WindowClass.isAtLeastLarge()
     val dismissThresholdPx = with(LocalDensity.current) { 120.dp.toPx() }
@@ -541,6 +573,8 @@ private fun ExpandedPlayerPage(
                             colors = colors,
                             playerAction = playerAction,
                             onFavoriteClick = onFavoriteClick,
+                            lyricsAvailable = lyricsAvailable,
+                            onLyricsClick = onLyricsClick,
                             livePositionFlow = livePositionFlow,
                         )
                     }
