@@ -72,6 +72,9 @@ object APICommands {
     const val MUSIC_MARK_PLAYED = "music/mark_played"
     const val MUSIC_MARK_UNPLAYED = "music/mark_unplayed"
 
+    // Metadata commands
+    const val METADATA_GET_TRACK_LYRICS = "metadata/get_track_lyrics"
+
     // Browse
     const val MUSIC_BROWSE = "music/browse"
 

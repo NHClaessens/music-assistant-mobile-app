@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -77,6 +78,7 @@ import io.music_assistant.client.utils.formatDuration
 import kotlinx.coroutines.flow.Flow
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.cd_favorite
+import musicassistantclient.composeapp.generated.resources.cd_lyrics
 import musicassistantclient.composeapp.generated.resources.cd_playing
 import musicassistantclient.composeapp.generated.resources.player_power_on
 import musicassistantclient.composeapp.generated.resources.player_powered_off
@@ -269,6 +271,8 @@ fun FullPlayerItem(
     playerAction: (PlayerData, PlayerAction) -> Unit,
     onFavoriteClick: (AppMediaItem) -> Unit,
     livePositionFlow: Flow<Double>?,
+    lyricsAvailable: Boolean = false,
+    onLyricsClick: () -> Unit = {},
 ) {
     val currentMedia = item.player.currentMedia
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
@@ -629,7 +633,22 @@ fun FullPlayerItem(
                 mainButtonSize = 60.dp,
                 tint = controlTint,
             )
-            Spacer(Modifier.size(favoriteSlot)) // mirrors the heart, keeps controls centered
+            // Mirrors the heart slot: lyrics button when available, else a spacer
+            // so the transport controls stay centered.
+            if (lyricsAvailable) {
+                IconButton(
+                    modifier = Modifier.size(favoriteSlot),
+                    onClick = onLyricsClick,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Lyrics,
+                        contentDescription = stringResource(Res.string.cd_lyrics),
+                        tint = colors.controlTint,
+                    )
+                }
+            } else {
+                Spacer(Modifier.size(favoriteSlot))
+            }
         }
     }
 }

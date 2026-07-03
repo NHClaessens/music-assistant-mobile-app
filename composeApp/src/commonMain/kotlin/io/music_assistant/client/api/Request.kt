@@ -1,7 +1,9 @@
 package io.music_assistant.client.api
 
+import io.music_assistant.client.data.factory.toLyricsRequestArg
 import io.music_assistant.client.data.factory.toMarkMediaItem
 import io.music_assistant.client.data.model.client.MediaType
+import io.music_assistant.client.data.model.client.items.Track as TrackItem
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.MarkableItem
@@ -543,6 +545,15 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             command = APICommands.MUSIC_BROWSE,
             args = buildJsonObject {
                 path?.let { put("path", JsonPrimitive(it)) }
+            },
+        )
+    }
+
+    data object Metadata {
+        fun getTrackLyrics(track: TrackItem) = Request(
+            command = APICommands.METADATA_GET_TRACK_LYRICS,
+            args = buildJsonObject {
+                put("track", track.toLyricsRequestArg())
             },
         )
     }

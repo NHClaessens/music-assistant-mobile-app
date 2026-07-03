@@ -54,6 +54,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,7 @@ import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -80,6 +82,7 @@ import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
 import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueue
 import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueueTrack
+import io.music_assistant.client.data.model.client.Lyrics
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.player.sendspin.SendspinState
@@ -128,6 +131,7 @@ import musicassistantclient.composeapp.generated.resources.queue_clear
 import musicassistantclient.composeapp.generated.resources.queue_no_other_players
 import musicassistantclient.composeapp.generated.resources.queue_transfer
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -158,6 +162,9 @@ fun PlayersPager(
         }
 
         val colorsSource = rememberExtractedColorsSource()
+        // One shared VM: only the current page drives it (see ExpandedPlayerPage),
+        // so lyrics track the displayed player.
+        val lyricsViewModel: LyricsViewModel = koinViewModel()
 
         val playerAction1 =
             { data: PlayerData, action: PlayerAction ->
@@ -264,6 +271,16 @@ fun PlayersPager(
                         val livePositionFlow = remember(queueId) {
                             queueId?.let { homeScreenViewModel.observePosition(it) }
                         }
+                        // Lyrics: only the displayed page drives the shared VM, so the
+                        // fetch (and the button) track the player currently on screen.
+                        val currentTrack = player.queueInfo?.currentItem?.track as? Track
+                        val isCurrentPage = page == playerPagerState.currentPage
+                        LaunchedEffect(isCurrentPage, currentTrack) {
+                            if (isCurrentPage) lyricsViewModel.onDisplayedTrackChanged(currentTrack)
+                        }
+                        val lyrics by lyricsViewModel.lyrics.collectAsStateWithLifecycle()
+                        // Snapshot at tap so a track change while reading doesn't yank the sheet.
+                        var sheetLyrics by remember { mutableStateOf<Lyrics?>(null) }
                         if (!expanded) {
                             CollapsedPlayerPage(
                                 isExpandedScreen = isExpandedScreen,
@@ -295,9 +312,19 @@ fun PlayersPager(
                                 isQueueExpanded = isQueueExpanded,
                                 onExpandQueue = { isQueueExpanded = it },
                                 contentPadding = contentPadding,
-                                isCurrentPage = page == playerPagerState.currentPage,
+                                isCurrentPage = isCurrentPage,
                                 navigateToItem = navigateToItem,
                                 livePositionFlow = livePositionFlow,
+                                lyricsAvailable = isCurrentPage && lyrics != null,
+                                onLyricsClick = { sheetLyrics = lyrics },
+                            )
+                        }
+                        sheetLyrics?.let { shown ->
+                            LyricsSheet(
+                                lyrics = shown,
+                                colors = colors,
+                                livePositionFlow = livePositionFlow,
+                                onDismiss = { sheetLyrics = null },
                             )
                         }
                     }
@@ -382,6 +409,8 @@ private fun ExpandedPlayerPage(
     isCurrentPage: Boolean,
     navigateToItem: (AppMediaItem) -> Unit = {},
     livePositionFlow: Flow<Double>?,
+    lyricsAvailable: Boolean = false,
+    onLyricsClick: () -> Unit = {},
 ) {
     val isLargeScreen = WindowClass.isAtLeastLarge()
     val dismissThresholdPx = with(LocalDensity.current) { 120.dp.toPx() }
@@ -541,6 +570,8 @@ private fun ExpandedPlayerPage(
                             colors = colors,
                             playerAction = playerAction,
                             onFavoriteClick = onFavoriteClick,
+                            lyricsAvailable = lyricsAvailable,
+                            onLyricsClick = onLyricsClick,
                             livePositionFlow = livePositionFlow,
                         )
                     }
