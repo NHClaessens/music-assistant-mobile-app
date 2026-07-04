@@ -3,6 +3,7 @@ import ComposeApp
 import UIKit
 import CarPlay
 import Intents
+import AVFoundation
 import os
 import os.log
 import os.lock
@@ -11,6 +12,79 @@ private let siriLog = OSLog(
     subsystem: Bundle.main.bundleIdentifier ?? "io.music-assistant.client",
     category: "Siri"
 )
+
+private final class SystemVolumeButtonObserver: NSObject {
+    private let session = AVAudioSession.sharedInstance()
+    private let appActive = OSAllocatedUnfairLock(initialState: UIApplication.shared.applicationState == .active)
+    private var observation: NSKeyValueObservation?
+    private var lastVolume: Float = AVAudioSession.sharedInstance().outputVolume
+    private var isAppActive: Bool { appActive.withLock { $0 } }
+
+    /// Wired once at startup. Lets us check whether the local engine is actively
+    /// rendering before we touch the shared session's category.
+    weak var player: NativeAudioController?
+
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func appDidBecomeActive() {
+        appActive.withLock { $0 = true }
+        start()
+    }
+
+    @objc private func appWillResignActive() {
+        appActive.withLock { $0 = false }
+        stop()
+    }
+
+    func start() {
+        guard observation == nil else { return }
+        do {
+            // KVO needs an active session; mix so remote volume capture doesn't steal focus.
+            if player?.isRenderingAudio != true {
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+                try session.setActive(true, options: [])
+            }
+            lastVolume = session.outputVolume
+            observation = session.observe(\.outputVolume, options: [.new]) { [weak self] audioSession, change in
+                guard let self else { return }
+                let volume = change.newValue ?? audioSession.outputVolume
+                guard volume != self.lastVolume else { return }
+                self.lastVolume = volume
+                guard self.isAppActive else { return }
+                DispatchQueue.main.async { [weak self] in
+                    guard self?.isAppActive == true else { return }
+                    KmpHelper.shared.onPlatformVolumeButtonPressed()
+                }
+            }
+        } catch {
+            NativeLog.shared.error(tag: "SystemVolumeButtonObserver", message: "Failed to activate audio session for volume observation: \(error)")
+        }
+    }
+
+    func stop() {
+        observation?.invalidate()
+        observation = nil
+        // Do not deactivate; this shared session may still belong to local playback.
+    }
+}
 
 /// Single-bit flag indicating whether `bootstrapKmp()` has run and Koin is
 /// usable. Exists because SiriKit intent handlers can be invoked before any
@@ -114,13 +188,15 @@ final class OsLogSinkImpl: NSObject, OsLogSink {
 struct iOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    // Keep a strong reference to the player
+    // Keep strong references to native integrations
     // Using NativeAudioController with swift-opus and libFLAC for decoding
     private let player = NativeAudioController()
+    private let volumeButtonObserver = SystemVolumeButtonObserver()
 
     init() {
-        // Register the Swift implementation with Kotlin
+        // Register the Swift audio player with Kotlin before KMP services are created.
         PlatformPlayerProvider.shared.player = player
+        volumeButtonObserver.player = player
 
         #if DEBUG
         // Route Kermit logs to the unified log un-redacted during development
@@ -140,6 +216,9 @@ struct iOSApp: App {
         // `MainViewController()` is safe.
         MainViewControllerKt.bootstrapKmp()
         KmpState.isReady = true
+        if UIApplication.shared.applicationState == .active {
+            volumeButtonObserver.start()
+        }
         NotificationCenter.default.post(name: KmpState.readyNotification, object: nil)
 
         // Required for apps to appear in Control Center

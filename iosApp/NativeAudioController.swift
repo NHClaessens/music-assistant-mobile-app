@@ -31,6 +31,8 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
 
     // MARK: - State
     private var isPlaying = false
+    /// True while local playback owns or is claiming the shared audio session.
+    var isRenderingAudio: Bool { streamStarted || isPlaying }
     private var streamStarted = false
     // Play-intent gate (mirrors Android's shouldPlayAudio). While false — paused or
     // interrupted — incoming audio is dropped instead of (re)starting the queue, so
