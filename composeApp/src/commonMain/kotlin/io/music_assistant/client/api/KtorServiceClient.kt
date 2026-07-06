@@ -28,6 +28,7 @@ import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.connectionInfo
 import io.music_assistant.client.utils.createPlatformHttpClient
 import io.music_assistant.client.utils.currentTimeMillis
+import io.music_assistant.client.utils.getServerIdentifier
 import io.music_assistant.client.utils.myJson
 import io.music_assistant.client.utils.update
 import io.music_assistant.client.webrtc.model.RemoteId
@@ -140,7 +141,7 @@ class KtorServiceClient(
         .stateIn(this, SharingStarted.Eagerly, null)
 
     override val isReadyForCommands: StateFlow<Boolean> = _sessionState
-        .map { it is SessionState.Connected && it.dataConnectionState == DataConnectionState.Authenticated }
+        .map { it is SessionState.Connected && it.dataConnectionState is DataConnectionState.Authenticated }
         .stateIn(this, SharingStarted.Eagerly, false)
 
     private val _externalConsumerActive = MutableStateFlow(false)
@@ -371,6 +372,10 @@ class KtorServiceClient(
         logger.i { "Playback inactive (state=${stateLabel(_sessionState.value)})" }
     }
 
+    override fun forceDisconnect(reason: Exception) {
+        disconnect(SessionState.Disconnected.Error(reason))
+    }
+
     /**
      * Called when the app returns to the foreground.
      */
@@ -407,7 +412,9 @@ class KtorServiceClient(
         SessionState.Disconnected.NoServerData -> "Disconnected.NoServerData"
         SessionState.Disconnected.Backgrounded -> "Disconnected.Backgrounded"
         SessionState.Disconnected.ByUser -> "Disconnected.ByUser"
-        is SessionState.Disconnected.Error -> "Disconnected.Error(${state.reason?.message})"
+        is SessionState.Disconnected.Error -> {
+            "Disconnected.Error(${state.reason?.message ?: state.reason?.toString()})"
+        }
         SessionState.Connecting -> "Connecting"
     }
 
@@ -415,7 +422,7 @@ class KtorServiceClient(
     private fun dcsLabel(dcs: DataConnectionState): String = when (dcs) {
         DataConnectionState.AwaitingServerInfo -> "AwaitingServerInfo"
         is DataConnectionState.AwaitingAuth -> "AwaitingAuth"
-        DataConnectionState.Authenticated -> "Authenticated"
+        is DataConnectionState.Authenticated -> "Authenticated"
     }
 
     private val rpcEngine = RpcEngine(
@@ -869,19 +876,7 @@ class KtorServiceClient(
     override fun logout() {
         val currentState = _sessionState.value
         if (currentState is SessionState.Connected) {
-            val serverIdentifier = when (currentState) {
-                is SessionState.Connected.Direct -> {
-                    settings.getDirectServerIdentifier(
-                        currentState.connectionInfo.host,
-                        currentState.connectionInfo.port,
-                        currentState.connectionInfo.isTls,
-                    )
-                }
-
-                is SessionState.Connected.WebRTC -> {
-                    settings.getWebRTCServerIdentifier(currentState.remoteId.rawId)
-                }
-            }
+            val serverIdentifier = settings.getServerIdentifier(currentState)
             settings.setTokenForServer(serverIdentifier, null)
             logger.d { "Cleared token for server" }
         }
@@ -942,16 +937,7 @@ class KtorServiceClient(
         }
         val currentState = _sessionState.value
         if (currentState is SessionState.Connected) {
-            val serverIdentifier = when (currentState) {
-                is SessionState.Connected.Direct -> settings.getDirectServerIdentifier(
-                    currentState.connectionInfo.host,
-                    currentState.connectionInfo.port,
-                    currentState.connectionInfo.isTls,
-                )
-
-                is SessionState.Connected.WebRTC ->
-                    settings.getWebRTCServerIdentifier(currentState.remoteId.rawId)
-            }
+            val serverIdentifier = settings.getServerIdentifier(currentState)
             settings.setTokenForServer(serverIdentifier, token)
             logger.d { "Saved token for server" }
         }
@@ -970,19 +956,7 @@ class KtorServiceClient(
     private fun clearCurrentServerToken() {
         val currentState = _sessionState.value
         if (currentState is SessionState.Connected) {
-            val serverIdentifier = when (currentState) {
-                is SessionState.Connected.Direct -> {
-                    settings.getDirectServerIdentifier(
-                        currentState.connectionInfo.host,
-                        currentState.connectionInfo.port,
-                        currentState.connectionInfo.isTls,
-                    )
-                }
-
-                is SessionState.Connected.WebRTC -> {
-                    settings.getWebRTCServerIdentifier(currentState.remoteId.rawId)
-                }
-            }
+            val serverIdentifier = settings.getServerIdentifier(currentState)
             settings.setTokenForServer(serverIdentifier, null)
             logger.i { "Cleared token for server due to auth failure" }
         }
@@ -1084,7 +1058,7 @@ class KtorServiceClient(
                         // NotStarted/InProgress/LoggedOut handled by AuthMgr or user; no-op.
                     }
                     DataConnectionState.AwaitingServerInfo -> Unit // server/hello pending
-                    DataConnectionState.Authenticated -> Unit // ready
+                    is DataConnectionState.Authenticated -> Unit // ready
                 }
             }
         }
