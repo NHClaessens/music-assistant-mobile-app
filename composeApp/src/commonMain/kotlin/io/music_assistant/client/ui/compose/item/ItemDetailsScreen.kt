@@ -566,18 +566,22 @@ private fun TabsBar(
                 )
             }
         }
-        if (sortCtx != null && currentSort != null && sortCtx !in listOf(SubItemContext.ALBUM_TRACKS, SubItemContext.PLAYLIST_ITEMS)) {
-            SortChip(
-                currentSort = currentSort,
-                availableFields = SortConfig.fieldsFor(sortCtx),
-                onSortChanged = { opt ->
-                    if (sortCtx == SubItemContext.ARTIST_ALBUMS) {
-                        onAlbumsSortChanged(sortCtx, opt)
-                    } else {
-                        onPlayableItemsSortChanged(sortCtx, opt)
-                    }
-                },
-            )
+        if (sortCtx != null && currentSort != null) {
+            val availableFields = SortConfig.fieldsFor(sortCtx)
+
+            if (availableFields.size > 1) {
+                SortChip(
+                    currentSort = currentSort,
+                    availableFields = availableFields,
+                    onSortChanged = { opt ->
+                        if (sortCtx == SubItemContext.ARTIST_ALBUMS) {
+                            onAlbumsSortChanged(sortCtx, opt)
+                        } else {
+                            onPlayableItemsSortChanged(sortCtx, opt)
+                        }
+                    },
+                )
+            }
         }
 
         currentTab.viewMediaType?.let { viewMediaType ->
