@@ -566,7 +566,7 @@ private fun TabsBar(
                 )
             }
         }
-        if (sortCtx != null && currentSort != null) {
+        if (sortCtx != null && currentSort != null && sortCtx !in listOf(SubItemContext.ALBUM_TRACKS, SubItemContext.PLAYLIST_ITEMS)) {
             SortChip(
                 currentSort = currentSort,
                 availableFields = SortConfig.fieldsFor(sortCtx),
