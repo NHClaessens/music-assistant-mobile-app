@@ -11,7 +11,6 @@ import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.utils.AuthProcessState
 import io.music_assistant.client.utils.DataConnectionState
 import io.music_assistant.client.utils.SessionState
-import io.music_assistant.client.utils.getServerIdentifier
 import io.music_assistant.client.utils.mainDispatcher
 import io.music_assistant.client.utils.resultAs
 import kotlinx.coroutines.CancellationException
@@ -114,6 +113,10 @@ class AuthenticationManager(
                                 }
 
                                 is AuthProcessState.Failed -> {
+                                    val serverIdentifier = settings.getServerIdentifier(state)
+                                    settings.setTokenForServer(serverIdentifier, null)
+                                    log.i { "Cleared token for server due to auth failure" }
+
                                     log.i {
                                         "AwaitingAuth(Failed): " +
                                             dataConnectionState.authProcessState.reason
@@ -123,6 +126,10 @@ class AuthenticationManager(
                                 }
 
                                 AuthProcessState.LoggedOut -> {
+                                    val serverIdentifier = settings.getServerIdentifier(state)
+                                    settings.setTokenForServer(serverIdentifier, null)
+                                    log.d { "Cleared token for server" }
+
                                     log.i { "AwaitingAuth(LoggedOut)" }
                                     _authState.value = AuthState.Idle
                                 }
@@ -136,9 +143,10 @@ class AuthenticationManager(
 
                                 val serverIdentifier = settings.getServerIdentifier(state)
                                 val serverId = dataConnectionState.serverInfo.serverId
-                                settings.setIdForServer(
+                                settings.setIdForServer(serverIdentifier, serverId)
+                                settings.setTokenForServer(
                                     serverIdentifier,
-                                    serverId,
+                                    dataConnectionState.token,
                                 )
                             }
                         }
@@ -334,3 +342,22 @@ class AuthenticationManager(
 }
 
 class ServerIdMismatchException : Exception()
+
+private fun SettingsRepository.getServerIdentifier(sessionState: SessionState): String? {
+    return when (sessionState) {
+        is SessionState.Connected -> getServerIdentifier(sessionState)
+        else -> null
+    }
+}
+
+private fun SettingsRepository.getServerIdentifier(sessionState: SessionState.Connected): String {
+    return when (sessionState) {
+        is SessionState.Connected.Direct -> this.getDirectServerIdentifier(
+            sessionState.connectionInfo.host,
+            sessionState.connectionInfo.port,
+            sessionState.connectionInfo.isTls,
+        )
+
+        is SessionState.Connected.WebRTC -> this.getWebRTCServerIdentifier(sessionState.remoteId.rawId)
+    }
+}

@@ -24,13 +24,12 @@ import io.music_assistant.client.data.model.server.events.Event
 import io.music_assistant.client.data.model.server.events.PlayerUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueItemsUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueUpdatedEvent
-import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.utils.AuthProcessState
 import io.music_assistant.client.utils.ConnectionData
 import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.UniqueIdGenerator
-import io.music_assistant.client.utils.getServerIdentifier
 import io.music_assistant.client.utils.myJson
+import io.music_assistant.client.utils.update
 import io.music_assistant.client.webrtc.DataChannelWrapper
 import io.music_assistant.client.webrtc.model.RemoteId
 import kotlinx.coroutines.flow.Flow
@@ -45,7 +44,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
 
-class FakeServiceClient(private val settingsRepository: SettingsRepository) : ServiceClient {
+class FakeServiceClient : ServiceClient {
     private var legacyVersion: LegacyVersion? = null
     private var requestErrors: Boolean = false
     private var connectionError: Exception? = null
@@ -515,16 +514,19 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
     }
 
     override suspend fun login(username: String, password: String) {
-        authorize("token", true)
-        _isReadyForCommands.value = true
+        if (username == this.username && password == this.password) {
+            authorize("token", true)
+            _isReadyForCommands.value = true
+        } else {
+            _sessionState.update { state ->
+                (state as SessionState.Connected).update(
+                    authProcessState = AuthProcessState.Failed("Invalid username or password"),
+                )
+            }
+        }
     }
 
     override suspend fun authorize(token: String, isAutoLogin: Boolean) {
-        val serverIdentifier = settingsRepository.getServerIdentifier(_sessionState.value)
-        if (serverIdentifier != null) {
-            settingsRepository.setTokenForServer(serverIdentifier, token)
-        }
-
         _sessionState.update {
             when (it) {
                 is SessionState.Connected.Direct -> {
@@ -534,6 +536,7 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                             authProcessState = AuthProcessState.NotStarted,
                             user = User("-1", username, username, "user"),
                             wasAutoLogin = true,
+                            token = token,
                         ),
                     )
                 }
@@ -544,11 +547,13 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
     }
 
     override fun logout() {
-        TODO("Not yet implemented")
+        _sessionState.update {
+            (it as? SessionState.Connected)?.update(
+                authProcessState = AuthProcessState.LoggedOut,
+                user = null,
+            ) ?: it
+        }
     }
-
-    private val _serverBaseUrl = MutableStateFlow<String?>(null)
-    override val serverBaseUrl: StateFlow<String?> = _serverBaseUrl
 
     override fun resolveImageUrl(
         path: String,
@@ -596,11 +601,8 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
                     ),
                 )
                 _sessionState.value = SessionState.Connected.Direct(connection, connectionData)
-                _serverBaseUrl.value = connectionData.serverInfo?.baseUrl
-                settingsRepository.updateConnectionInfo(connection)
             } else {
                 _sessionState.value = SessionState.Disconnected.Error(it)
-                _serverBaseUrl.value = null
             }
         }
     }
@@ -627,6 +629,10 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
         _sessionState.update {
             SessionState.Disconnected.Error(reason)
         }
+    }
+
+    override fun noServer() {
+        _sessionState.update { SessionState.Disconnected.NoServerData }
     }
 
     fun addToLibrary(vararg items: ServerMediaItem) {
@@ -745,7 +751,6 @@ class FakeServiceClient(private val settingsRepository: SettingsRepository) : Se
 
         if (error != null) {
             _sessionState.value = SessionState.Disconnected.Error(error)
-            _serverBaseUrl.value = null
         }
     }
 

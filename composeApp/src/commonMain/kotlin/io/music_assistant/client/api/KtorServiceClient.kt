@@ -25,10 +25,8 @@ import io.music_assistant.client.utils.DataConnectionState
 import io.music_assistant.client.utils.HasConnectionData
 import io.music_assistant.client.utils.NetworkMonitor
 import io.music_assistant.client.utils.SessionState
-import io.music_assistant.client.utils.connectionInfo
 import io.music_assistant.client.utils.createPlatformHttpClient
 import io.music_assistant.client.utils.currentTimeMillis
-import io.music_assistant.client.utils.getServerIdentifier
 import io.music_assistant.client.utils.myJson
 import io.music_assistant.client.utils.update
 import io.music_assistant.client.webrtc.model.RemoteId
@@ -129,16 +127,6 @@ class KtorServiceClient(
     private val _sessionState: MutableStateFlow<SessionState> =
         MutableStateFlow(SessionState.Disconnected.Initial)
     override val sessionState = _sessionState.asStateFlow()
-
-    override val serverBaseUrl: StateFlow<String?> = _sessionState
-        .map { state ->
-            when (state) {
-                is SessionState.Connected.Direct -> state.connectionInfo.webUrl
-                is SessionState.Reconnecting.Direct -> state.connectionInfo.webUrl
-                else -> null
-            }
-        }
-        .stateIn(this, SharingStarted.Eagerly, null)
 
     override val isReadyForCommands: StateFlow<Boolean> = _sessionState
         .map { it is SessionState.Connected && it.dataConnectionState is DataConnectionState.Authenticated }
@@ -376,6 +364,10 @@ class KtorServiceClient(
         disconnect(SessionState.Disconnected.Error(reason))
     }
 
+    override fun noServer() {
+        _sessionState.update { SessionState.Disconnected.NoServerData }
+    }
+
     /**
      * Called when the app returns to the foreground.
      */
@@ -441,64 +433,6 @@ class KtorServiceClient(
         launch {
             isReadyForCommands.collect { ready ->
                 logger.i { "isReadyForCommands=$ready" }
-            }
-        }
-        launch {
-            _sessionState.collect { state ->
-                when (state) {
-                    is SessionState.Connected -> {
-                        state.connectionInfo?.let { connInfo ->
-                            settings.updateConnectionInfo(connInfo)
-                        }
-                    }
-
-                    is SessionState.Reconnecting -> {
-                        state.connectionInfo?.let { connInfo ->
-                            settings.updateConnectionInfo(connInfo)
-                        }
-                    }
-
-                    is SessionState.Disconnected -> {
-                        when (state) {
-                            SessionState.Disconnected.ByUser,
-                            SessionState.Disconnected.NoServerData,
-                            SessionState.Disconnected.Backgrounded,
-                            is SessionState.Disconnected.Error,
-                            -> Unit
-
-                            SessionState.Disconnected.Initial -> {
-                                val mostRecent = settings.connectionHistory.value.firstOrNull()
-                                when (mostRecent?.type) {
-                                    ConnectionType.DIRECT -> {
-                                        val connInfo = mostRecent.connectionInfo
-                                        if (connInfo != null) {
-                                            connect(connInfo)
-                                        } else {
-                                            _sessionState.update { SessionState.Disconnected.NoServerData }
-                                        }
-                                    }
-
-                                    ConnectionType.WEBRTC -> {
-                                        val remoteId =
-                                            mostRecent.remoteId?.let { RemoteId.parse(it) }
-                                        if (remoteId != null) {
-                                            connectWebRTC(remoteId)
-                                        } else {
-                                            _sessionState.update { SessionState.Disconnected.NoServerData }
-                                        }
-                                    }
-
-                                    else -> {
-                                        settings.connectionInfo.value?.let { connect(it) }
-                                            ?: _sessionState.update { SessionState.Disconnected.NoServerData }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    SessionState.Connecting -> Unit
-                }
             }
         }
     }
@@ -845,7 +779,6 @@ class KtorServiceClient(
                 AuthResolution.Aborted -> return
                 is AuthResolution.Surface -> setAuthFailed(resolution.message)
                 is AuthResolution.Reject -> {
-                    clearCurrentServerToken()
                     setAuthFailed(resolution.message)
                 }
 
@@ -856,7 +789,6 @@ class KtorServiceClient(
         } catch (e: Exception) {
             if (_sessionState.value !is SessionState.Connected) return
             setAuthFailed(e.message ?: "Exception happened: $e")
-            clearCurrentServerToken()
         }
     }
 
@@ -874,13 +806,6 @@ class KtorServiceClient(
     }
 
     override fun logout() {
-        val currentState = _sessionState.value
-        if (currentState is SessionState.Connected) {
-            val serverIdentifier = settings.getServerIdentifier(currentState)
-            settings.setTokenForServer(serverIdentifier, null)
-            logger.d { "Cleared token for server" }
-        }
-
         if (_sessionState.value !is SessionState.Connected) return
         _sessionState.update {
             (it as? SessionState.Connected)?.update(
@@ -915,7 +840,6 @@ class KtorServiceClient(
                 AuthResolution.Aborted -> return
                 is AuthResolution.Surface -> setAuthFailed(resolution.message)
                 is AuthResolution.Reject -> {
-                    clearCurrentServerToken()
                     setAuthFailed(resolution.message)
                 }
                 is AuthResolution.Authenticated ->
@@ -926,7 +850,6 @@ class KtorServiceClient(
         } catch (e: Exception) {
             if (_sessionState.value !is SessionState.Connected) return
             setAuthFailed(e.message ?: "Exception happened: $e")
-            clearCurrentServerToken()
         }
     }
 
@@ -934,12 +857,6 @@ class KtorServiceClient(
         val user = answer.resultAs<AuthorizationResponse>()?.user ?: run {
             setAuthFailed("Failed to parse user data")
             return
-        }
-        val currentState = _sessionState.value
-        if (currentState is SessionState.Connected) {
-            val serverIdentifier = settings.getServerIdentifier(currentState)
-            settings.setTokenForServer(serverIdentifier, token)
-            logger.d { "Saved token for server" }
         }
 
         silentReauth.reset()
@@ -949,16 +866,8 @@ class KtorServiceClient(
                 user = user,
                 wasAutoLogin = isAutoLogin,
                 needsServerReauth = false,
+                token = token,
             ) ?: it
-        }
-    }
-
-    private fun clearCurrentServerToken() {
-        val currentState = _sessionState.value
-        if (currentState is SessionState.Connected) {
-            val serverIdentifier = settings.getServerIdentifier(currentState)
-            settings.setTokenForServer(serverIdentifier, null)
-            logger.i { "Cleared token for server due to auth failure" }
         }
     }
 
