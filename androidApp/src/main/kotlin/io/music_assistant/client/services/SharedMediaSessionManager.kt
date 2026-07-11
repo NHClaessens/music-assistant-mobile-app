@@ -37,8 +37,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,6 +130,11 @@ class SharedMediaSessionManager(
     private var remoteVolumeControlType: Int? = null
     /** null = not yet configured; true/false = last applied routing mode. */
     private var playbackRoutingIsRemote: Boolean? = null
+    private var lastRemoteVolumePlayerId: String? = null
+    /** Net un-applied hardware key steps (+ = ups waiting, − = downs waiting). */
+    private var pendingVolumeSteps = 0
+    private var remoteVolumeFlushJob: Job? = null
+    private val remoteVolumeSendMutex = Mutex()
 
     data class ErrorState(
         val code: Int,
@@ -161,6 +169,10 @@ class SharedMediaSessionManager(
             remoteVolumeProvider = null
             remoteVolumeControlType = null
             playbackRoutingIsRemote = null
+            lastRemoteVolumePlayerId = null
+            pendingVolumeSteps = 0
+            remoteVolumeFlushJob?.cancel()
+            remoteVolumeFlushJob = null
         }
     }
 
@@ -203,6 +215,109 @@ class SharedMediaSessionManager(
             launchPlaybackWriter(scope)
             launchQueueWriter(scope)
             launchPlaybackRoutingWriter(scope)
+        }
+    }
+
+    /**
+     * Android only delivers the next hardware volume key once [VolumeProviderCompat]
+     * reports a change via [VolumeProviderCompat.setCurrentVolume]. Nudge by ±1 so rapid
+     * presses are not coalesced/dropped; authoritative level still comes from the server.
+     */
+    private fun nudgeVolumeProviderForSystem(direction: Int) {
+        val provider = remoteVolumeProvider ?: return
+        val delta =
+            when (direction) {
+                AudioManager.ADJUST_RAISE -> 1
+                AudioManager.ADJUST_LOWER -> -1
+                else -> return
+            }
+        provider.setCurrentVolume(
+            (provider.currentVolume + delta).coerceIn(0, REMOTE_MAX_VOLUME),
+        )
+    }
+
+    @Synchronized
+    private fun enqueueRemoteVolumeStep(direction: Int) {
+        when (direction) {
+            AudioManager.ADJUST_RAISE -> pendingVolumeSteps++
+            AudioManager.ADJUST_LOWER -> pendingVolumeSteps--
+            else -> return
+        }
+        nudgeVolumeProviderForSystem(direction)
+        scheduleRemoteVolumeFlush()
+    }
+
+    private fun scheduleRemoteVolumeFlush() {
+        if (remoteVolumeFlushJob?.isActive == true) return
+        remoteVolumeFlushJob =
+            writerScope?.launch {
+                flushPendingRemoteVolumeSteps()
+            }
+    }
+
+    private suspend fun flushPendingRemoteVolumeSteps() {
+        while (true) {
+            val step =
+                synchronized(this) {
+                    when {
+                        pendingVolumeSteps > 0 -> {
+                            pendingVolumeSteps--
+                            true
+                        }
+                        pendingVolumeSteps < 0 -> {
+                            pendingVolumeSteps++
+                            false
+                        }
+                        else -> return
+                    }
+                }
+            val playerData = currentPlayer() ?: return
+            if (playerData.isLocal || !playerData.player.isVolumeSliderAccessible) {
+                synchronized(this) { pendingVolumeSteps = 0 }
+                return
+            }
+            applyOneRemoteVolumeStep(playerData, up = step)
+        }
+    }
+
+    private suspend fun applyOneRemoteVolumeStep(playerData: PlayerData, up: Boolean) {
+        remoteVolumeSendMutex.withLock {
+            val activePlayer = currentPlayer() ?: return
+            if (activePlayer.playerId != playerData.playerId) return
+            val previousVolume = activePlayer.player.currentVolume
+            val action = relativeVolumeAction(activePlayer, up = up)
+            val result = dataSource.playerActionAwait(activePlayer, action)
+            if (result.isFailure) {
+                logger.w(result.exceptionOrNull()) {
+                    "Remote volume action failed for ${playerData.player.name}: $action"
+                }
+                return
+            }
+            val confirmedVolume =
+                dataSource.awaitPlayerVolumeChange(
+                    playerId = activePlayer.playerId,
+                    previousVolume = previousVolume,
+                )
+            confirmedVolume?.roundToInt()?.coerceIn(0, REMOTE_MAX_VOLUME)?.let { level ->
+                remoteVolumeProvider?.setCurrentVolume(level)
+            }
+        }
+    }
+
+    private fun enqueueRemoteMuteToggle(playerData: PlayerData) {
+        writerScope?.launch {
+            remoteVolumeSendMutex.withLock {
+                val result =
+                    dataSource.playerActionAwait(
+                        playerData,
+                        PlayerAction.ToggleMute(playerData.player.currentMuteState),
+                    )
+                if (result.isFailure) {
+                    logger.w(result.exceptionOrNull()) {
+                        "Remote mute toggle failed for ${playerData.player.name}"
+                    }
+                }
+            }
         }
     }
 
@@ -257,6 +372,7 @@ class SharedMediaSessionManager(
             sourcePlayerData()
                 .map { (player, _) ->
                     PlaybackRoutingSnapshot(
+                        playerId = player.playerId,
                         isLocal = player.isLocal,
                         volume = player.player.currentVolume?.roundToInt(),
                         volumeControllable = player.player.isVolumeSliderAccessible,
@@ -361,6 +477,7 @@ class SharedMediaSessionManager(
     }
 
     private data class PlaybackRoutingSnapshot(
+        val playerId: String,
         val isLocal: Boolean,
         val volume: Int?,
         val volumeControllable: Boolean,
@@ -376,9 +493,15 @@ class SharedMediaSessionManager(
                 remoteVolumeProvider = null
                 remoteVolumeControlType = null
                 playbackRoutingIsRemote = false
+                lastRemoteVolumePlayerId = null
                 logger.d { "playback routing → local" }
             }
             return
+        }
+
+        if (snapshot.playerId != lastRemoteVolumePlayerId) {
+            pendingVolumeSteps = 0
+            lastRemoteVolumePlayerId = snapshot.playerId
         }
 
         val controlType =
@@ -417,25 +540,22 @@ class SharedMediaSessionManager(
         val playerData = currentPlayer() ?: return
         if (playerData.isLocal || !playerData.player.isVolumeSliderAccessible) return
 
-        val action =
-            when (direction) {
-                AudioManager.ADJUST_RAISE -> remoteVolumeStepAction(playerData, up = true)
-                AudioManager.ADJUST_LOWER -> remoteVolumeStepAction(playerData, up = false)
-                AudioManager.ADJUST_MUTE,
-                AudioManager.ADJUST_UNMUTE,
-                AudioManager.ADJUST_TOGGLE_MUTE,
-                ->
-                    if (playerData.player.canMute) {
-                        PlayerAction.ToggleMute(playerData.player.currentMuteState)
-                    } else {
-                        return
-                    }
-                else -> return
+        when (direction) {
+            AudioManager.ADJUST_MUTE,
+            AudioManager.ADJUST_UNMUTE,
+            AudioManager.ADJUST_TOGGLE_MUTE,
+            -> {
+                if (!playerData.player.canMute) return
+                enqueueRemoteMuteToggle(playerData)
             }
-        dataSource.playerAction(playerData, action)
+            AudioManager.ADJUST_RAISE,
+            AudioManager.ADJUST_LOWER,
+            -> enqueueRemoteVolumeStep(direction)
+            else -> Unit
+        }
     }
 
-    private fun remoteVolumeStepAction(playerData: PlayerData, up: Boolean): PlayerAction =
+    private fun relativeVolumeAction(playerData: PlayerData, up: Boolean): PlayerAction =
         if (playerData.childrenBinds.any { it.isBound }) {
             if (up) PlayerAction.GroupVolumeUp else PlayerAction.GroupVolumeDown
         } else {

@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.CoroutineContext
 
 @OptIn(FlowPreview::class)
@@ -1146,15 +1147,52 @@ class MainDataSource(
             localPlayerController.handleLocalCommand(data, action)
             return
         }
-        val resolved = playerRequestFactory.resolve(data, action)
         launch {
-            val request = playerRequestFactory.buildRequest(data, resolved) ?: return@launch
-            val result = apiClient.sendRequest(request)
+            val result = playerActionAwait(data, action)
             if (result.isFailure) {
-                log.e(
-                    result.exceptionOrNull(),
-                ) { "Failed to send player action request for ${data.player.name}: $action" }
+                log.e(result.exceptionOrNull()) {
+                    "Failed to send player action request for ${data.player.name}: $action"
+                }
             }
+        }
+    }
+
+    suspend fun playerActionAwait(data: PlayerData, action: PlayerAction): Result<Unit> {
+        if (data.isLocal) {
+            localPlayerController.handleLocalCommand(data, action)
+            return Result.success(Unit)
+        }
+        val resolved = playerRequestFactory.resolve(data, action)
+        val request =
+            playerRequestFactory.buildRequest(data, resolved)
+                ?: return Result.failure(IllegalArgumentException("Unsupported action: $action"))
+        return apiClient.sendRequest(request).map { }
+    }
+
+    /**
+     * Suspends until [playerId]'s reported volume differs from [previousVolume], or
+     * [timeoutMs] elapses. Used to serialize hardware volume keys: RPC ack alone is
+     * not enough because the server's player state may still be stale when the next
+     * relative command is sent.
+     */
+    suspend fun awaitPlayerVolumeChange(
+        playerId: String,
+        previousVolume: Float?,
+        timeoutMs: Long = 3_000,
+    ): Float? {
+        fun PlayerData?.volumeFor(playerId: String): Float? =
+            this?.takeIf { it.playerId == playerId }?.player?.currentVolume
+
+        nowPlayingPlayer.value.volumeFor(playerId)
+            ?.takeIf { it != previousVolume }
+            ?.let { return it }
+
+        return withTimeoutOrNull(timeoutMs) {
+            nowPlayingPlayer
+                .map { it.volumeFor(playerId) }
+                .filterNotNull()
+                .distinctUntilChanged()
+                .first { it != previousVolume }
         }
     }
 
