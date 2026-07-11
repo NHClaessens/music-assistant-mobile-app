@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import androidx.media.VolumeProviderCompat
 import androidx.media.utils.MediaConstants
 import co.touchlab.kermit.Logger
 import coil3.ImageLoader
@@ -30,6 +31,7 @@ import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.canBeFavorited
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -120,6 +122,12 @@ class SharedMediaSessionManager(
 
     private val logger = Logger.withTag("SharedSession")
 
+    // Remote-output volume keys are routed through MediaSession (not STREAM_MUSIC).
+    private var remoteVolumeProvider: VolumeProviderCompat? = null
+    private var remoteVolumeControlType: Int? = null
+    /** null = not yet configured; true/false = last applied routing mode. */
+    private var playbackRoutingIsRemote: Boolean? = null
+
     data class ErrorState(
         val code: Int,
         val message: String,
@@ -150,6 +158,9 @@ class SharedMediaSessionManager(
             lastBitmap = null
             autoPlayHandler = null
             strings = null
+            remoteVolumeProvider = null
+            remoteVolumeControlType = null
+            playbackRoutingIsRemote = null
         }
     }
 
@@ -191,6 +202,7 @@ class SharedMediaSessionManager(
             strings = MediaSessionStrings.load()
             launchPlaybackWriter(scope)
             launchQueueWriter(scope)
+            launchPlaybackRoutingWriter(scope)
         }
     }
 
@@ -235,6 +247,23 @@ class SharedMediaSessionManager(
                         },
                     )
                 }
+        }
+    }
+
+    private fun launchPlaybackRoutingWriter(scope: CoroutineScope) {
+        // Local vs remote output determines whether volume keys adjust STREAM_MUSIC or the
+        // active MA player. Keep the provider's reported level in sync with server updates.
+        scope.launch {
+            sourcePlayerData()
+                .map { (player, _) ->
+                    PlaybackRoutingSnapshot(
+                        isLocal = player.isLocal,
+                        volume = player.player.currentVolume?.roundToInt(),
+                        volumeControllable = player.player.isVolumeSliderAccessible,
+                    )
+                }
+                .distinctUntilChanged()
+                .collect { updatePlaybackRouting(it) }
         }
     }
 
@@ -330,6 +359,88 @@ class SharedMediaSessionManager(
     private fun act(action: PlayerAction) {
         currentPlayer()?.let { dataSource.playerAction(it, action) }
     }
+
+    private data class PlaybackRoutingSnapshot(
+        val isLocal: Boolean,
+        val volume: Int?,
+        val volumeControllable: Boolean,
+    )
+
+    @Synchronized
+    private fun updatePlaybackRouting(snapshot: PlaybackRoutingSnapshot) {
+        val session = mediaSession ?: return
+
+        if (snapshot.isLocal) {
+            if (playbackRoutingIsRemote != false) {
+                session.setPlaybackToLocal(AudioManager.STREAM_MUSIC)
+                remoteVolumeProvider = null
+                remoteVolumeControlType = null
+                playbackRoutingIsRemote = false
+                logger.d { "playback routing → local" }
+            }
+            return
+        }
+
+        val controlType =
+            if (snapshot.volumeControllable) {
+                VolumeProviderCompat.VOLUME_CONTROL_RELATIVE
+            } else {
+                VolumeProviderCompat.VOLUME_CONTROL_FIXED
+            }
+        val currentVolume =
+            snapshot.volume?.coerceIn(0, REMOTE_MAX_VOLUME)
+                ?: REMOTE_DEFAULT_VOLUME
+
+        val needsNewProvider =
+            remoteVolumeProvider == null ||
+                playbackRoutingIsRemote != true ||
+                remoteVolumeControlType != controlType
+
+        if (needsNewProvider) {
+            val provider =
+                object : VolumeProviderCompat(controlType, REMOTE_MAX_VOLUME, currentVolume) {
+                    override fun onAdjustVolume(direction: Int) {
+                        handleRemoteVolumeAdjust(direction)
+                    }
+                }
+            remoteVolumeProvider = provider
+            remoteVolumeControlType = controlType
+            session.setPlaybackToRemote(provider)
+            playbackRoutingIsRemote = true
+            logger.d { "playback routing → remote (control=$controlType, vol=$currentVolume)" }
+        } else {
+            remoteVolumeProvider?.setCurrentVolume(currentVolume)
+        }
+    }
+
+    private fun handleRemoteVolumeAdjust(direction: Int) {
+        val playerData = currentPlayer() ?: return
+        if (playerData.isLocal || !playerData.player.isVolumeSliderAccessible) return
+
+        val action =
+            when (direction) {
+                AudioManager.ADJUST_RAISE -> remoteVolumeStepAction(playerData, up = true)
+                AudioManager.ADJUST_LOWER -> remoteVolumeStepAction(playerData, up = false)
+                AudioManager.ADJUST_MUTE,
+                AudioManager.ADJUST_UNMUTE,
+                AudioManager.ADJUST_TOGGLE_MUTE,
+                ->
+                    if (playerData.player.canMute) {
+                        PlayerAction.ToggleMute(playerData.player.currentMuteState)
+                    } else {
+                        return
+                    }
+                else -> return
+            }
+        dataSource.playerAction(playerData, action)
+    }
+
+    private fun remoteVolumeStepAction(playerData: PlayerData, up: Boolean): PlayerAction =
+        if (playerData.childrenBinds.any { it.isBound }) {
+            if (up) PlayerAction.GroupVolumeUp else PlayerAction.GroupVolumeDown
+        } else {
+            if (up) PlayerAction.VolumeUp else PlayerAction.VolumeDown
+        }
 
     /**
      * Set an error state. The error takes precedence: the writer will show the error
@@ -547,4 +658,9 @@ class SharedMediaSessionManager(
         } else {
             R.drawable.baseline_arrow_right_alt_24
         }
+
+    private companion object {
+        private const val REMOTE_MAX_VOLUME = 100
+        private const val REMOTE_DEFAULT_VOLUME = 50
+    }
 }

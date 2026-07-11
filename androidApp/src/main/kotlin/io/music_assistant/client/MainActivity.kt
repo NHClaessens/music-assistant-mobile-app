@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
-import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -15,7 +14,6 @@ import io.music_assistant.client.api.DeepLinkBus
 import io.music_assistant.client.auth.AuthenticationManager
 import io.music_assistant.client.auth.OAuthHandler
 import io.music_assistant.client.data.MainDataSource
-import io.music_assistant.client.input.VolumeButtonService
 import io.music_assistant.client.services.MainMediaPlaybackService
 import io.music_assistant.client.ui.compose.App
 import org.koin.android.ext.android.inject
@@ -24,7 +22,6 @@ class MainActivity : ComponentActivity() {
     private val dataSource: MainDataSource by inject()
     private val authManager: AuthenticationManager by inject()
     private val deepLinkBus: DeepLinkBus by inject()
-    private val volumeButtonService: VolumeButtonService by inject()
     private val oauthHandler: OAuthHandler by lazy {
         OAuthHandler(this)
     }
@@ -74,15 +71,6 @@ class MainActivity : ComponentActivity() {
         // under the default standard launchMode). Keep getIntent() in sync.
         setIntent(intent)
         handleIncomingUri(intent)
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) &&
-            event?.repeatCount == 0
-        ) {
-            volumeButtonService.onPlatformVolumeButtonPressed()
-        }
-        return super.onKeyDown(keyCode, event)
     }
 
     /**

@@ -24,15 +24,11 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
@@ -52,7 +48,6 @@ import io.music_assistant.client.data.model.client.items.Genre
 import io.music_assistant.client.data.model.client.items.Playlist
 import io.music_assistant.client.data.model.client.items.Podcast
 import io.music_assistant.client.data.model.client.items.RecommendationFolder
-import io.music_assistant.client.input.VolumeButtonService
 import io.music_assistant.client.ui.compose.common.ToastDuration
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
@@ -92,7 +87,6 @@ import musicassistantclient.composeapp.generated.resources.nav_home
 import musicassistantclient.composeapp.generated.resources.nav_library
 import musicassistantclient.composeapp.generated.resources.nav_search
 import musicassistantclient.composeapp.generated.resources.nav_settings
-import musicassistantclient.composeapp.generated.resources.players_remote_volume_hint
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -112,7 +106,6 @@ fun MainNavigationRoot(
     val toastState = rememberToastState()
     val errorBus: ErrorMessageBus = koinInject()
     val deepLinkBus: DeepLinkBus = koinInject()
-    val volumeButtonService: VolumeButtonService = koinInject()
 
     LaunchedEffect(Unit) {
         homeScreenViewModel.links.collectLatest { url -> uriHandler.openUri(url) }
@@ -212,21 +205,6 @@ fun MainNavigationRoot(
     val homeScreenState = remember { mutableStateOf<HomeScreenState?>(null) }
     val libraryScreenState = remember { mutableStateOf<LibraryScreenState?>(null) }
     val searchScreenState = remember { mutableStateOf<SearchScreenState?>(null) }
-
-    val remoteVolumeHint = stringResource(Res.string.players_remote_volume_hint)
-    val viewingRemote = data?.selectedPlayer?.isLocal == false
-    val currentHint by rememberUpdatedState(remoteVolumeHint)
-    val observingRemote by rememberUpdatedState(viewingRemote)
-    val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(lifecycleOwner, volumeButtonService) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            volumeButtonService.buttonPresses.collect {
-                if (observingRemote) {
-                    toastState.showToast(currentHint, ToastDuration.SHORT)
-                }
-            }
-        }
-    }
 
     val navigationItems = listOf(
         multiBackStack.createNavigationItem(

@@ -187,7 +187,6 @@
   <string name="players_loading">Spelers laden…</string>
   <string name="players_none_available">Geen spelers beschikbaar</string>
   <string name="players_nothing">Speelt niets af</string>
-  <string name="players_remote_volume_hint">De volumeknoppen werken alleen voor de lokale speler</string>
   <string name="players_title">Spelers</string>
   <string name="playlist_add_button">Afspeellijst toevoegen</string>
   <string name="playlist_add_new">Nieuwe toevoegen</string>
