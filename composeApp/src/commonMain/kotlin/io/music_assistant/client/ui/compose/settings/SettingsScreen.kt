@@ -339,6 +339,7 @@ fun SettingsScreen(goHome: () -> Unit, exitApp: () -> Unit) {
                 }
 
                 // Misc settings - always visible
+                SwipeActionsSection()
                 val shareLogsTitle = stringResource(Res.string.settings_share_logs)
                 val shareCrashLogsTitle = stringResource(Res.string.settings_share_crash_logs)
                 MiscSection(

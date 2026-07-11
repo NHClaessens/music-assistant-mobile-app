@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
+import io.music_assistant.client.api.ToastBus
 import io.music_assistant.client.data.MainDataSource
 import io.music_assistant.client.data.model.client.LibraryFilters
 import io.music_assistant.client.data.model.client.MediaType
@@ -22,9 +23,7 @@ import io.music_assistant.client.ui.Timings
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.utils.resultAs
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -42,6 +41,7 @@ class ItemListViewModel(
     private val mainDataSource: MainDataSource,
     private val settingsRepository: SettingsRepository,
     private val mediaItemRepository: MediaItemRepository,
+    private val toastBus: ToastBus,
 ) : ViewModel() {
     private val _state = MutableStateFlow(
         State(
@@ -50,9 +50,6 @@ class ItemListViewModel(
         ),
     )
     val state = _state.asStateFlow()
-
-    private val _toasts = MutableSharedFlow<String>()
-    val toasts = _toasts.asSharedFlow()
 
     // Options for the provider/genre dynamic filters, loaded lazily the first time
     // the filter sheet asks for them (see loadFilterOptions).
@@ -377,7 +374,7 @@ class ItemListViewModel(
             apiClient.sendRequest(Request.Playlist.create(name))
                 .onFailure {
                     Logger.e("Failed to create playlist", it)
-                    _toasts.emit(getString(Res.string.toast_error_create_playlist))
+                    toastBus.show(getString(Res.string.toast_error_create_playlist))
                 }
         }
     }

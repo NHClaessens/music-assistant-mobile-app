@@ -274,6 +274,11 @@
   <string name="settings_host">Host</string>
   <string name="settings_local_player_disabled">Local player (Sendspin protocol)</string>
   <string name="settings_local_player_enabled">Local player enabled</string>
+  <string name="settings_swipe_actions">Swipe actions</string>
+  <string name="settings_swipe_actions_dialog_title">Configure swipe actions</string>
+  <string name="settings_swipe_left">Swipe left</string>
+  <string name="settings_swipe_right">Swipe right</string>
+  <string name="swipe_action_nothing">Nothing</string>
   <string name="settings_misc">Misc</string>
   <string name="settings_no_saved_connections">No saved connections yet</string>
   <string name="settings_path">Path</string>
@@ -306,6 +311,7 @@
   <string name="sort_position">Position</string>
   <string name="sort_release_date">Release date</string>
   <string name="sort_year">Year</string>
+  <string name="toast_swipe_action">%1$s · %2$s</string>
   <string name="toast_added_to_playlist">Added to %1$s</string>
   <string name="toast_error_add_playlist">Error adding to playlist</string>
   <string name="toast_error_create_playlist">Error creating playlist</string>

@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -22,14 +23,19 @@ import io.music_assistant.client.data.model.client.items.PlayableItem
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
-import io.music_assistant.client.settings.ViewMode
+import io.music_assistant.client.api.ToastBus
 import io.music_assistant.client.ui.compose.common.ConfirmationDialog
 import io.music_assistant.client.ui.compose.common.RemoveFromLibraryConfirmationDialog
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_remove
 import musicassistantclient.composeapp.generated.resources.dialog_remove_from_playlist_message
 import musicassistantclient.composeapp.generated.resources.dialog_remove_from_playlist_title
+import musicassistantclient.composeapp.generated.resources.toast_swipe_action
+import io.music_assistant.client.settings.ViewMode
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 
 typealias PlayHandler<T> = (item: T, queueOption: QueueOption, radio: Boolean, fromHereInParent: Boolean) -> Unit
 
@@ -49,6 +55,7 @@ fun TrackWithMenu(
             ViewMode.GRID -> Modifier
             ViewMode.LIST -> Modifier.fillMaxWidth()
         },
+        viewMode = viewMode,
         item = item,
         onPlayOption = onPlayOption,
         playlistActions = playlistActions,
@@ -93,6 +100,7 @@ fun PodcastEpisodeWithMenu(
             ViewMode.GRID -> Modifier
             ViewMode.LIST -> Modifier.fillMaxWidth()
         },
+        viewMode = viewMode,
         item = item,
         onPlayOption = onPlayOption,
         playlistActions = playlistActions,
@@ -136,6 +144,7 @@ fun RadioWithMenu(
             ViewMode.GRID -> Modifier
             ViewMode.LIST -> Modifier.fillMaxWidth()
         },
+        viewMode = viewMode,
         item = item,
         onPlayOption = onPlayOption,
         playlistActions = playlistActions,
@@ -169,6 +178,7 @@ fun RadioWithMenu(
 @Composable
 private fun <T> PlayableItemWithMenu(
     modifier: Modifier = Modifier,
+    viewMode: ViewMode = ViewMode.GRID,
     item: T,
     onPlayOption: PlayHandler<T>,
     playlistActions: PlaylistActions? = null,
@@ -212,16 +222,66 @@ private fun <T> PlayableItemWithMenu(
         }
     }
 
+    val runSwipeAction: (ItemAction) -> Unit = { action ->
+        when (action) {
+            is ItemAction.Play,
+            ItemAction.StartRadio,
+            is ItemAction.PlayFromHere,
+            -> runPlayAction(action)
+            ItemAction.AddToLibrary -> libraryActions.onLibraryClick(item)
+            ItemAction.RemoveFromLibrary -> showRemoveConfirmation = true
+            ItemAction.Favorite,
+            ItemAction.Unfavorite,
+            -> libraryActions.onFavoriteClick(item)
+            else -> Unit
+        }
+    }
+
+    val swipePrefs = LocalSwipeActionPrefs.current
+    val swipeOnLeftAction = swipePrefs.onSwipeLeft.effectiveFor(item)
+    val swipeOnRightAction = swipePrefs.onSwipeRight.effectiveFor(item)
+    val swipeEnabled = viewMode == ViewMode.LIST && (swipeOnLeftAction != null || swipeOnRightAction != null)
+    val toastBus = koinInject<ToastBus>()
+    val scope = rememberCoroutineScope()
+
     // Non-playable items keep the long-press menu (favorite, library, …) but can't be played:
     // dim them and route a tap to the menu instead of starting playback.
     val playable = item.isPlayable
     Box(modifier = modifier) {
-        itemComposable(
-            Modifier.align(Alignment.Center)
-                .then(if (playable) Modifier else Modifier.alpha(DISABLED_ITEM_ALPHA)),
-            { effectiveDefault?.let(runPlayAction) ?: run { expandedItemId = item.itemId } },
-            { expandedItemId = item.itemId },
-        )
+        val rowContent: @Composable (Modifier) -> Unit = { rowModifier ->
+            itemComposable(
+                rowModifier
+                    .then(if (playable) Modifier else Modifier.alpha(DISABLED_ITEM_ALPHA)),
+                { effectiveDefault?.let(runPlayAction) ?: run { expandedItemId = item.itemId } },
+                { expandedItemId = item.itemId },
+            )
+        }
+
+        if (swipeEnabled) {
+            SwipeableListRow(
+                onSwipeLeftAction = swipeOnLeftAction,
+                onSwipeRightAction = swipeOnRightAction,
+                onAction = { action ->
+                    runSwipeAction(action)
+                    if (action != ItemAction.RemoveFromLibrary) {
+                        scope.launch {
+                            val actionLabel = getString(action.title(null))
+                            toastBus.show(
+                                getString(
+                                    Res.string.toast_swipe_action,
+                                    item.displayName,
+                                    actionLabel,
+                                ),
+                            )
+                        }
+                    }
+                },
+            ) {
+                rowContent(Modifier)
+            }
+        } else {
+            rowContent(Modifier.align(Alignment.Center))
+        }
         DropdownMenu(
             modifier = Modifier.semantics {
                 role = Role.DropdownList

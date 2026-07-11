@@ -52,8 +52,6 @@ import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.stringResource
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.DataState
-import io.music_assistant.client.ui.compose.common.ToastHost
-import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.clearFocusOnScroll
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
@@ -71,7 +69,6 @@ import io.music_assistant.client.ui.compose.common.items.RadioWithMenu
 import io.music_assistant.client.ui.compose.common.items.TrackWithMenu
 import io.music_assistant.client.ui.compose.common.items.lazyListOccurrenceKeys
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
-import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.ScreenState
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
@@ -96,13 +93,6 @@ fun SearchScreen(
     onSearchConsumed: () -> Unit = {},
 ) {
     val searchState by searchViewModel.state.collectAsStateWithLifecycle()
-    val toastState = rememberToastState()
-
-    LaunchedEffect(Unit) {
-        actionsViewModel.toasts.collect { toast ->
-            toastState.showToast(toast)
-        }
-    }
 
     // Escalation from an empty in-library quick search (state hoisted in MainNavigationRoot,
     // which outlives the per-NavEntry SearchViewModel). Apply once, then clear.
@@ -128,7 +118,6 @@ fun SearchScreen(
         ProvideClickActions(ClickContext.SEARCH) {
         SearchContent(
             state = searchState,
-            toastState = toastState,
             onItemClick = { item ->
                 when (item) {
                     is Artist,
@@ -201,7 +190,6 @@ private fun SearchTopBar(
 @Composable
 private fun SearchContent(
     state: SearchViewModel.State,
-    toastState: ToastState,
     onItemClick: (AppMediaItem) -> Unit,
     onPlayClick: PlayHandler<AppMediaItem>,
     playlistActions: PlaylistActions,
@@ -394,14 +382,6 @@ private fun SearchContent(
                 }
             }
         }
-
-        // Toast host
-        ToastHost(
-            toastState = toastState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 48.dp),
-        )
     }
 }
 

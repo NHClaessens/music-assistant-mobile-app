@@ -40,6 +40,7 @@ import androidx.savedstate.serialization.SavedStateConfiguration
 import io.music_assistant.client.api.DeepLinkBus
 import io.music_assistant.client.api.DeepLinkDestination
 import io.music_assistant.client.api.ErrorMessageBus
+import io.music_assistant.client.api.ToastBus
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.Artist
@@ -105,6 +106,7 @@ fun MainNavigationRoot(
     val uriHandler = LocalUriHandler.current
     val toastState = rememberToastState()
     val errorBus: ErrorMessageBus = koinInject()
+    val toastBus: ToastBus = koinInject()
     val deepLinkBus: DeepLinkBus = koinInject()
 
     LaunchedEffect(Unit) {
@@ -112,11 +114,17 @@ fun MainNavigationRoot(
     }
 
     // Surface server-side RPC errors as toasts on top of whichever screen is active.
-    // (Per-screen ToastHosts handle ActionsViewModel toasts.)
     LaunchedEffect(Unit) {
         errorBus.messages.collect { msg ->
             val truncated = if (msg.length > 150) msg.take(150) + "…" else msg
             toastState.showToast(truncated, ToastDuration.LONG)
+        }
+    }
+
+    // App-wide action confirmations (swipe actions, library mutations, etc.).
+    LaunchedEffect(Unit) {
+        toastBus.messages.collect { toast ->
+            toastState.showToast(toast.text, toast.duration)
         }
     }
 

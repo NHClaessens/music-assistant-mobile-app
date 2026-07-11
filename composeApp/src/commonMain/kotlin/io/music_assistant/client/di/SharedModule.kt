@@ -2,6 +2,7 @@ package io.music_assistant.client.di
 
 import io.music_assistant.client.api.DeepLinkBus
 import io.music_assistant.client.api.ErrorMessageBus
+import io.music_assistant.client.api.ToastBus
 import io.music_assistant.client.api.KtorServiceClient
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.auth.AuthCoordinator
@@ -35,6 +36,7 @@ import io.music_assistant.client.ui.compose.library.ItemListViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
 import io.music_assistant.client.ui.compose.search.SearchViewModel
 import io.music_assistant.client.ui.compose.settings.CarActionsViewModel
+import io.music_assistant.client.ui.compose.settings.SwipeActionsViewModel
 import io.music_assistant.client.ui.compose.settings.CarDspViewModel
 import io.music_assistant.client.ui.compose.settings.DefaultClickActionsViewModel
 import io.music_assistant.client.ui.compose.settings.SettingsViewModel
@@ -53,6 +55,7 @@ fun sharedModule(
         singleOf(::SettingsRepository)
         singleOf(::NetworkMonitor)
         singleOf(::ErrorMessageBus)
+        singleOf(::ToastBus)
         singleOf(::DeepLinkBus)
         singleOf(::VolumeButtonService)
         singleOf(::ImageCacheInvalidator)
@@ -88,9 +91,10 @@ fun sharedModule(
         singleOf(::DominantColorViewModel)  // Singleton - app-wide art-color cache
         singleOf(::MdiCodepoints)           // Singleton - MDI name->codepoint table (one-time load)
         viewModelOf(::ThemeViewModel)
-        factory { ActionsViewModel(get(), get(), get()) }
+        factory { ActionsViewModel(get(), get(), get(), get()) }
         factory { SettingsViewModel(get(), get(), get()) }
         factory { DefaultClickActionsViewModel(get()) }
+        factory { SwipeActionsViewModel(get()) }
         factory { CarActionsViewModel(get()) }
         factory { CarDspViewModel(get(), get()) }
         factory {
@@ -100,7 +104,7 @@ fun sharedModule(
             )
         }
         factory { LibraryCategoriesViewModel(get()) }
-        factory { params -> ItemListViewModel(params[0], get(), get(), get(), get()) }
+        factory { params -> ItemListViewModel(params[0], get(), get(), get(), get(), get()) }
         factory { params -> BrowseViewModel(params.getOrNull<String>(), get(), get(), get()) }
         factory { params ->
             ItemDetailsViewModel(

@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.ui.compose.common.dismissKeyboardOnTap
 import io.music_assistant.client.ui.compose.common.items.ProvideClickActionPrefs
+import io.music_assistant.client.ui.compose.common.items.ProvideSwipeActionPrefs
 import io.music_assistant.client.ui.theme.AppTheme
 import io.music_assistant.client.ui.theme.SystemAppearance
 import io.music_assistant.client.ui.theme.ThemeSetting
@@ -65,7 +66,9 @@ fun App() {
     AppTheme(darkTheme = darkTheme) {
         Box(Modifier.fillMaxSize().dismissKeyboardOnTap()) {
             ProvideClickActionPrefs {
-                TopLevelNavRoot()
+                ProvideSwipeActionPrefs {
+                    TopLevelNavRoot()
+                }
             }
             StatusBarScrim(darkTheme, Modifier.align(Alignment.TopCenter))
         }

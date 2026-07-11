@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
+import io.music_assistant.client.api.ToastBus
 import io.music_assistant.client.data.MainDataSource
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.MarkableItem
@@ -13,8 +14,6 @@ import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.ProgressActions
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.toast_added_to_playlist
@@ -35,9 +34,8 @@ class ActionsViewModel(
     private val apiClient: ServiceClient,
     private val dataSource: MainDataSource,
     private val mediaItemRepository: MediaItemRepository,
+    private val toastBus: ToastBus,
 ) : ViewModel(), PlaylistActions, LibraryActions, ProgressActions {
-    private val _toasts = MutableSharedFlow<String>()
-    val toasts = _toasts.asSharedFlow()
 
     /**
      * Toggles library status of the item.
@@ -76,7 +74,7 @@ class ActionsViewModel(
             itemChanges = mediaItemRepository.itemChanges,
             timeoutMs = CREATE_CONFIRM_TIMEOUT_MS,
             sendCreate = { apiClient.sendRequest(Request.Playlist.create(name)) },
-            onError = { _toasts.emit(getString(Res.string.toast_error_create_playlist)) },
+            onError = { toastBus.show(getString(Res.string.toast_error_create_playlist)) },
         )
 
     override fun addToPlaylist(
@@ -85,7 +83,7 @@ class ActionsViewModel(
     ) {
         viewModelScope.launch {
             if (itemUri == null) {
-                _toasts.emit(getString(Res.string.toast_no_uri))
+                toastBus.show(getString(Res.string.toast_no_uri))
                 return@launch
             }
             apiClient.sendRequest(
@@ -95,10 +93,10 @@ class ActionsViewModel(
                 ),
             )
                 .onSuccess {
-                    _toasts.emit(getString(Res.string.toast_added_to_playlist, playlist.displayName))
+                    toastBus.show(getString(Res.string.toast_added_to_playlist, playlist.displayName))
                 }
                 .onFailure {
-                    _toasts.emit(getString(Res.string.toast_error_add_playlist))
+                    toastBus.show(getString(Res.string.toast_error_add_playlist))
                 }
         }
     }
@@ -133,9 +131,9 @@ class ActionsViewModel(
                     mediaItemRepository.publishLocalChange(
                         MediaItemChange.Updated(markable.withPlayed(true)),
                     )
-                    _toasts.emit(getString(Res.string.toast_marked_played))
+                    toastBus.show(getString(Res.string.toast_marked_played))
                 }
-                .onFailure { _toasts.emit(getString(Res.string.toast_error_mark_played)) }
+                .onFailure { toastBus.show(getString(Res.string.toast_error_mark_played)) }
         }
     }
 
@@ -150,9 +148,9 @@ class ActionsViewModel(
                     mediaItemRepository.publishLocalChange(
                         MediaItemChange.Updated(markable.withPlayed(false)),
                     )
-                    _toasts.emit(getString(Res.string.toast_marked_unplayed))
+                    toastBus.show(getString(Res.string.toast_marked_unplayed))
                 }
-                .onFailure { _toasts.emit(getString(Res.string.toast_error_mark_unplayed)) }
+                .onFailure { toastBus.show(getString(Res.string.toast_error_mark_unplayed)) }
         }
     }
 

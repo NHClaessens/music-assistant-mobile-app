@@ -59,8 +59,6 @@ import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.SortChip
-import io.music_assistant.client.ui.compose.common.ToastHost
-import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.clearFocusOnScroll
 import io.music_assistant.client.ui.compose.common.items.CreatePlaylistDialog
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
@@ -68,7 +66,6 @@ import io.music_assistant.client.ui.compose.common.items.PlayHandler
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.ProgressActions
 import io.music_assistant.client.ui.compose.common.items.ProvideClickActions
-import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
 import io.music_assistant.client.ui.compose.nav.TwoRowTopAppBar
@@ -102,19 +99,6 @@ fun ItemListScreen(
     onGlobalSearch: (query: String) -> Unit,
     onBack: () -> Unit,
 ) {
-    val toastState = rememberToastState()
-    // Collect toasts
-    LaunchedEffect(Unit) {
-        actionsViewModel.toasts.collect { toast ->
-            toastState.showToast(toast)
-        }
-    }
-    LaunchedEffect(Unit) {
-        itemListViewModel.toasts.collect { toast ->
-            toastState.showToast(toast)
-        }
-    }
-
     val state by itemListViewModel.state.collectAsStateWithLifecycle()
     val providerOptions by itemListViewModel.providerOptions.collectAsStateWithLifecycle()
     val genreOptions by itemListViewModel.genreOptions.collectAsStateWithLifecycle()
@@ -144,7 +128,6 @@ fun ItemListScreen(
         ProvideClickActions(ClickContext.LIBRARY) {
         ItemList(
             showCreatePlaylistDialog = showCreatePlaylistDialog,
-            toastState = toastState,
             onNavigateClick = onNavigateClick,
             onGlobalSearch = onGlobalSearch,
             searchQuery = state.searchQuery,
@@ -350,7 +333,6 @@ private fun ItemListTopBar(
 private fun ItemList(
     modifier: Modifier = Modifier,
     showCreatePlaylistDialog: Boolean,
-    toastState: ToastState,
     onNavigateClick: (AppMediaItem) -> Unit,
     onGlobalSearch: (query: String) -> Unit,
     searchQuery: String,
@@ -427,14 +409,6 @@ private fun ItemList(
                 }
             }
         }
-
-        // Toast host
-        ToastHost(
-            toastState = toastState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 48.dp),
-        )
 
         // Create Playlist Dialog
         if (showCreatePlaylistDialog) {

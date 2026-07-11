@@ -231,6 +231,39 @@ class SettingsRepository(
         _defaultClickActions.update { updated }
     }
 
+    // Swipe gesture actions on list-row items, keyed by finger direction (not screen side).
+    // New keys: swipe_action_on_swipe_left / swipe_action_on_swipe_right.
+    // Legacy swipe_action_left / swipe_action_right used library screen-side naming and were
+    // wired backwards — on read we swap them so existing configs keep the same gesture.
+    private val _swipeActions = MutableStateFlow(loadSwipeActions())
+    val swipeActions = _swipeActions.asStateFlow()
+
+    private fun parseSwipeActionOption(raw: String?): SwipeActionOption? =
+        raw?.let { runCatching { SwipeActionOption.valueOf(it) }.getOrNull() }
+
+    private fun loadSwipeActions(): SwipeActionPrefs {
+        val onSwipeLeft = settings.getStringOrNull("swipe_action_on_swipe_left")
+        val onSwipeRight = settings.getStringOrNull("swipe_action_on_swipe_right")
+        if (onSwipeLeft != null || onSwipeRight != null) {
+            return SwipeActionPrefs(
+                onSwipeLeft = parseSwipeActionOption(onSwipeLeft) ?: SwipeActionOption.NOTHING,
+                onSwipeRight = parseSwipeActionOption(onSwipeRight) ?: SwipeActionOption.NOTHING,
+            )
+        }
+        val legacyLeft = parseSwipeActionOption(settings.getStringOrNull("swipe_action_left"))
+        val legacyRight = parseSwipeActionOption(settings.getStringOrNull("swipe_action_right"))
+        return SwipeActionPrefs(
+            onSwipeLeft = legacyRight ?: SwipeActionOption.NOTHING,
+            onSwipeRight = legacyLeft ?: SwipeActionOption.NOTHING,
+        )
+    }
+
+    fun setSwipeActions(prefs: SwipeActionPrefs) {
+        settings.putString("swipe_action_on_swipe_left", prefs.onSwipeLeft.name)
+        settings.putString("swipe_action_on_swipe_right", prefs.onSwipeRight.name)
+        _swipeActions.update { prefs }
+    }
+
     // Car (Android Auto / CarPlay) per-kind tap action. JSON map ItemKind.name ->
     // DefaultClickAction.name. Absent keys resolve to PLAY_NOW at the call site (= today's
     // hard-coded REPLACE-on-tap), so there's nothing to migrate.

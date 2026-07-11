@@ -127,6 +127,7 @@ kotlin {
             implementation(libs.icons.tabler)
             implementation(libs.settings.multiplatform)
             implementation(libs.reorderable)
+            implementation(libs.swipeable.kmp)
 
             implementation(libs.kermit)
 
