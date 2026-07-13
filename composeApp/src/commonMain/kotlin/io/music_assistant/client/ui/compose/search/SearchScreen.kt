@@ -81,6 +81,7 @@ import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.search_error
 import musicassistantclient.composeapp.generated.resources.search_in_library_only
 import musicassistantclient.composeapp.generated.resources.search_no_results
+import musicassistantclient.composeapp.generated.resources.search_query_label
 import musicassistantclient.composeapp.generated.resources.search_start
 import musicassistantclient.composeapp.generated.resources.search_title
 import org.jetbrains.compose.resources.stringResource
@@ -118,7 +119,6 @@ fun SearchScreen(
             SearchTopBar(
                 searchState.searchState,
                 onQueryChanged = searchViewModel::onQueryChanged,
-                onSearchTriggered = searchViewModel::onSearchTriggered,
                 onMediaTypeToggled = searchViewModel::onMediaTypeToggled,
                 onLibraryOnlyToggled = searchViewModel::onLibraryOnlyToggled,
             )
@@ -164,7 +164,6 @@ fun SearchScreen(
 private fun SearchTopBar(
     searchState: SearchViewModel.SearchState,
     onQueryChanged: (String) -> Unit,
-    onSearchTriggered: () -> Unit,
     onMediaTypeToggled: (MediaType, Boolean) -> Unit,
     onLibraryOnlyToggled: (Boolean) -> Unit,
 ) {
@@ -178,17 +177,15 @@ private fun SearchTopBar(
                         .wrapContentHeight(Alignment.CenterVertically),
                     text = stringResource(Res.string.search_title),
                 )
-                val modifier = Modifier.padding(end = 16.dp)
+
                 SearchInput(
-                    modifier = modifier,
+                    placeHolder = stringResource(Res.string.search_query_label),
                     query = searchState.query,
-                    onQueryChanged = onQueryChanged,
-                    onSearchTriggered = onSearchTriggered,
+                    onSearch = onQueryChanged,
                 )
 
                 // Search filters (always visible)
                 SearchFilters(
-                    modifier = modifier,
                     searchState = searchState,
                     onMediaTypeToggled = onMediaTypeToggled,
                     onLibraryOnlyToggled = onLibraryOnlyToggled,

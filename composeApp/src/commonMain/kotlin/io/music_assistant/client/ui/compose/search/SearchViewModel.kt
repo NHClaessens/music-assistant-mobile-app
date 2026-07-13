@@ -127,9 +127,6 @@ class SearchViewModel(
 
     fun onQueryChanged(query: String) {
         _state.update { it.copy(searchState = it.searchState.copy(query = query)) }
-    }
-
-    fun onSearchTriggered() {
         searchTrigger.tryEmit(Unit)
     }
 

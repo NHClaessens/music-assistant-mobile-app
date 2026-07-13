@@ -1,16 +1,15 @@
 package io.music_assistant.client.ui.compose.search
 
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -19,19 +18,16 @@ import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.common_clear
-import musicassistantclient.composeapp.generated.resources.search_query_label
-import musicassistantclient.composeapp.generated.resources.search_title
 import org.jetbrains.compose.resources.stringResource
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchInput(
-    modifier: Modifier = Modifier,
+    placeHolder: String,
     query: String,
-    onQueryChanged: (String) -> Unit,
-    onSearchTriggered: () -> Unit,
+    onSearch: (String) -> Unit,
     focusManager: FocusManager = LocalFocusManager.current,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -41,47 +37,37 @@ fun SearchInput(
         }
     }
 
-    OutlinedTextField(
-        modifier = modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester),
-        value = query,
-        onValueChange = onQueryChanged,
-        maxLines = 1,
-        label = { Text(stringResource(Res.string.search_query_label)) },
-        trailingIcon = {
-            Row {
-                if (query.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            onQueryChanged("")
-                            onSearchTriggered()
-                        },
-                    ) {
+    Surface(
+        shape = SearchBarDefaults.inputFieldShape,
+        color = SearchBarDefaults.colors().containerColor,
+        contentColor = contentColorFor(SearchBarDefaults.colors().containerColor),
+        tonalElevation = SearchBarDefaults.TonalElevation,
+        shadowElevation = SearchBarDefaults.ShadowElevation,
+    ) {
+        SearchBarDefaults.InputField(
+            modifier = Modifier.focusRequester(focusRequester),
+            state = TextFieldState(initialText = query),
+            onSearch = {
+                onSearch(it)
+                focusManager.clearFocus()
+            },
+            expanded = false,
+            onExpandedChange = {},
+            placeholder = {
+                Text(placeHolder)
+            },
+            trailingIcon = if (query.isNotEmpty()) {
+                {
+                    IconButton(onClick = { onSearch("") }) {
                         Icon(
                             Icons.Default.Clear,
                             contentDescription = stringResource(Res.string.common_clear),
                         )
                     }
                 }
-                IconButton(
-                    onClick = {
-                        focusManager.clearFocus()
-                        onSearchTriggered()
-                    },
-                    enabled = query.isNotBlank(),
-                ) {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = stringResource(Res.string.search_title),
-                    )
-                }
-            }
-        },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = {
-            focusManager.clearFocus()
-            onSearchTriggered()
-        }),
-    )
+            } else {
+                null
+            },
+        )
+    }
 }

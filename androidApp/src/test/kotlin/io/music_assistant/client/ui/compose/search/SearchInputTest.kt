@@ -17,7 +17,7 @@ class SearchInputTest {
     @Test
     fun `requests focus when query is empty`() {
         composeTestRule.setContent {
-            SearchInput(query = "", onQueryChanged = {}, onSearchTriggered = {})
+            SearchInput(placeHolder = "Search query", query = "", onSearch = {})
         }
 
         composeTestRule.onNodeWithText("Search query").assertIsFocused()
@@ -26,7 +26,7 @@ class SearchInputTest {
     @Test
     fun `does not request focus when query is not empty`() {
         composeTestRule.setContent {
-            SearchInput(query = "con", onQueryChanged = {}, onSearchTriggered = {})
+            SearchInput(placeHolder = "Search query", query = "con", onSearch = {})
         }
 
         composeTestRule.onNodeWithText("con").assertIsNotFocused()
