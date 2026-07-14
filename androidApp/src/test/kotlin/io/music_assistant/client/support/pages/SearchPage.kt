@@ -1,6 +1,7 @@
 package io.music_assistant.client.support.pages
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -48,8 +49,18 @@ class SearchPage(composeTestRule: ComposeTestRule) : ComposePage(composeTestRule
         return this
     }
 
+    fun assertNoResult(result: String): SearchPage {
+        composeTestRule.onNodeWithText(result).assertIsNotDisplayed()
+        return this
+    }
+
     fun assertNoResults(): SearchPage {
         composeTestRule.onNodeWithText(Res.string.search_start.get()).assertIsDisplayed()
+        return this
+    }
+
+    fun enableFilter(filter: String): SearchPage {
+        composeTestRule.onNodeWithContentDescription("Filter $filter").performClick()
         return this
     }
 
