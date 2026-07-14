@@ -43,6 +43,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlin.collections.addAll
 
 class FakeServiceClient : ServiceClient {
     private var legacyVersion: LegacyVersion? = null
@@ -55,9 +56,16 @@ class FakeServiceClient : ServiceClient {
     private val queues = mutableListOf<ServerQueue>()
     private val queueItems = mutableMapOf<String, List<ServerQueueItem>>()
     private val items = mutableSetOf<ServerMediaItem>()
+    private val globalItems = mutableListOf<ServerMediaItem>()
+
     private val albums: List<ServerMediaItem>
         get() {
             return items.filter { it.mediaType == MediaType.ALBUM.serverValue }
+        }
+
+    private val globalAlbums: List<ServerMediaItem>
+        get() {
+            return globalItems.filter { it.mediaType == MediaType.ALBUM.serverValue }
         }
 
     private val artists: List<ServerMediaItem>
@@ -199,7 +207,7 @@ class FakeServiceClient : ServiceClient {
                             request = request,
                             result = SearchResult(
                                 artists = searchItems(request, searchArg, artists),
-                                albums = searchItems(request, searchArg, albums),
+                                albums = searchItems(request, searchArg, albums + globalAlbums),
                                 tracks = searchItems(request, searchArg, tracks),
                                 playlists = searchItems(request, searchArg, playlists),
                                 podcasts = searchItems(request, searchArg, podcasts),
@@ -217,7 +225,7 @@ class FakeServiceClient : ServiceClient {
                                     emptyList()
                                 },
                                 albums = if (mediaTypes.contains(MediaType.ALBUM.serverValue)) {
-                                    searchItems(request, searchArg, albums)
+                                    searchItems(request, searchArg, albums + globalAlbums)
                                 } else {
                                     emptyList()
                                 },
@@ -686,6 +694,10 @@ class FakeServiceClient : ServiceClient {
                 this.items.add(it)
             }
         }
+    }
+
+    fun addToGlobalItems(vararg items: ServerMediaItem) {
+        this.globalItems.addAll(items)
     }
 
     fun addPlayers(vararg players: ServerPlayer) {

@@ -140,7 +140,7 @@ class LibraryTest {
     }
 
     @Test
-    fun `can search item`() {
+    fun `can search within items`() {
         val album1 = ServerMediaItemFixtures.album(name = "Balloon Trapeze Experience")
         val album2 = ServerMediaItemFixtures.album(name = "Frontal Lobe Annihilation Puzzle")
         serviceClient.addToLibrary(album1, album2)
@@ -152,6 +152,21 @@ class LibraryTest {
             .search("lobe")
             .assertMediaDisplayed(album2.name)
             .assertMediaNotDisplayed(album1.name)
+    }
+
+    @Test
+    fun `can search outside of library if there are no results`() {
+        val album = ServerMediaItemFixtures.album(name = "Balloon Trapeze Experience")
+        serviceClient.addToGlobalItems(album)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickLibrary()
+            .clickAlbums()
+            .openSearch()
+            .search("balloon")
+            .assertNoItems()
+            .clickSearchEverywhere("balloon")
+            .assertResult(album.name)
     }
 
     @Test
