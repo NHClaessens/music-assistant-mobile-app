@@ -205,8 +205,8 @@ private fun ItemListTopBar(
             title = {
                 if (showSearch) {
                     SearchInput(
-                        placeHolder = stringResource(Res.string.library_quick_search),
                         onSearch = onSearchQueryChanged,
+                        placeHolder = stringResource(Res.string.library_quick_search),
                     )
                 } else {
                     val title = when (mediaType) {

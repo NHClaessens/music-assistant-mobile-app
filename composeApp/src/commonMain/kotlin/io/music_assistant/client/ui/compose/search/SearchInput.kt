@@ -1,5 +1,6 @@
 package io.music_assistant.client.ui.compose.search
 
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
@@ -26,9 +27,10 @@ import org.jetbrains.compose.resources.stringResource
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchInput(
-    placeHolder: String,
+    modifier: Modifier = Modifier,
     onSearch: (String) -> Unit,
     focusManager: FocusManager = LocalFocusManager.current,
+    placeHolder: String,
 ) {
     val textFieldState = rememberTextFieldState()
 
@@ -40,6 +42,7 @@ fun SearchInput(
     }
 
     Surface(
+        modifier = modifier.fillMaxWidth(),
         shape = SearchBarDefaults.inputFieldShape,
         color = SearchBarDefaults.colors().containerColor,
         contentColor = contentColorFor(SearchBarDefaults.colors().containerColor),
@@ -47,7 +50,7 @@ fun SearchInput(
         shadowElevation = SearchBarDefaults.ShadowElevation,
     ) {
         SearchBarDefaults.InputField(
-            modifier = Modifier.focusRequester(focusRequester),
+            modifier = modifier.focusRequester(focusRequester),
             state = textFieldState,
             onSearch = {
                 onSearch(it)

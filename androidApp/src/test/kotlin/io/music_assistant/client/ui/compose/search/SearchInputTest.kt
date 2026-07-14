@@ -21,7 +21,7 @@ class SearchInputTest {
     @Test
     fun `requests focus`() {
         composeTestRule.setContent {
-            SearchInput(placeHolder = "Search query", onSearch = {})
+            SearchInput(onSearch = {}, placeHolder = "Search query")
         }
 
         composeTestRule.onNodeWithText("Search query").assertIsFocused()
@@ -32,7 +32,7 @@ class SearchInputTest {
         val restorationTester = StateRestorationTester(composeTestRule)
 
         restorationTester.setContent {
-            SearchInput(placeHolder = "Search query", onSearch = {})
+            SearchInput(onSearch = {}, placeHolder = "Search query")
         }
 
         composeTestRule.onNodeWithText("Search query").performTextReplacement("blah")

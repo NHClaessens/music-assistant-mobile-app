@@ -23,7 +23,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -74,6 +73,7 @@ import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.ScreenState
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
+import io.music_assistant.client.ui.compose.nav.TwoRowTopAppBar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import musicassistantclient.composeapp.generated.resources.Res
@@ -165,21 +165,21 @@ private fun SearchTopBar(
     onMediaTypeToggled: (MediaType, Boolean) -> Unit,
     onLibraryOnlyToggled: (Boolean) -> Unit,
 ) {
-    TopAppBar(
+    TwoRowTopAppBar(
         title = {
-            Column {
-                SearchInput(
-                    placeHolder = stringResource(Res.string.search_query_label),
-                    onSearch = onQueryChanged,
-                )
-
-                // Search filters (always visible)
-                SearchFilters(
-                    searchState = searchState,
-                    onMediaTypeToggled = onMediaTypeToggled,
-                    onLibraryOnlyToggled = onLibraryOnlyToggled,
-                )
-            }
+            SearchInput(
+                modifier = Modifier.padding(end = 16.dp),
+                onSearch = onQueryChanged,
+                placeHolder = stringResource(Res.string.search_query_label),
+            )
+        },
+        secondRow = {
+            SearchFilters(
+                modifier = Modifier.padding(end = 16.dp),
+                searchState = searchState,
+                onMediaTypeToggled = onMediaTypeToggled,
+                onLibraryOnlyToggled = onLibraryOnlyToggled,
+            )
         },
     )
 }
