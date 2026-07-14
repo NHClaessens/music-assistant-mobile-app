@@ -1,6 +1,7 @@
 package io.music_assistant.client.ui.compose.search
 
-import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,13 +27,14 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun SearchInput(
     placeHolder: String,
-    query: String,
     onSearch: (String) -> Unit,
     focusManager: FocusManager = LocalFocusManager.current,
 ) {
+    val textFieldState = rememberTextFieldState()
+
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        if (query.isEmpty()) {
+        if (textFieldState.text.isEmpty()) {
             focusRequester.requestFocus()
         }
     }
@@ -46,7 +48,7 @@ fun SearchInput(
     ) {
         SearchBarDefaults.InputField(
             modifier = Modifier.focusRequester(focusRequester),
-            state = TextFieldState(initialText = query),
+            state = textFieldState,
             onSearch = {
                 onSearch(it)
                 focusManager.clearFocus()
@@ -56,9 +58,14 @@ fun SearchInput(
             placeholder = {
                 Text(placeHolder)
             },
-            trailingIcon = if (query.isNotEmpty()) {
+            trailingIcon = if (textFieldState.text.isNotEmpty()) {
                 {
-                    IconButton(onClick = { onSearch("") }) {
+                    IconButton(
+                        onClick = {
+                            textFieldState.clearText()
+                            onSearch("")
+                        },
+                    ) {
                         Icon(
                             Icons.Default.Clear,
                             contentDescription = stringResource(Res.string.common_clear),

@@ -180,7 +180,6 @@ private fun SearchTopBar(
 
                 SearchInput(
                     placeHolder = stringResource(Res.string.search_query_label),
-                    query = searchState.query,
                     onSearch = onQueryChanged,
                 )
 
