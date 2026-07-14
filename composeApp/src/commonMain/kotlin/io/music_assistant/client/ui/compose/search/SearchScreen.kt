@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -83,7 +82,6 @@ import musicassistantclient.composeapp.generated.resources.search_in_library_onl
 import musicassistantclient.composeapp.generated.resources.search_no_results
 import musicassistantclient.composeapp.generated.resources.search_query_label
 import musicassistantclient.composeapp.generated.resources.search_start
-import musicassistantclient.composeapp.generated.resources.search_title
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -169,15 +167,7 @@ private fun SearchTopBar(
 ) {
     TopAppBar(
         title = {
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                Text(
-                    modifier = Modifier
-                        .height(56.dp)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    text = stringResource(Res.string.search_title),
-                )
-
+            Column {
                 SearchInput(
                     placeHolder = stringResource(Res.string.search_query_label),
                     onSearch = onQueryChanged,
