@@ -50,7 +50,7 @@ fun SearchInput(
         shadowElevation = SearchBarDefaults.ShadowElevation,
     ) {
         SearchBarDefaults.InputField(
-            modifier = modifier.focusRequester(focusRequester),
+            modifier = Modifier.focusRequester(focusRequester),
             state = textFieldState,
             onSearch = {
                 onSearch(it)
