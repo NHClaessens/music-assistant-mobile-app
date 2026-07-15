@@ -234,7 +234,7 @@
   <string name="search_error">Error loading search results</string>
   <string name="search_in_library_only">In library only</string>
   <string name="search_no_results">No results found</string>
-  <string name="search_query_label">Search query</string>
+  <string name="search_query_label">Search…</string>
   <string name="search_start">Start searching…</string>
   <string name="search_title">Global search</string>
   <string name="server_id_mismatch_error">Server ID was changed. Re-authentication required.</string>

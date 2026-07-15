@@ -82,7 +82,6 @@ import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.search_error
 import musicassistantclient.composeapp.generated.resources.search_in_library_only
 import musicassistantclient.composeapp.generated.resources.search_no_results
-import musicassistantclient.composeapp.generated.resources.search_query_label
 import musicassistantclient.composeapp.generated.resources.search_start
 import org.jetbrains.compose.resources.stringResource
 
@@ -176,7 +175,6 @@ private fun SearchTopBar(
                 query = searchState.query,
                 onQueryChanged = onQueryChanged,
                 onSearch = onSearch,
-                placeHolder = stringResource(Res.string.search_query_label),
             )
         },
         secondRow = {

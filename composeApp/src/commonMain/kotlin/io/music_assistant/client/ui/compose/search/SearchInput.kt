@@ -20,6 +20,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.common_clear
+import musicassistantclient.composeapp.generated.resources.search_query_label
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,7 +31,6 @@ fun SearchInput(
     onQueryChanged: (String) -> Unit = {},
     onSearch: () -> Unit = {},
     focusManager: FocusManager = LocalFocusManager.current,
-    placeHolder: String,
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -58,7 +58,7 @@ fun SearchInput(
             expanded = false,
             onExpandedChange = {},
             placeholder = {
-                Text(placeHolder)
+                Text(stringResource(Res.string.search_query_label))
             },
             trailingIcon = if (query.isNotEmpty()) {
                 {

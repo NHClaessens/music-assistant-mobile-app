@@ -19,6 +19,7 @@ import musicassistantclient.composeapp.generated.resources.nav_home
 import musicassistantclient.composeapp.generated.resources.nav_library
 import musicassistantclient.composeapp.generated.resources.nav_search
 import musicassistantclient.composeapp.generated.resources.nav_settings
+import musicassistantclient.composeapp.generated.resources.search_query_label
 
 class ItemListPage(private val type: String, composeTestRule: ComposeTestRule) :
     ComposePage(composeTestRule) {
@@ -40,7 +41,7 @@ class ItemListPage(private val type: String, composeTestRule: ComposeTestRule) :
     }
 
     fun search(query: String): ItemListPage {
-        composeTestRule.onNodeWithText(Res.string.library_quick_search.get())
+        composeTestRule.onNodeWithText(Res.string.search_query_label.get())
             .assertIsDisplayed()
             .performTextInput(query)
 
