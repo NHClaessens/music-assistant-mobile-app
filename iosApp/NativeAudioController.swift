@@ -220,7 +220,7 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         if !streamStarted {
             streamStarted = true
             logDebug("First data received (\(swiftData.count) bytes)")
-            NowPlayingManager.shared.activatePlayback()
+            NowPlayingCoordinator.shared.activatePlayback()
             startAudioQueue()
         }
 
@@ -267,7 +267,7 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
     func resumeSink() {
         logInfo("resumeSink")
         shouldPlay = true
-        NowPlayingManager.shared.activatePlayback()
+        NowPlayingCoordinator.shared.activatePlayback()
         isPlaying = true
         if let queue = audioQueue {
             AudioQueueStart(queue, nil)
@@ -293,7 +293,8 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
     }
 
     func dispose() {
-        NowPlayingManager.shared.clearNowPlayingInfo()
+        // The Now Playing surface is cleared by the track channel going null
+        // (pipeline teardown removes the current item); no direct clear here.
         stopAudioQueue()
         decoder = nil
     }
@@ -412,12 +413,10 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
 
     private var remoteCommandHandler: RemoteCommandHandler?
 
-    /// `duration` and `elapsedTime` are passed as `KotlinDouble?` because Kotlin/Native
-    /// boxes nullable primitives in interface signatures. A nil here means "value
-    /// unknown — leave the corresponding `MPNowPlayingInfoCenter` field alone" (vs.
-    /// the prior contract which forced callers to fabricate a 0 and visibly reset the
-    /// playback bar). See `MainDataSource`'s position-tracker overlay for why this
-    /// distinction matters in practice.
+    /// Superseded: Now Playing state reaches Swift through the Kotlin channel
+    /// observers in `NowPlayingCoordinator`, not this call. Kept as a no-op
+    /// only because the `PlatformAudioPlayer` protocol still declares it;
+    /// removed together with the Kotlin-side pipeline.
     func updateNowPlaying(
         title: String?,
         artist: String?,
@@ -428,33 +427,26 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
         playbackRate: Double,
         isLongFormContent: Bool
     ) {
-        NowPlayingManager.shared.updateNowPlayingInfo(
-            title: title,
-            artist: artist,
-            album: album,
-            artworkUrl: artworkUrl,
-            duration: duration?.doubleValue,
-            elapsedTime: elapsedTime?.doubleValue,
-            playbackRate: playbackRate,
-            isLongFormContent: isLongFormContent
-        )
+        // No-op: the channel handlers own every Now Playing key group.
     }
 
     func setLongFormSeekIntervals(backSeconds: Int64, forwardSeconds: Int64) {
-        NowPlayingManager.shared.setLongFormSeekIntervals(
+        NowPlayingCoordinator.shared.setLongFormSeekIntervals(
             backSeconds: backSeconds,
             forwardSeconds: forwardSeconds
         )
     }
 
+    /// Superseded like `updateNowPlaying`: the clear is the track channel
+    /// emitting null. No-op until the protocol drops the method.
     func clearNowPlaying() {
-        NowPlayingManager.shared.clearNowPlayingInfo()
+        // No-op: the channel handlers own every Now Playing key group.
     }
 
     func setRemoteCommandHandler(handler: RemoteCommandHandler?) {
         self.remoteCommandHandler = handler
 
-        NowPlayingManager.shared.setCommandHandler { [weak self] command in
+        NowPlayingCoordinator.shared.setCommandHandler { [weak self] command in
             self?.logInfo("Remote command: \(command)")
             self?.remoteCommandHandler?.onCommand(command: command, source: "remote")
         }
