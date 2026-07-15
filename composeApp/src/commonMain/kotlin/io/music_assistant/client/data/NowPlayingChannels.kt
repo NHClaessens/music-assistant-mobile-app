@@ -67,25 +67,19 @@ internal object NowPlayingChannelChangeDetection {
         if (old == null || new == null) return old == new
         if (old.isPlaying != new.isPlaying || old.rate != new.rate) return false
 
-        return when {
-            old.elapsedSec == null && new.elapsedSec == null -> true
-            old.elapsedSec == null || new.elapsedSec == null -> false
-            else -> {
-                val projectedOld = old.elapsedSec +
-                    (new.anchorMs - old.anchorMs) / 1000.0 * old.rate
-                abs(projectedOld - new.elapsedSec) < ELAPSED_ANCHOR_EPSILON_S
-            }
+        if (old.elapsedSec == null || new.elapsedSec == null) {
+            return old.elapsedSec == new.elapsedSec
         }
+
+        val projectedOld = old.elapsedSec +
+            (new.anchorMs - old.anchorMs) / 1000.0 * old.rate
+        return abs(projectedOld - new.elapsedSec) < ELAPSED_ANCHOR_EPSILON_S
     }
 }
 
 /** Maps local-player state to the metadata channel. */
 internal fun buildNowPlayingTrack(playerData: PlayerData?): NowPlayingTrack? =
-    buildNowPlayingTrackFromItem(playerData?.queueInfo?.currentItem?.track)
-
-/** Maps one playable item without requiring a full player or queue fixture. */
-internal fun buildNowPlayingTrackFromItem(item: PlayableItem?): NowPlayingTrack? =
-    item?.toNowPlayingTrack()
+    playerData?.queueInfo?.currentItem?.track?.toNowPlayingTrack()
 
 /**
  * Maps local-player state to an anchor, or null when there is no current item.

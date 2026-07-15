@@ -105,9 +105,12 @@ class NowPlayingTrackChannelTest {
                 duration = 240.0,
                 isLongFormContent = false,
             ),
-            buildNowPlayingTrackFromItem(item),
+            buildNowPlayingTrack(playerData(item, queueInfo(queueId = "queue-1"))),
         )
-        assertTrue(buildNowPlayingTrackFromItem(testAudiobook())!!.isLongFormContent)
+        assertTrue(
+            buildNowPlayingTrack(playerData(testAudiobook(), queueInfo(queueId = "queue-1")))!!
+                .isLongFormContent,
+        )
     }
 }
 
