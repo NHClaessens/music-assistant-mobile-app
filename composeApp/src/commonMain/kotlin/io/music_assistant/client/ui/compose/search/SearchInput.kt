@@ -1,8 +1,6 @@
 package io.music_assistant.client.ui.compose.search
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.input.clearText
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,15 +26,15 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun SearchInput(
     modifier: Modifier = Modifier,
-    onSearch: (String) -> Unit,
+    query: String,
+    onQueryChanged: (String) -> Unit = {},
+    onSearch: () -> Unit = {},
     focusManager: FocusManager = LocalFocusManager.current,
     placeHolder: String,
 ) {
-    val textFieldState = rememberTextFieldState()
-
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        if (textFieldState.text.isEmpty()) {
+        if (query.isEmpty()) {
             focusRequester.requestFocus()
         }
     }
@@ -51,9 +49,10 @@ fun SearchInput(
     ) {
         SearchBarDefaults.InputField(
             modifier = Modifier.focusRequester(focusRequester),
-            state = textFieldState,
+            query = query,
+            onQueryChange = onQueryChanged,
             onSearch = {
-                onSearch(it)
+                onSearch()
                 focusManager.clearFocus()
             },
             expanded = false,
@@ -61,12 +60,12 @@ fun SearchInput(
             placeholder = {
                 Text(placeHolder)
             },
-            trailingIcon = if (textFieldState.text.isNotEmpty()) {
+            trailingIcon = if (query.isNotEmpty()) {
                 {
                     IconButton(
                         onClick = {
-                            textFieldState.clearText()
-                            onSearch("")
+                            onQueryChanged("")
+                            onSearch()
                         },
                     ) {
                         Icon(

@@ -119,9 +119,8 @@ fun ItemListScreen(
                 onToggleViewMode = itemListViewModel::toggleViewMode,
                 viewMode = state.viewMode,
                 searchQuery = state.searchQuery,
-                onSearchQueryChanged = {
-                    itemListViewModel.onSearchQueryChanged(it)
-                },
+                onSearchQueryChanged = itemListViewModel::onSearchQueryChanged,
+                onSearch = itemListViewModel::onSearch,
                 onSortChanged = { itemListViewModel.onSortChanged(it) },
                 mediaType = state.mediaType,
                 sortOption = state.sortOption,
@@ -173,6 +172,7 @@ private fun ItemListTopBar(
     viewMode: ViewMode,
     searchQuery: String,
     onSearchQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
     onSortChanged: (SortOption) -> Unit,
     mediaType: MediaType,
     sortOption: SortOption,
@@ -205,7 +205,9 @@ private fun ItemListTopBar(
             title = {
                 if (showSearch) {
                     SearchInput(
-                        onSearch = onSearchQueryChanged,
+                        query = searchQuery,
+                        onQueryChanged = onSearchQueryChanged,
+                        onSearch = onSearch,
                         placeHolder = stringResource(Res.string.library_quick_search),
                     )
                 } else {

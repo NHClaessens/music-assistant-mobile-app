@@ -27,8 +27,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import musicassistantclient.composeapp.generated.resources.Res
@@ -43,6 +41,8 @@ class ItemListViewModel(
     private val settingsRepository: SettingsRepository,
     private val mediaItemRepository: MediaItemRepository,
 ) : ViewModel() {
+    private val searchTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     private val _state = MutableStateFlow(
         State(
             dataState = DataState.Loading(),
@@ -66,12 +66,11 @@ class ItemListViewModel(
 
     init {
         viewModelScope.launch {
-            _state.map {
-                listOf(it.searchQuery, it.sortOption, it.filters)
-            }
-                .distinctUntilChanged()
+            searchTrigger
                 .debounce { Timings.INPUT_DEBOUNCE }
-                .collect { loadFirstPage() }
+                .collect {
+                    loadFirstPage()
+                }
         }
 
         viewModelScope.launch {
@@ -85,6 +84,7 @@ class ItemListViewModel(
         viewModelScope.launch {
             settingsRepository.libraryFilters(mediaType).collect { filters ->
                 _state.update { it.copy(filters = filters) }
+                searchTrigger.tryEmit(Unit)
             }
         }
 
@@ -105,6 +105,8 @@ class ItemListViewModel(
                 }
             }
         }
+
+        searchTrigger.tryEmit(Unit)
     }
 
     private fun removeItem(deleted: AppMediaItem) {
@@ -215,12 +217,17 @@ class ItemListViewModel(
         else -> null
     }
 
+    fun onSearch() {
+        searchTrigger.tryEmit(Unit)
+    }
+
     fun onSearchQueryChanged(query: String) {
         _state.update { it.copy(searchQuery = query) }
     }
 
     fun onSortChanged(sortOption: SortOption) {
         _state.update { it.copy(sortOption = sortOption) }
+        searchTrigger.tryEmit(Unit)
     }
 
     fun loadMore() {

@@ -119,6 +119,7 @@ fun SearchScreen(
             SearchTopBar(
                 searchState.searchState,
                 onQueryChanged = searchViewModel::onQueryChanged,
+                onSearch = searchViewModel::onSearch,
                 onMediaTypeToggled = searchViewModel::onMediaTypeToggled,
                 onLibraryOnlyToggled = searchViewModel::onLibraryOnlyToggled,
             )
@@ -164,6 +165,7 @@ fun SearchScreen(
 private fun SearchTopBar(
     searchState: SearchViewModel.SearchState,
     onQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
     onMediaTypeToggled: (MediaType, Boolean) -> Unit,
     onLibraryOnlyToggled: (Boolean) -> Unit,
 ) {
@@ -171,7 +173,9 @@ private fun SearchTopBar(
         title = {
             SearchInput(
                 modifier = Modifier.padding(end = 16.dp),
-                onSearch = onQueryChanged,
+                query = searchState.query,
+                onQueryChanged = onQueryChanged,
+                onSearch = onSearch,
                 placeHolder = stringResource(Res.string.search_query_label),
             )
         },
