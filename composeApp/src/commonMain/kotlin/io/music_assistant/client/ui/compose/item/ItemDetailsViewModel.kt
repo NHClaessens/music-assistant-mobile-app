@@ -461,6 +461,10 @@ class ItemDetailsViewModel(
         viewModelScope.launch {
             val mediaUri = itemToPlay.mediaUri ?: return@launch
             mainDataSource.selectedPlayer?.queueOrPlayerId?.let { queueId ->
+                Logger.withTag("PlayDispatch").i {
+                    "ItemDetailsViewModel.onPlayClick: uri=$mediaUri option=$option " +
+                        "radio=$radio startItem=${startItem?.itemId} queue=$queueId"
+                }
                 apiClient.sendRequest(
                     Request.Library.play(
                         media = listOf(mediaUri),
@@ -479,6 +483,10 @@ class ItemDetailsViewModel(
             viewModelScope.launch {
                 item.uri?.let { uri ->
                     mainDataSource.selectedPlayer?.queueOrPlayerId?.let { queueId ->
+                        Logger.withTag("PlayDispatch").i {
+                            "ItemDetailsViewModel.onChapterClick: uri=$uri " +
+                                "chapter=$chapterPosition queue=$queueId"
+                        }
                         apiClient.sendRequest(
                             Request.Library.play(
                                 media = listOf(uri),

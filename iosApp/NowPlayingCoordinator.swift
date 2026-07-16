@@ -28,7 +28,31 @@ final class NowPlayingCoordinator {
 
     /// Sole writer of `MPNowPlayingInfoCenter.default().nowPlayingInfo`; all
     /// dictionary mutations in this class go through it.
-    private let infoStore = NowPlayingInfoStore()
+    ///
+    /// The sink logs every actual info-center assignment. The store coalesces
+    /// writes, so these lines are the complete record of what the system UI
+    /// was told — the first thing to read when the lock screen or media
+    /// center misbehaves. Rare by construction (at most one per main-loop
+    /// pass, and only when something changed), so info level costs nothing.
+    private let infoStore = NowPlayingInfoStore(
+        sink: { info in
+            NativeLog.shared.info(
+                tag: NowPlayingCoordinator.logTag,
+                message: NowPlayingCoordinator.describeAssignment(info)
+            )
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        }
+    )
+
+    private static func describeAssignment(_ info: [String: Any]?) -> String {
+        guard let info else { return "Info center assign: nil" }
+        let title = info[MPMediaItemPropertyTitle] as? String ?? "-"
+        let rate = (info[MPNowPlayingInfoPropertyPlaybackRate] as? Double)
+            .map { String(format: "%.2f", $0) } ?? "-"
+        let elapsed = (info[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double)
+            .map { String(format: "%.1f", $0) } ?? "-"
+        return "Info center assign: \(info.count) keys title=\(title) rate=\(rate) elapsed=\(elapsed)"
+    }
 
     private var commandHandler: CommandHandler?
 
@@ -209,6 +233,10 @@ final class NowPlayingCoordinator {
     }
 
     private func applyTrackKeys(_ track: NowPlayingTrack, artwork: MPMediaItemArtwork?, rebuildingGroup: Bool) {
+        logDebug(
+            "Track keys applied: id=\(track.mediaItemId) rebuild=\(rebuildingGroup) " +
+                "artwork=\(artwork != nil) restoreCandidate=\(lastTransport?.mediaItemId ?? "none")"
+        )
         infoStore.setTrackKeys(
             title: track.title,
             artist: track.artist,
@@ -272,9 +300,16 @@ final class NowPlayingCoordinator {
             // been presented yet (early) or is no longer current (stale).
             // Cached above: if the matching track write comes, its rebuild
             // restores this anchor; if not, it is simply never rendered.
-            logDebug("Transport for \(arrival.mediaItemId) held — presenting \(currentTrackId ?? "none")")
+            // Info level: this only fires on out-of-order channel delivery,
+            // so each line is a meaningful anomaly marker, never chatter.
+            logInfo("Transport for \(arrival.mediaItemId) held — presenting \(currentTrackId ?? "none")")
             return
         }
+        logDebug(
+            "Transport applied: id=\(arrival.mediaItemId) " +
+                "elapsed=\(arrival.elapsedSec.map { String(format: "%.1f", $0) } ?? "-") " +
+                "rate=\(arrival.rate) deferredRateOnly=\(artworkWaitTrackId != nil)"
+        )
         if artworkWaitTrackId != nil {
             // This track's first write is still deferred pending artwork, so
             // the previous track's metadata is on screen; flip the rate
@@ -349,6 +384,10 @@ final class NowPlayingCoordinator {
             // which would silently clobber it and desync `currentAudioSessionMode`.
             try session.setCategory(.playback, mode: currentAudioSessionMode ?? .default, options: [])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
+            // Info level: fires only when playback (re)starts, and an absent
+            // line here is the tell when iOS shows "Not Playing" despite
+            // healthy info-center assignments.
+            logInfo("Playback activated: mode=\((currentAudioSessionMode ?? .default).rawValue)")
         } catch {
             logError("Failed to activate playback: \(error)")
         }
