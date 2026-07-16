@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -24,7 +23,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
@@ -35,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,6 +75,7 @@ import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.ScreenState
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
+import io.music_assistant.client.ui.compose.nav.TwoRowTopAppBar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import musicassistantclient.composeapp.generated.resources.Res
@@ -82,7 +83,6 @@ import musicassistantclient.composeapp.generated.resources.search_error
 import musicassistantclient.composeapp.generated.resources.search_in_library_only
 import musicassistantclient.composeapp.generated.resources.search_no_results
 import musicassistantclient.composeapp.generated.resources.search_start
-import musicassistantclient.composeapp.generated.resources.search_title
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -118,7 +118,7 @@ fun SearchScreen(
             SearchTopBar(
                 searchState.searchState,
                 onQueryChanged = searchViewModel::onQueryChanged,
-                onSearchTriggered = searchViewModel::onSearchTriggered,
+                onSearch = searchViewModel::onSearch,
                 onMediaTypeToggled = searchViewModel::onMediaTypeToggled,
                 onLibraryOnlyToggled = searchViewModel::onLibraryOnlyToggled,
             )
@@ -164,36 +164,26 @@ fun SearchScreen(
 private fun SearchTopBar(
     searchState: SearchViewModel.SearchState,
     onQueryChanged: (String) -> Unit,
-    onSearchTriggered: () -> Unit,
+    onSearch: () -> Unit,
     onMediaTypeToggled: (MediaType, Boolean) -> Unit,
     onLibraryOnlyToggled: (Boolean) -> Unit,
 ) {
-    TopAppBar(
+    TwoRowTopAppBar(
         title = {
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                Text(
-                    modifier = Modifier
-                        .height(56.dp)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    text = stringResource(Res.string.search_title),
-                )
-                val modifier = Modifier.padding(end = 16.dp)
-                SearchInput(
-                    modifier = modifier,
-                    query = searchState.query,
-                    onQueryChanged = onQueryChanged,
-                    onSearchTriggered = onSearchTriggered,
-                )
-
-                // Search filters (always visible)
-                SearchFilters(
-                    modifier = modifier,
-                    searchState = searchState,
-                    onMediaTypeToggled = onMediaTypeToggled,
-                    onLibraryOnlyToggled = onLibraryOnlyToggled,
-                )
-            }
+            SearchInput(
+                modifier = Modifier.padding(end = 16.dp),
+                query = searchState.query,
+                onQueryChanged = onQueryChanged,
+                onSearch = onSearch,
+            )
+        },
+        secondRow = {
+            SearchFilters(
+                modifier = Modifier.padding(end = 16.dp),
+                searchState = searchState,
+                onMediaTypeToggled = onMediaTypeToggled,
+                onLibraryOnlyToggled = onLibraryOnlyToggled,
+            )
         },
     )
 }
@@ -430,9 +420,14 @@ private fun SearchFilters(
                         )
                     },
                     label = {
+                        val text = stringResource(mediaTypeSelect.type.stringResource())
+
                         Text(
-                            text = stringResource(mediaTypeSelect.type.stringResource()),
+                            text = text,
                             style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.semantics {
+                                contentDescription = "Filter $text"
+                            },
                         )
                     },
                 )

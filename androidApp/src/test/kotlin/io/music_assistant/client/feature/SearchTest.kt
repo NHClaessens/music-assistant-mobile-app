@@ -13,6 +13,7 @@ import io.music_assistant.client.support.pages.clickHome
 import io.music_assistant.client.support.pages.clickSearch
 import io.music_assistant.client.support.rules.createTestRuleChain
 import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.media_type_albums
 import musicassistantclient.composeapp.generated.resources.nav_home
 import musicassistantclient.composeapp.generated.resources.nav_search
 import org.junit.Rule
@@ -41,6 +42,23 @@ class SearchTest {
             .clickSearch()
             .search("onion")
             .assertResult(album.name)
+            .clickOnMedia(album)
+    }
+
+    @Test
+    fun `can filter search results`() {
+        val album = ServerMediaItemFixtures.album(name = "The Exploding Onion Conspiracy")
+        val track = ServerMediaItemFixtures.track(name = "Onion Dip")
+        serviceClient.addToLibrary(album, track)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickSearch()
+            .search("onion")
+            .assertResult(album.name)
+            .assertResult(track.name)
+            .enableFilter(Res.string.media_type_albums.get())
+            .assertResult(album.name)
+            .assertNoResult(track.name)
             .clickOnMedia(album)
     }
 
