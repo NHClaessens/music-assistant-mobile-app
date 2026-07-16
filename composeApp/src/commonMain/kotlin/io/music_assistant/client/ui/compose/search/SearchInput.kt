@@ -11,11 +11,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBarDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -27,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.common_clear
 import musicassistantclient.composeapp.generated.resources.search_query_label
@@ -48,65 +47,56 @@ fun SearchInput(
         }
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
+    val textStyle = MaterialTheme.typography.bodyLarge
+    TextField(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .focusRequester(focusRequester),
         shape = SearchBarDefaults.inputFieldShape,
-        color = SearchBarDefaults.colors().containerColor,
-        contentColor = contentColorFor(SearchBarDefaults.colors().containerColor),
-        tonalElevation = SearchBarDefaults.TonalElevation,
-        shadowElevation = SearchBarDefaults.ShadowElevation,
-    ) {
-        val textStyle = MaterialTheme.typography.bodyLarge
-
-        TextField(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(SearchBarDefaults.InputFieldHeight)
-                .focusRequester(focusRequester),
-            value = query,
-            onValueChange = onQueryChanged,
-            placeholder = {
-                Text(
-                    stringResource(Res.string.search_query_label),
-                    style = textStyle,
-                )
+        value = query,
+        onValueChange = onQueryChanged,
+        placeholder = {
+            Text(
+                stringResource(Res.string.search_query_label),
+                style = textStyle,
+            )
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(
+            onSearch = {
+                onSearch()
+                focusManager.clearFocus()
             },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = {
-                    onSearch()
-                    focusManager.clearFocus()
-                },
-            ),
-            textStyle = textStyle,
-            trailingIcon = if (query.isNotEmpty()) {
-                {
-                    IconButton(
-                        onClick = {
-                            onQueryChanged("")
-                            onSearch()
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Clear,
-                            contentDescription = stringResource(Res.string.common_clear),
-                        )
-                    }
+        ),
+        textStyle = textStyle,
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(
+                    onClick = {
+                        onQueryChanged("")
+                        onSearch()
+                    },
+                ) {
+                    Icon(
+                        Icons.Default.Clear,
+                        contentDescription = stringResource(Res.string.common_clear),
+                    )
                 }
-            } else {
-                null
-            },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = SearchBarDefaults.colors().containerColor,
-                unfocusedContainerColor = SearchBarDefaults.colors().containerColor,
-                disabledContainerColor = SearchBarDefaults.colors().containerColor,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent,
-            ),
-        )
-    }
+            }
+        } else {
+            null
+        },
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = SearchBarDefaults.colors().containerColor,
+            unfocusedContainerColor = SearchBarDefaults.colors().containerColor,
+            disabledContainerColor = SearchBarDefaults.colors().containerColor,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+        ),
+    )
 }
 
 @Preview
