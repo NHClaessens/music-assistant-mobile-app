@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.tooling.preview.Preview
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.common_clear
 import musicassistantclient.composeapp.generated.resources.search_query_label
@@ -76,7 +77,7 @@ fun SearchInput(
                 onSearch = {
                     onSearch()
                     focusManager.clearFocus()
-                }
+                },
             ),
             textStyle = textStyle,
             trailingIcon = if (query.isNotEmpty()) {
@@ -106,4 +107,16 @@ fun SearchInput(
             ),
         )
     }
+}
+
+@Preview
+@Composable
+fun SearchInputPreview() {
+    SearchInput(query = "A query for something")
+}
+
+@Preview
+@Composable
+fun SearchInputEmptyPreview() {
+    SearchInput(query = "")
 }
