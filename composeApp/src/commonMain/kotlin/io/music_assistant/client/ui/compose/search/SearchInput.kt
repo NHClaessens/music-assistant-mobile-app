@@ -110,3 +110,11 @@ fun SearchInputPreview() {
 fun SearchInputEmptyPreview() {
     SearchInput(query = "")
 }
+
+@Preview
+@Composable
+fun SearchInputLongQueryPreview() {
+    SearchInput(
+        query = "a really long query for something that isn't likely to be something anyone would actually ever type",
+    )
+}
