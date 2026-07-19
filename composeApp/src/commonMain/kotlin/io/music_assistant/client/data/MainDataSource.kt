@@ -190,26 +190,16 @@ class MainDataSource(
 
     /**
      * Transport anchors for the local player's system-media presentation.
-     * The content identity is retained only for deduplication so a new track
-     * always emits a fresh anchor. No-track states remain explicit nulls.
+     * Each anchor carries its content identity: the dedup keys on it (a new
+     * track always emits a fresh anchor) and the Swift consumer uses it to
+     * correlate anchors with the track it is presenting, since the track and
+     * transport channels have no cross-channel ordering guarantee. No-track
+     * states remain explicit nulls.
      */
     val nowPlayingTransport: StateFlow<NowPlayingTransport?> =
         localPlayer
-            .map { playerData ->
-                NowPlayingTransportEmission(
-                    mediaItemId = playerData?.queueInfo?.currentItem?.track?.itemId,
-                    transport = buildNowPlayingTransport(playerData, positionTracker),
-                )
-            }
-            .distinctUntilChanged { old, new ->
-                NowPlayingChannelChangeDetection.sameTransport(
-                    oldMediaItemId = old.mediaItemId,
-                    old = old.transport,
-                    newMediaItemId = new.mediaItemId,
-                    new = new.transport,
-                )
-            }
-            .map { it.transport }
+            .map { buildNowPlayingTransport(it, positionTracker) }
+            .distinctUntilChanged(NowPlayingChannelChangeDetection::sameTransport)
             .stateIn(this, SharingStarted.Eagerly, null)
 
     /** Queue modes and their shared availability gate for system-media controls. */

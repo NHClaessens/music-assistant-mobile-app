@@ -398,6 +398,8 @@ class ItemListViewModel(
             val queueId = mainDataSource.selectedPlayer?.queueOrPlayerId ?: return@launch
 
             item.mediaUri?.let { mediaUri ->
+                Logger.withTag("PlayDispatch")
+                    .i { "ItemListViewModel: uri=$mediaUri option=$option radio=$radio queue=$queueId" }
                 apiClient.sendRequest(
                     Request.Library.play(
                         media = listOf(mediaUri),

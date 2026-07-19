@@ -204,8 +204,9 @@ struct iOSApp: App {
         OsLogSinkProvider.shared.sink = OsLogSinkImpl()
         #endif
 
-        // Initialize NowPlayingManager early to configure AudioSession
-        _ = NowPlayingManager.shared
+        // Initialize NowPlayingCoordinator early to configure AudioSession
+        // and install remote-command targets (its Swift-only init phase).
+        _ = NowPlayingCoordinator.shared
 
         // KMP/Koin init MUST run here, not in any SwiftUI lifecycle callback.
         // A CarPlay-only cold launch (head unit tap) connects only the
@@ -216,6 +217,10 @@ struct iOSApp: App {
         // `MainViewController()` is safe.
         MainViewControllerKt.bootstrapKmp()
         KmpState.isReady = true
+
+        // Second coordinator init phase: the now-playing channel observers
+        // need the Kotlin graph, which exists only after bootstrapKmp().
+        NowPlayingCoordinator.shared.startObserving()
         if UIApplication.shared.applicationState == .active {
             volumeButtonObserver.start()
         }

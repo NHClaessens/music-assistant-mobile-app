@@ -47,12 +47,10 @@ expect class MediaPlayerController(platformContext: PlatformContext) {
 
     // Now Playing (Control Center / Lock Screen) - iOS only, no-op on other platforms
     //
-    // `duration` and `elapsedTime` are nullable: iOS's `MPNowPlayingInfoCenter` uses
-    // `(elapsed, timestamp, rate)` to interpolate the playback bar locally. If we pass 0
-    // for "unknown elapsed", the bar visibly resets to 0; passing null tells the iOS
-    // adapter to leave that field alone and let iOS keep extrapolating from the last
-    // known good value. See the position-tracker overlay in `MainDataSource` and the
-    // skip-nil-fields merge in `NowPlayingManager.updateNowPlayingInfo` (Swift).
+    // Superseded by the now-playing channels (`MainDataSource.nowPlayingTrack`
+    // et al.), which `NowPlayingCoordinator` (Swift) observes directly; the iOS
+    // receiver behind this call no longer writes anything. Removed together
+    // with the snapshot pipeline that still calls it.
     fun updateNowPlaying(
         title: String?,
         artist: String?,
