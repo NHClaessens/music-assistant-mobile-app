@@ -81,33 +81,6 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
         return 100
     }
 
-    // Now Playing (Control Center / Lock Screen)
-    actual fun updateNowPlaying(
-        title: String?,
-        artist: String?,
-        album: String?,
-        artworkUrl: String?,
-        duration: Double?,
-        elapsedTime: Double?,
-        playbackRate: Double,
-        isLongFormContent: Boolean,
-    ) {
-        PlatformPlayerProvider.player?.updateNowPlaying(
-            title,
-            artist,
-            album,
-            artworkUrl,
-            duration,
-            elapsedTime,
-            playbackRate,
-            isLongFormContent,
-        )
-    }
-
-    actual fun clearNowPlaying() {
-        PlatformPlayerProvider.player?.clearNowPlaying()
-    }
-
     actual fun setLongFormSeekIntervals(backSeconds: Long, forwardSeconds: Long) {
         PlatformPlayerProvider.player?.setLongFormSeekIntervals(backSeconds, forwardSeconds)
     }

@@ -413,34 +413,11 @@ class NativeAudioController: NSObject, PlatformAudioPlayer {
 
     private var remoteCommandHandler: RemoteCommandHandler?
 
-    /// Superseded: Now Playing state reaches Swift through the Kotlin channel
-    /// observers in `NowPlayingCoordinator`, not this call. Kept as a no-op
-    /// only because the `PlatformAudioPlayer` protocol still declares it;
-    /// removed together with the Kotlin-side pipeline.
-    func updateNowPlaying(
-        title: String?,
-        artist: String?,
-        album: String?,
-        artworkUrl: String?,
-        duration: KotlinDouble?,
-        elapsedTime: KotlinDouble?,
-        playbackRate: Double,
-        isLongFormContent: Bool
-    ) {
-        // No-op: the channel handlers own every Now Playing key group.
-    }
-
     func setLongFormSeekIntervals(backSeconds: Int64, forwardSeconds: Int64) {
         NowPlayingCoordinator.shared.setLongFormSeekIntervals(
             backSeconds: backSeconds,
             forwardSeconds: forwardSeconds
         )
-    }
-
-    /// Superseded like `updateNowPlaying`: the clear is the track channel
-    /// emitting null. No-op until the protocol drops the method.
-    func clearNowPlaying() {
-        // No-op: the channel handlers own every Now Playing key group.
     }
 
     func setRemoteCommandHandler(handler: RemoteCommandHandler?) {
