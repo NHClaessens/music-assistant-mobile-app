@@ -100,7 +100,6 @@ enum KmpState {
         get { _isReady.withLock { $0 } }
         set { _isReady.withLock { $0 = newValue } }
     }
-    static let readyNotification = Notification.Name("KMPReadyNotification")
 }
 
 /// Buffers an incoming musicassistant:// URL when it arrives before Koin is
@@ -224,7 +223,6 @@ struct iOSApp: App {
         if UIApplication.shared.applicationState == .active {
             volumeButtonObserver.start()
         }
-        NotificationCenter.default.post(name: KmpState.readyNotification, object: nil)
 
         // Required for apps to appear in Control Center
         // Must be called for remote control events to work

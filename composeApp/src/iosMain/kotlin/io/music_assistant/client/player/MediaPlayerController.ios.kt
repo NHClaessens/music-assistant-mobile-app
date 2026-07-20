@@ -14,7 +14,6 @@ import io.music_assistant.client.player.sendspin.model.AudioCodec
  */
 actual class MediaPlayerController actual constructor(platformContext: PlatformContext) {
     private val log = Logger.withTag("MediaPlayerController")
-    private var isPrepared: Boolean = false
 
     // Callback for remote commands from Control Center
     actual var onRemoteCommand: ((String) -> Unit)? = null
@@ -31,7 +30,6 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
         val player = PlatformPlayerProvider.player
         if (player != null) {
             player.prepareStream(codec.name.lowercase(), sampleRate, channels, bitDepth, codecHeader, listener)
-            isPrepared = true
 
             // Set up remote command handler for iOS-originated commands
             player.setRemoteCommandHandler(object : RemoteCommandHandler {
@@ -60,7 +58,6 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
 
     actual fun stopRawPcmStream() {
         PlatformPlayerProvider.player?.stopRawPcmStream()
-        isPrepared = false
     }
 
     actual fun setVolume(volume: Int) {
@@ -73,7 +70,6 @@ actual class MediaPlayerController actual constructor(platformContext: PlatformC
 
     actual fun release() {
         PlatformPlayerProvider.player?.dispose()
-        isPrepared = false
     }
 
     actual fun getCurrentSystemVolume(): Int {
