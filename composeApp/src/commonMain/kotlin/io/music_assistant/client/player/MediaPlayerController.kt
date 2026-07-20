@@ -48,25 +48,6 @@ expect class MediaPlayerController(platformContext: PlatformContext) {
 
     fun release()
 
-    // Now Playing (Control Center / Lock Screen) - iOS only, no-op on other platforms
-    //
-    // Superseded by the now-playing channels (`MainDataSource.nowPlayingTrack`
-    // et al.), which `NowPlayingCoordinator` (Swift) observes directly; the iOS
-    // receiver behind this call no longer writes anything. Removed together
-    // with the snapshot pipeline that still calls it.
-    fun updateNowPlaying(
-        title: String?,
-        artist: String?,
-        album: String?,
-        artworkUrl: String?,
-        duration: Double?,
-        elapsedTime: Double?,
-        playbackRate: Double,
-        isLongFormContent: Boolean,
-    )
-
-    fun clearNowPlaying()
-
     fun setLongFormSeekIntervals(backSeconds: Long, forwardSeconds: Long)
 }
 
