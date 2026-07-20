@@ -94,4 +94,9 @@ class ExpandedPlayerPage(
 
         return this
     }
+
+    fun clickQualityTier(tier: String): AudioChainPage {
+        composeTestRule.onNodeWithText(tier).performClick()
+        return AudioChainPage(composeTestRule).assertOnPage()
+    }
 }
