@@ -27,7 +27,7 @@ class ServerQueueItemSerializationTest {
         assertEquals("library", streamDetails.provider)
         assertEquals("audio/flac", streamDetails.audioFormat.contentType)
         assertEquals(44_100, streamDetails.audioFormat.sampleRate)
-        assertEquals(emptyMap(), streamDetails.dsp)
+        assertEquals(null, streamDetails.dsp)
     }
 
     @Test
@@ -55,7 +55,7 @@ class ServerQueueItemSerializationTest {
 
         val queueItem = myJson.decodeFromString<ServerQueueItem>(json)
         val streamDetails = assertNotNull(queueItem.streamDetails)
-        val outputFormat = assertNotNull(streamDetails.dsp["player-1"]?.outputFormat)
+        val outputFormat = assertNotNull(streamDetails.dsp?.get("player-1")?.outputFormat)
 
         assertEquals("audio/pcm_s16le", outputFormat.contentType)
         assertEquals(48_000, outputFormat.sampleRate)

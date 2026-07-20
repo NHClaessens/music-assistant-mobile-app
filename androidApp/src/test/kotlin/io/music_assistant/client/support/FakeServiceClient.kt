@@ -582,9 +582,13 @@ class FakeServiceClient : ServiceClient {
         val queueIndex = queues.indexOfFirst { it.queueId == queueId }
         val player = findPlayer { it.activeSource == queueId }.second
 
-        val dsp = mapOf(
-            player.playerId to DSPSettings(outputFormat = playerAudioFormats[player.playerId]),
-        )
+        val dsp = legacyVersion.let {
+            if (it != null && it <= LegacyVersion.V2_9) {
+                mapOf(player.playerId to DSPSettings(outputFormat = playerAudioFormats[player.playerId]))
+            } else {
+                null
+            }
+        }
 
         val firstItem = items.firstOrNull()
         val currentItem = firstItem?.copy(
@@ -934,6 +938,7 @@ class FakeServiceClient : ServiceClient {
 
     enum class LegacyVersion {
         V2_8,
+        V2_9
     }
 }
 
