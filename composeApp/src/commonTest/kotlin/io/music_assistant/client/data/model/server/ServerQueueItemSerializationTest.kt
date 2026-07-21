@@ -6,8 +6,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class ServerQueueItemSerializationTest {
+
+    /**
+     * Required to support server v2.9 and 2.10
+     */
     @Test
-    fun deserializesStreamDetailsWithoutLegacyDsp() {
+    fun deserializesStreamDetailsWithoutDsp() {
         val json = """
             {
               "queue_item_id": "queue-item-1",
@@ -30,8 +34,11 @@ class ServerQueueItemSerializationTest {
         assertEquals(null, streamDetails.dsp)
     }
 
+    /**
+     * Required to support server v2.9 and 2.10
+     */
     @Test
-    fun deserializesStreamDetailsWithLegacyDsp() {
+    fun deserializesStreamDetailsWithDsp() {
         val json = """
             {
               "queue_item_id": "queue-item-1",
