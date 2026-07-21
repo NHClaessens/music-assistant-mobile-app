@@ -6,7 +6,9 @@ import io.music_assistant.client.api.ConnectionInfo
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.data.model.client.MediaType
+import io.music_assistant.client.data.model.server.AudioFormat
 import io.music_assistant.client.data.model.server.AuthProvider
+import io.music_assistant.client.data.model.server.DSPSettings
 import io.music_assistant.client.data.model.server.EventType
 import io.music_assistant.client.data.model.server.PlayerState
 import io.music_assistant.client.data.model.server.ProviderManifest
@@ -19,6 +21,7 @@ import io.music_assistant.client.data.model.server.ServerQueue
 import io.music_assistant.client.data.model.server.ServerQueueItem
 import io.music_assistant.client.data.model.server.ServerUser
 import io.music_assistant.client.data.model.server.ServerUserPreferences
+import io.music_assistant.client.data.model.server.StreamDetails
 import io.music_assistant.client.data.model.server.User
 import io.music_assistant.client.data.model.server.events.Event
 import io.music_assistant.client.data.model.server.events.PlayerUpdatedEvent
@@ -54,6 +57,7 @@ class FakeServiceClient : ServiceClient {
     private val uniqueIdGenerator = UniqueIdGenerator()
 
     private val players = mutableListOf<ServerPlayer>()
+    private val playerAudioFormats = mutableMapOf<String, AudioFormat>()
     private val queues = mutableListOf<ServerQueue>()
     private val queueItems = mutableMapOf<String, List<ServerQueueItem>>()
     private val items = mutableSetOf<ServerMediaItem>()
@@ -576,8 +580,26 @@ class FakeServiceClient : ServiceClient {
         items: List<ServerQueueItem>,
     ) {
         val queueIndex = queues.indexOfFirst { it.queueId == queueId }
+        val player = findPlayer { it.activeSource == queueId }.second
 
-        val currentItem = items.firstOrNull()
+        val dsp = legacyVersion.let {
+            if (it != null && it <= LegacyVersion.V2_9) {
+                mapOf(player.playerId to DSPSettings(outputFormat = playerAudioFormats[player.playerId]))
+            } else {
+                null
+            }
+        }
+
+        val firstItem = items.firstOrNull()
+        val currentItem = firstItem?.copy(
+            streamDetails = firstItem.streamDetails.let { streamDetails ->
+                streamDetails?.copy(dsp = dsp) ?: StreamDetails(
+                    audioFormat = AudioFormat(),
+                    dsp = dsp,
+                )
+            },
+        ) ?: firstItem
+
         queues[queueIndex] =
             queues[queueIndex].copy(currentItem = currentItem)
         queueItems[queueId] = items
@@ -604,16 +626,22 @@ class FakeServiceClient : ServiceClient {
         search: (ServerPlayer) -> Boolean,
         update: (ServerPlayer) -> ServerPlayer,
     ) {
-        val playerIndex = players.indexOfFirst(search)
-        val player = update(players[playerIndex])
-        players[playerIndex] = player
+        val (playerIndex, originalPlayer) = findPlayer(search)
+        val updatedPlayer = update(originalPlayer)
+        players[playerIndex] = updatedPlayer
         _events.emit(
             PlayerUpdatedEvent(
                 event = EventType.PLAYER_UPDATED,
-                objectId = player.playerId,
-                data = player,
+                objectId = updatedPlayer.playerId,
+                data = updatedPlayer,
             ),
         )
+    }
+
+    private fun findPlayer(search: (ServerPlayer) -> Boolean): Pair<Int, ServerPlayer> {
+        val playerIndex = players.indexOfFirst(search)
+        val originalPlayer = players[playerIndex]
+        return Pair(playerIndex, originalPlayer)
     }
 
     override suspend fun login(username: String, password: String) {
@@ -904,8 +932,13 @@ class FakeServiceClient : ServiceClient {
         }
     }
 
+    fun setPlayerAudioFormat(player: ServerPlayer, audioFormat: AudioFormat) {
+        playerAudioFormats[player.playerId] = audioFormat
+    }
+
     enum class LegacyVersion {
         V2_8,
+        V2_9,
     }
 }
 

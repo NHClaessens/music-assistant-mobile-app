@@ -6,8 +6,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class ServerQueueItemSerializationTest {
+    /**
+     * Required to support server v2.9 and 2.10
+     */
     @Test
-    fun deserializesStreamDetailsWithoutLegacyDsp() {
+    fun deserializesStreamDetailsWithoutDsp() {
         val json = """
             {
               "queue_item_id": "queue-item-1",
@@ -27,11 +30,14 @@ class ServerQueueItemSerializationTest {
         assertEquals("library", streamDetails.provider)
         assertEquals("audio/flac", streamDetails.audioFormat.contentType)
         assertEquals(44_100, streamDetails.audioFormat.sampleRate)
-        assertEquals(emptyMap(), streamDetails.dsp)
+        assertEquals(null, streamDetails.dsp)
     }
 
+    /**
+     * Required to support server v2.9 and 2.10
+     */
     @Test
-    fun deserializesStreamDetailsWithLegacyDsp() {
+    fun deserializesStreamDetailsWithDsp() {
         val json = """
             {
               "queue_item_id": "queue-item-1",
@@ -55,7 +61,7 @@ class ServerQueueItemSerializationTest {
 
         val queueItem = myJson.decodeFromString<ServerQueueItem>(json)
         val streamDetails = assertNotNull(queueItem.streamDetails)
-        val outputFormat = assertNotNull(streamDetails.dsp["player-1"]?.outputFormat)
+        val outputFormat = assertNotNull(streamDetails.dsp?.get("player-1")?.outputFormat)
 
         assertEquals("audio/pcm_s16le", outputFormat.contentType)
         assertEquals(48_000, outputFormat.sampleRate)
