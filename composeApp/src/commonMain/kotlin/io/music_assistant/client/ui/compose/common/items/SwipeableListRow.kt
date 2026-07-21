@@ -86,8 +86,10 @@ private fun swipeActionColor(action: ItemAction): Color = when (action) {
         QueueOption.REPLACE -> MaterialTheme.colorScheme.primary
         QueueOption.PLAY -> MaterialTheme.colorScheme.tertiary
         QueueOption.NEXT -> MaterialTheme.colorScheme.secondary
+        QueueOption.REPLACE_NEXT -> MaterialTheme.colorScheme.secondary
         QueueOption.ADD -> MaterialTheme.colorScheme.primaryContainer
     }
+    ItemAction.InterleaveIntoQueue -> MaterialTheme.colorScheme.secondary
     ItemAction.StartRadio -> MaterialTheme.colorScheme.tertiary
     ItemAction.AddToLibrary -> MaterialTheme.colorScheme.secondary
     ItemAction.RemoveFromLibrary -> MaterialTheme.colorScheme.error

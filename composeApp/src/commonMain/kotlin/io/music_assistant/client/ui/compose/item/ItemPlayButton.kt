@@ -44,7 +44,7 @@ import org.jetbrains.compose.resources.stringResource
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun ItemPlayButton(
     item: AppMediaItem,
-    onPlayClick: (QueueOption, Boolean) -> Unit,
+    onPlayClick: (QueueOption, Boolean, Boolean) -> Unit,
     tint: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
 ) {
@@ -68,8 +68,9 @@ fun ItemPlayButton(
 
     val runPlayAction: (ItemAction) -> Unit = { action ->
         when (action) {
-            is ItemAction.Play -> onPlayClick(action.queueOption, false)
-            ItemAction.StartRadio -> onPlayClick(QueueOption.REPLACE, true)
+            is ItemAction.Play -> onPlayClick(action.queueOption, false, false)
+            ItemAction.InterleaveIntoQueue -> onPlayClick(QueueOption.NEXT, false, true)
+            ItemAction.StartRadio -> onPlayClick(QueueOption.REPLACE, true, false)
             else -> Unit
         }
     }

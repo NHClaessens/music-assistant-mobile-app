@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlaylistAddCircle
 import androidx.compose.material.icons.filled.QueuePlayNext
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.ui.graphics.vector.ImageVector
 import compose.icons.TablerIcons
@@ -30,6 +31,7 @@ import musicassistantclient.composeapp.generated.resources.action_customize
 import musicassistantclient.composeapp.generated.resources.action_favorite
 import musicassistantclient.composeapp.generated.resources.action_insert_next
 import musicassistantclient.composeapp.generated.resources.action_insert_next_and_play
+import musicassistantclient.composeapp.generated.resources.action_interleave_into_queue
 import musicassistantclient.composeapp.generated.resources.action_mark_played
 import musicassistantclient.composeapp.generated.resources.action_mark_unplayed
 import musicassistantclient.composeapp.generated.resources.action_play_album_from_here
@@ -46,6 +48,7 @@ sealed class ItemAction(val kind: Kind) {
     enum class Kind { PLAYBACK, OTHER }
 
     data class Play(val queueOption: QueueOption) : ItemAction(Kind.PLAYBACK)
+    data object InterleaveIntoQueue : ItemAction(Kind.PLAYBACK)
     data object PlayFromHere : ItemAction(Kind.PLAYBACK)
     data object StartRadio : ItemAction(Kind.PLAYBACK)
 
@@ -68,8 +71,11 @@ fun ItemAction.title(context: ClickContext? = null): StringResource = when (this
         QueueOption.REPLACE -> Res.string.action_play_now
         QueueOption.PLAY -> Res.string.action_insert_next_and_play
         QueueOption.NEXT -> Res.string.action_insert_next
+        QueueOption.REPLACE_NEXT -> Res.string.action_interleave_into_queue
         QueueOption.ADD -> Res.string.action_add_to_queue
     }
+
+    ItemAction.InterleaveIntoQueue -> Res.string.action_interleave_into_queue
 
     is ItemAction.PlayFromHere -> when (context) {
         ClickContext.ALBUM -> Res.string.action_play_album_from_here
@@ -96,8 +102,11 @@ fun ItemAction.icon(context: ClickContext?): ImageVector = when (this) {
         QueueOption.REPLACE -> PlayIcon
         QueueOption.PLAY -> Icons.Default.PlaylistAddCircle
         QueueOption.NEXT -> Icons.Default.QueuePlayNext
+        QueueOption.REPLACE_NEXT -> Icons.Default.SwapVert
         QueueOption.ADD -> Icons.Default.AddToQueue
     }
+
+    ItemAction.InterleaveIntoQueue -> Icons.Default.SwapVert
 
     is ItemAction.PlayFromHere -> when (context) {
         ClickContext.ALBUM -> AlbumIcon

@@ -12,6 +12,7 @@
   <string name="action_go_to_artist">Go to artist</string>
   <string name="action_insert_next">Add next</string>
   <string name="action_insert_next_and_play">Add next and play</string>
+  <string name="action_interleave_into_queue">Interleave into queue</string>
   <string name="action_mark_played">Mark as played</string>
   <string name="action_mark_unplayed">Mark as unplayed</string>
   <string name="action_ok">OK</string>

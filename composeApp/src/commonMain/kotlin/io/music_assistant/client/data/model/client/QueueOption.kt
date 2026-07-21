@@ -4,6 +4,7 @@ enum class QueueOption(val serverValue: String) {
     PLAY("play"),
     REPLACE("replace"),
     NEXT("next"),
+    REPLACE_NEXT("replace_next"),
     ADD("add"),
     ;
 

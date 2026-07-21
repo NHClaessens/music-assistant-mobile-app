@@ -6,6 +6,7 @@ import co.touchlab.kermit.Logger
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.data.MainDataSource
+import io.music_assistant.client.data.playMediaItem
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.SortConfig
@@ -434,9 +435,9 @@ class ItemDetailsViewModel(
         }
     }
 
-    fun onPlayClick(option: QueueOption, radio: Boolean) {
+    fun onPlayClick(option: QueueOption, radio: Boolean, interleave: Boolean = false) {
         (_state.value.itemState as? DataState.Data)?.data?.let {
-            onPlayClick(it, option, radio, false)
+            onPlayClick(it, option, radio, false, interleave)
         }
     }
 
@@ -445,7 +446,23 @@ class ItemDetailsViewModel(
         option: QueueOption,
         radio: Boolean,
         fromHereInParent: Boolean,
+        interleave: Boolean = false,
     ) {
+        if (interleave) {
+            viewModelScope.launch {
+                playMediaItem(
+                    apiClient = apiClient,
+                    player = mainDataSource.selectedPlayer,
+                    mediaItemRepository = mediaItemRepository,
+                    item = item,
+                    option = option,
+                    radioMode = radio,
+                    interleave = true,
+                )
+            }
+            return
+        }
+
         val parent = (_state.value.itemState as? DataState.Data)?.data
         val (itemToPlay, startItem) = if (fromHereInParent && parent != null) {
             Pair(parent, item)
@@ -454,18 +471,15 @@ class ItemDetailsViewModel(
         }
 
         viewModelScope.launch {
-            val mediaUri = itemToPlay.mediaUri ?: return@launch
-            mainDataSource.selectedPlayer?.queueOrPlayerId?.let { queueId ->
-                apiClient.sendRequest(
-                    Request.Library.play(
-                        media = listOf(mediaUri),
-                        queueOrPlayerId = queueId,
-                        option = option,
-                        radioMode = radio && item !is Genre,
-                        startItem = startItem?.itemId,
-                    ),
-                )
-            }
+            playMediaItem(
+                apiClient = apiClient,
+                player = mainDataSource.selectedPlayer,
+                mediaItemRepository = mediaItemRepository,
+                item = itemToPlay,
+                option = option,
+                radioMode = radio,
+                startItem = startItem?.itemId,
+            )
         }
     }
 

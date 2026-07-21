@@ -2,6 +2,10 @@ package io.music_assistant.client.ui.compose.common.items
 
 import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.QueueOption
+import io.music_assistant.client.data.model.client.testAlbum
+import io.music_assistant.client.data.model.client.testArtist
+import io.music_assistant.client.data.model.client.testPlaylist
+import io.music_assistant.client.data.model.client.testPodcast
 import io.music_assistant.client.data.model.client.testPodcastEpisode
 import io.music_assistant.client.data.model.client.testTrack
 import musicassistantclient.composeapp.generated.resources.Res
@@ -84,5 +88,43 @@ class ItemActionResolverTest {
     @Test
     fun `play-button overflow is empty for a non-playable item`() {
         assertEquals(emptyList(), resolvePlayButtonActions(testTrack(isPlayable = false), default = null))
+    }
+
+    @Test
+    fun `playback block includes interleave for multi-track containers`() {
+        val albumActions = resolveLongClickActions(
+            item = testAlbum(),
+            librarySupported = false,
+            canAddToPlaylist = false,
+            canRemoveFromPlaylist = false,
+            progressSupported = false,
+        )
+        val nextIndex = albumActions.indexOf(ItemAction.Play(QueueOption.NEXT))
+        val interleaveIndex = albumActions.indexOf(ItemAction.InterleaveIntoQueue)
+        assertTrue(nextIndex >= 0)
+        assertTrue(interleaveIndex > nextIndex)
+        assertFalse(ItemAction.InterleaveIntoQueue in resolveLongClickActions(
+            item = testTrack(),
+            librarySupported = false,
+            canAddToPlaylist = false,
+            canRemoveFromPlaylist = false,
+            progressSupported = false,
+        ))
+    }
+
+    @Test
+    fun `interleave appears for playlist artist and podcast`() {
+        listOf(testPlaylist(), testArtist(), testPodcast()).forEach { item ->
+            assertTrue(
+                ItemAction.InterleaveIntoQueue in resolveLongClickActions(
+                    item = item,
+                    librarySupported = false,
+                    canAddToPlaylist = false,
+                    canRemoveFromPlaylist = false,
+                    progressSupported = false,
+                ),
+                "expected interleave for ${item::class.simpleName}",
+            )
+        }
     }
 }

@@ -7,6 +7,7 @@ import io.music_assistant.client.api.APICommands
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.data.MainDataSource
+import io.music_assistant.client.data.playMediaItem
 import io.music_assistant.client.data.model.client.Player
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.QueueOption
@@ -236,20 +237,18 @@ class HomeScreenViewModel(
         item: AppMediaItem,
         option: QueueOption,
         radio: Boolean,
+        interleave: Boolean = false,
     ) {
-        dataSource.selectedPlayer?.queueOrPlayerId?.let { queueId ->
-            item.mediaUri?.let { mediaUri ->
-                viewModelScope.launch {
-                    apiClient.sendRequest(
-                        Request.Library.play(
-                            media = listOf(mediaUri),
-                            queueOrPlayerId = queueId,
-                            option = option,
-                            radioMode = radio && item !is Genre,
-                        ),
-                    )
-                }
-            }
+        viewModelScope.launch {
+            playMediaItem(
+                apiClient = apiClient,
+                player = dataSource.selectedPlayer,
+                mediaItemRepository = mediaItemRepository,
+                item = item,
+                option = option,
+                radioMode = radio,
+                interleave = interleave,
+            )
         }
     }
 

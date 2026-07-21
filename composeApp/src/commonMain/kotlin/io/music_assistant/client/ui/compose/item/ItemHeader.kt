@@ -91,7 +91,7 @@ fun ItemHeader(
         MaterialTheme.colorScheme.primary,
     ),
     providerIconFetcher: (@Composable (Modifier, String) -> Unit)? = null,
-    onPlayClick: (QueueOption, Boolean) -> Unit = { _, _ -> },
+    onPlayClick: (QueueOption, Boolean, Boolean) -> Unit = { _, _, _ -> },
 ) {
     // Art color on top, fading down to the surface the Screen actually paints, so the
     // wash dissolves seamlessly where the tabs begin. Mirrors the player gradient (inverted).

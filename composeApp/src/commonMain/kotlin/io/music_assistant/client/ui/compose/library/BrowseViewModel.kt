@@ -6,6 +6,7 @@ import co.touchlab.kermit.Logger
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.data.MainDataSource
+import io.music_assistant.client.data.playMediaItem
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Genre
@@ -52,19 +53,18 @@ class BrowseViewModel(
         item: AppMediaItem,
         option: QueueOption,
         radio: Boolean,
+        interleave: Boolean = false,
     ) {
         viewModelScope.launch {
-            val queueId = mainDataSource.selectedPlayer?.queueOrPlayerId ?: return@launch
-            item.mediaUri?.let { mediaUri ->
-                apiClient.sendRequest(
-                    Request.Library.play(
-                        media = listOf(mediaUri),
-                        queueOrPlayerId = queueId,
-                        option = option,
-                        radioMode = radio && item !is Genre,
-                    ),
-                )
-            }
+            playMediaItem(
+                apiClient = apiClient,
+                player = mainDataSource.selectedPlayer,
+                mediaItemRepository = mediaItemRepository,
+                item = item,
+                option = option,
+                radioMode = radio,
+                interleave = interleave,
+            )
         }
     }
 }

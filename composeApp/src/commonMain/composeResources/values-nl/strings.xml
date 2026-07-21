@@ -11,6 +11,7 @@
   <string name="action_go_to_artist">Naar artiest</string>
   <string name="action_insert_next">Volgende invoegen</string>
   <string name="action_insert_next_and_play">Volgende invoegen en afspelen</string>
+  <string name="action_interleave_into_queue">Afwisselend in wachtrij</string>
   <string name="action_mark_played">Als afgespeeld markeren</string>
   <string name="action_mark_unplayed">Als niet afgespeeld markeren</string>
   <string name="action_ok">OK</string>

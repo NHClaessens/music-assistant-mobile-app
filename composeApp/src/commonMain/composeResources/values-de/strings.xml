@@ -11,6 +11,7 @@
   <string name="action_go_to_artist">Zum Künstler</string>
   <string name="action_insert_next">Als Nächstes einreihen</string>
   <string name="action_insert_next_and_play">Als Nächstes einreihen und abspielen</string>
+  <string name="action_interleave_into_queue">In Warteschlange einweben</string>
   <string name="action_mark_played">Als gespielt markieren</string>
   <string name="action_mark_unplayed">Als ungespielt markieren</string>
   <string name="action_ok">OK</string>

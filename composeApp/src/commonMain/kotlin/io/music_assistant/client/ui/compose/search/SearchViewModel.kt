@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.data.MainDataSource
+import io.music_assistant.client.data.playMediaItem
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.items.Album
@@ -159,20 +160,18 @@ class SearchViewModel(
         track: AppMediaItem,
         option: QueueOption,
         radio: Boolean,
+        interleave: Boolean = false,
     ) {
         viewModelScope.launch {
-            mainDataSource.selectedPlayer?.queueOrPlayerId?.let { queueId ->
-                track.mediaUri?.let { mediaUri ->
-                    apiClient.sendRequest(
-                        Request.Library.play(
-                            media = listOf(mediaUri),
-                            queueOrPlayerId = queueId,
-                            option = option,
-                            radioMode = radio && track !is Genre,
-                        ),
-                    )
-                }
-            }
+            playMediaItem(
+                apiClient = apiClient,
+                player = mainDataSource.selectedPlayer,
+                mediaItemRepository = mediaItemRepository,
+                item = track,
+                option = option,
+                radioMode = radio,
+                interleave = interleave,
+            )
         }
     }
 

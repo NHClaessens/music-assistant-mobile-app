@@ -132,8 +132,8 @@ fun SearchScreen(
                     else -> Unit
                 }
             },
-            onPlayClick = { track, option, radio, _ ->
-                searchViewModel.onPlayClick(track, option, radio)
+            onPlayClick = { track, option, radio, _, interleave ->
+                searchViewModel.onPlayClick(track, option, radio, interleave)
             },
             playlistActions = actionsViewModel,
             libraryActions = actionsViewModel,

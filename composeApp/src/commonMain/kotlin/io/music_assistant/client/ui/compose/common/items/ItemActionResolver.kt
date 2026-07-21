@@ -2,6 +2,7 @@ package io.music_assistant.client.ui.compose.common.items
 
 import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.QueueOption
+import io.music_assistant.client.data.supportsInterleaveIntoQueue
 import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Audiobook
@@ -74,6 +75,9 @@ private fun MutableList<ItemAction>.addPlaybackActions(
     add(ItemAction.Play(QueueOption.REPLACE))
     add(ItemAction.Play(QueueOption.PLAY))
     add(ItemAction.Play(QueueOption.NEXT))
+    if (item.supportsInterleaveIntoQueue) {
+        add(ItemAction.InterleaveIntoQueue)
+    }
     add(ItemAction.Play(QueueOption.ADD))
 
     if (context == ClickContext.ALBUM || context == ClickContext.PLAYLIST) {

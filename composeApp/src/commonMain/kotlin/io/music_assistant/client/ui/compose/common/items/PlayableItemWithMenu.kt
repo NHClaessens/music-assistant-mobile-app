@@ -37,7 +37,13 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
-typealias PlayHandler<T> = (item: T, queueOption: QueueOption, radio: Boolean, fromHereInParent: Boolean) -> Unit
+typealias PlayHandler<T> = (
+    item: T,
+    queueOption: QueueOption,
+    radio: Boolean,
+    fromHereInParent: Boolean,
+    interleave: Boolean,
+) -> Unit
 
 @Composable
 fun TrackWithMenu(
@@ -215,9 +221,10 @@ private fun <T> PlayableItemWithMenu(
 
     val runPlayAction: (ItemAction) -> Unit = { action ->
         when (action) {
-            is ItemAction.Play -> onPlayOption(item, action.queueOption, false, false)
-            ItemAction.StartRadio -> onPlayOption(item, QueueOption.REPLACE, true, false)
-            is ItemAction.PlayFromHere -> onPlayOption(item, QueueOption.REPLACE, false, true)
+            is ItemAction.Play -> onPlayOption(item, action.queueOption, false, false, false)
+            ItemAction.InterleaveIntoQueue -> onPlayOption(item, QueueOption.NEXT, false, false, true)
+            ItemAction.StartRadio -> onPlayOption(item, QueueOption.REPLACE, true, false, false)
+            is ItemAction.PlayFromHere -> onPlayOption(item, QueueOption.REPLACE, false, true, false)
             else -> Unit
         }
     }
@@ -225,6 +232,7 @@ private fun <T> PlayableItemWithMenu(
     val runSwipeAction: (ItemAction) -> Unit = { action ->
         when (action) {
             is ItemAction.Play,
+            ItemAction.InterleaveIntoQueue,
             ItemAction.StartRadio,
             is ItemAction.PlayFromHere,
             -> runPlayAction(action)
@@ -293,6 +301,7 @@ private fun <T> PlayableItemWithMenu(
                 expandedItemId = null
                 when (action) {
                     is ItemAction.Play,
+                    ItemAction.InterleaveIntoQueue,
                     ItemAction.StartRadio,
                     is ItemAction.PlayFromHere,
                     -> runPlayAction(action)
