@@ -54,6 +54,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,7 +104,7 @@ import io.music_assistant.client.ui.compose.common.rememberExtractedColorsSource
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.home.CollapsibleQueue
 import io.music_assistant.client.ui.compose.home.HomeScreenViewModel
-import io.music_assistant.client.ui.compose.home.HorizontalPagerIndicator
+import io.music_assistant.client.ui.compose.home.PlayerSwitcherRow
 import io.music_assistant.client.ui.compose.home.Queue
 import io.music_assistant.client.ui.inactive
 import io.music_assistant.client.utils.LrcParser
@@ -202,11 +203,75 @@ fun PlayersPager(
                 WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
             )
         }
+        val currentPageIndex = playerPagerState.currentPage
+        val currentPlayer = playerDataList.getOrNull(currentPageIndex)
+        var headerGroupDialogPlayerId by remember { mutableStateOf<String?>(null) }
+        var headerDspDialogPlayerId by remember { mutableStateOf<String?>(null) }
+        headerGroupDialogPlayerId?.let { playerId ->
+            playerDataList.firstOrNull { it.player.id == playerId }?.let { dialogPlayer ->
+                GroupSettingsDialog(
+                    player = dialogPlayer,
+                    onDismissRequest = { headerGroupDialogPlayerId = null },
+                    groupAction = { id: String, action: PlayerAction ->
+                        homeScreenViewModel.playerAction(id, action)
+                    },
+                    localPlayerId = homeScreenViewModel.localPlayerId,
+                    onAdjustPlaybackDelay = {
+                        homeScreenViewModel.adjustSendspinStaticDelayMs(it)
+                    },
+                )
+            }
+        }
+        headerDspDialogPlayerId?.let { playerId ->
+            DspSettingsDialog(
+                playerId = playerId,
+                dspSettingsViewModel = dspSettingsViewModel,
+                onDismissRequest = { headerDspDialogPlayerId = null },
+            )
+        }
         Column(modifier = modifier) {
-            if (playerDataList.size > 1) {
-                HorizontalPagerIndicator(
+            if (expanded) {
+                if (currentPlayer != null) {
+                    val currentColors by playerColors.getValue(currentPlayer)
+                    ExpandedPlayerHeader(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        player = currentPlayer,
+                        colors = currentColors,
+                        players = playerDataList,
+                        playerColors = playerColors,
+                        pagerState = playerPagerState,
+                        sendspinState = state.sendspinState,
+                        onSelectPlayer = { selectDialogPlayerId = it.player.id },
+                        onGroupButton = { headerGroupDialogPlayerId = it.player.id },
+                        onDspButton = if (!currentPlayer.player.isGroup) {
+                            { headerDspDialogPlayerId = currentPlayer.player.id }
+                        } else {
+                            null
+                        },
+                        onClose = onClose,
+                        allPlayers = playerDataList,
+                        playerAction = playerAction1,
+                        queueAction = { homeScreenViewModel.queueAction(it) },
+                        navigateToItem = {
+                            navigateToItem(it)
+                            onClose()
+                        },
+                        moveToPlayer = moveToPlayer,
+                        playlistActions = actionsViewModel,
+                    )
+                }
+            } else if (!isExpandedScreen) {
+                PlayerSwitcherRow(
                     modifier = Modifier.padding(top = 4.dp),
                     pagerState = playerPagerState,
+                    players = playerDataList,
+                    controlTintFor = { player ->
+                        val colors by playerColors.getValue(player)
+                        colors.controlTint
+                    },
+                    sendSpinState = state.sendspinState,
+                    onSelectPlayer = { selectDialogPlayerId = it.player.id },
+                    onGroupButton = { headerGroupDialogPlayerId = it.player.id },
                 )
             }
 
@@ -320,6 +385,7 @@ fun PlayersPager(
                                 livePositionFlow = livePositionFlow,
                                 lyricsAvailable = isCurrentPage && lyrics != null,
                                 onLyricsClick = { sheetLyrics = lyrics },
+                                showHeader = false,
                             )
                         }
                         sheetLyrics?.let { shown ->
@@ -388,6 +454,77 @@ private fun BoundPlayerInfo(
     }
 }
 
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun ExpandedPlayerHeader(
+    modifier: Modifier = Modifier,
+    player: PlayerData,
+    colors: PlayerColors,
+    players: List<PlayerData>,
+    playerColors: Map<PlayerData, State<PlayerColors>>,
+    pagerState: PagerState,
+    sendspinState: SendspinState?,
+    onSelectPlayer: (PlayerData) -> Unit,
+    onGroupButton: (PlayerData) -> Unit,
+    onDspButton: (() -> Unit)?,
+    onClose: () -> Unit,
+    allPlayers: List<PlayerData>,
+    playerAction: (PlayerData, PlayerAction) -> Unit,
+    queueAction: (QueueAction) -> Unit,
+    navigateToItem: (AppMediaItem) -> Unit,
+    moveToPlayer: (String) -> Unit,
+    playlistActions: PlaylistActions?,
+) {
+    CenteredThreeSlotRow(
+        modifier = modifier.fillMaxWidth(),
+        start = {
+            IconButton(onClick = onClose) {
+                Icon(
+                    Icons.Default.ExpandMore,
+                    "Collapse",
+                    modifier = Modifier.size(32.dp),
+                )
+            }
+        },
+        center = {
+            PlayerSwitcherRow(
+                pagerState = pagerState,
+                players = players,
+                controlTintFor = { playerData ->
+                    val playerColorState by playerColors.getValue(playerData)
+                    playerColorState.controlTint
+                },
+                sendSpinState = sendspinState,
+                onSelectPlayer = onSelectPlayer,
+                onGroupButton = onGroupButton,
+            )
+        },
+        end = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (player.queueInfo?.isRadioOn == true) {
+                    Icon(
+                        imageVector = Icons.Default.CellTower,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = colors.controlTint,
+                    )
+                }
+                PlayerOverflowMenu(
+                    currentPlayer = player,
+                    allPlayers = allPlayers,
+                    playerAction = { playerAction(player, it) },
+                    queueAction = queueAction,
+                    navigateToItem = navigateToItem,
+                    onPlayerSelected = { moveToPlayer(it) },
+                    onOpenDsp = onDspButton,
+                    playlistActions = playlistActions,
+                )
+            }
+        },
+    )
+}
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun ExpandedPlayerPage(
@@ -413,6 +550,7 @@ private fun ExpandedPlayerPage(
     livePositionFlow: Flow<Double>?,
     lyricsAvailable: Boolean = false,
     onLyricsClick: () -> Unit = {},
+    showHeader: Boolean = true,
 ) {
     val isLargeScreen = WindowClass.isAtLeastLarge()
     val dismissThresholdPx = with(LocalDensity.current) { 120.dp.toPx() }
@@ -432,6 +570,7 @@ private fun ExpandedPlayerPage(
         modifier = Modifier.padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (showHeader) {
         CenteredThreeSlotRow(
             modifier = Modifier.fillMaxWidth(),
             start = {
@@ -478,6 +617,7 @@ private fun ExpandedPlayerPage(
                 }
             },
         )
+        }
 
         AnimatedVisibility(
             visible = isQueueExpanded,
@@ -926,21 +1066,6 @@ private fun CollapsedPlayerPage(
     onGroupButton: () -> Unit,
     playerAction: (PlayerData, PlayerAction) -> Unit,
 ) {
-    if (!isExpandedScreen) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            PlayerSelectionButton(
-                player = player,
-                controlTint = colors.controlTint,
-                sendSpinState = sendspinState,
-                onSelectPlayer = onSelectPlayer,
-                onGroupButton = onGroupButton,
-            )
-        }
-    }
-
     CompactPlayerItem(
         modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         item = player,
