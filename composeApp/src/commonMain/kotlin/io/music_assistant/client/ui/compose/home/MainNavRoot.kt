@@ -5,6 +5,7 @@ package io.music_assistant.client.ui.compose.home
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -49,6 +50,7 @@ import io.music_assistant.client.data.model.client.items.Genre
 import io.music_assistant.client.data.model.client.items.Playlist
 import io.music_assistant.client.data.model.client.items.Podcast
 import io.music_assistant.client.data.model.client.items.RecommendationFolder
+import io.music_assistant.client.ui.compose.common.StatusBarScrim
 import io.music_assistant.client.ui.compose.common.ToastDuration
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
@@ -306,6 +308,9 @@ fun MainNavigationRoot(
                     backEnabled = !playerExpanded,
                 )
             }
+        }
+        if (!playerExpanded) {
+            StatusBarScrim(modifier = Modifier.align(Alignment.TopCenter))
         }
         ToastHost(toastState = toastState)
     }

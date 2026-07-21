@@ -2,9 +2,13 @@ package io.music_assistant.client.ui.compose.nav
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -36,11 +40,13 @@ import io.music_assistant.client.utils.WindowClass
 fun AdaptiveNavigationBarLayout(
     navigationItems: List<NavigationItem>,
     showNavigation: Boolean = true,
-    navigationBarHeight: Dp = 88.dp,
+    navigationBarHeight: Dp = 64.dp,
     navigationRailWidth: Dp = 80.dp,
     content: @Composable BoxScope.(contentPadding: PaddingValues) -> Unit,
 ) {
     val isExpandedScreen = WindowClass.isAtLeastExpanded()
+    val navigationBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val totalBottomPadding = navigationBarHeight + navigationBarInset
 
     Box(modifier = Modifier.fillMaxSize()) {
         val showRail = showNavigation && isExpandedScreen
@@ -50,7 +56,7 @@ fun AdaptiveNavigationBarLayout(
             if (showRail) {
                 PaddingValues(start = navigationRailWidth)
             } else if (showBar) {
-                PaddingValues(bottom = navigationBarHeight)
+                PaddingValues(bottom = totalBottomPadding)
             } else {
                 PaddingValues()
             },
@@ -72,18 +78,24 @@ fun AdaptiveNavigationBarLayout(
                 }
             }
         } else if (showBar) {
-            NavigationBar(
-                modifier = Modifier.align(Alignment.BottomCenter).height(navigationBarHeight),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = navigationBarInset),
             ) {
-                navigationItems.forEach {
-                    NavigationBarItem(
-                        selected = it.selected,
-                        onClick = it.onClick,
-                        icon = {
-                            Icon(it.icon, contentDescription = it.label)
-                        },
-                    )
+                NavigationBar(
+                    modifier = Modifier.height(navigationBarHeight),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    navigationItems.forEach {
+                        NavigationBarItem(
+                            selected = it.selected,
+                            onClick = it.onClick,
+                            icon = {
+                                Icon(it.icon, contentDescription = it.label)
+                            },
+                        )
+                    }
                 }
             }
         }
