@@ -38,7 +38,7 @@ class SearchTest {
     @Test
     fun `can navigate to items via search`() {
         val album = ServerMediaItemFixtures.album(name = "The Exploding Onion Conspiracy")
-        serviceClient.addToLibrary(album)
+        serviceClient.addItems(album)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickSearch()
@@ -51,7 +51,7 @@ class SearchTest {
     fun `can filter search results by media type`() {
         val album = ServerMediaItemFixtures.album(name = "The Exploding Onion Conspiracy")
         val track = ServerMediaItemFixtures.track(name = "Onion Dip")
-        serviceClient.addToLibrary(album, track)
+        serviceClient.addItems(album, track)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickSearch()
@@ -69,9 +69,11 @@ class SearchTest {
     @Test
     fun `can filter search results to library only`() {
         val libraryAlbum = ServerMediaItemFixtures.album(name = "The Exploding Onion Conspiracy")
-        val globalAlbum = ServerMediaItemFixtures.album(name = "A Tale of Onions")
+        val globalAlbum =
+            ServerMediaItemFixtures.album(name = "A Tale of Onions")
+        serviceClient.addItems(libraryAlbum)
         serviceClient.addToLibrary(libraryAlbum)
-        serviceClient.addToGlobalItems(globalAlbum)
+        serviceClient.addItems(globalAlbum)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickSearch()
@@ -86,7 +88,7 @@ class SearchTest {
     @Test
     fun `clicking clear clears results`() {
         val album = ServerMediaItemFixtures.album(name = "Blast from Dastardly Past")
-        serviceClient.addToLibrary(album)
+        serviceClient.addItems(album)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickSearch()
@@ -99,7 +101,7 @@ class SearchTest {
     fun `search has its own backstack`() {
         val album1 = ServerMediaItemFixtures.album()
         val album2 = ServerMediaItemFixtures.album()
-        serviceClient.addToLibrary(album1, album2)
+        serviceClient.addItems(album1, album2)
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(album1)

@@ -46,8 +46,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
-import kotlin.properties.ReadOnlyProperty
-import kotlin.reflect.KProperty
 
 class FakeServiceClient : ServiceClient {
     private var legacyVersion: LegacyVersion? = null
@@ -60,25 +58,8 @@ class FakeServiceClient : ServiceClient {
     private val playerAudioFormats = mutableMapOf<String, AudioFormat>()
     private val queues = mutableListOf<ServerQueue>()
     private val queueItems = mutableMapOf<String, List<ServerQueueItem>>()
-    private val items = mutableSetOf<ServerMediaItem>()
-    private val globalItems = mutableSetOf<ServerMediaItem>()
-
-    private val albums: List<ServerMediaItem> by items(items, MediaType.ALBUM)
-    private val artists: List<ServerMediaItem> by items(items, MediaType.ARTIST)
-    private val tracks: List<ServerMediaItem> by items(items, MediaType.TRACK)
-    private val playlists: List<ServerMediaItem> by items(items, MediaType.PLAYLIST)
-    private val audiobooks: List<ServerMediaItem> by items(items, MediaType.AUDIOBOOK)
-    private val podcasts: List<ServerMediaItem> by items(items, MediaType.PODCAST)
-    private val radios: List<ServerMediaItem> by items(items, MediaType.RADIO)
-    private val genres: List<ServerMediaItem> by items(items, MediaType.GENRE)
-    private val globalArtists: List<ServerMediaItem> by items(globalItems, MediaType.ARTIST)
-    private val globalAlbums: List<ServerMediaItem> by items(globalItems, MediaType.ALBUM)
-    private val globalTracks: List<ServerMediaItem> by items(globalItems, MediaType.TRACK)
-    private val globalPlaylists: List<ServerMediaItem> by items(globalItems, MediaType.PLAYLIST)
-    private val globalAudiobooks: List<ServerMediaItem> by items(globalItems, MediaType.AUDIOBOOK)
-    private val globalPodcasts: List<ServerMediaItem> by items(globalItems, MediaType.PODCAST)
-    private val globalRadios: List<ServerMediaItem> by items(globalItems, MediaType.RADIO)
-    private val globalGenres: List<ServerMediaItem> by items(globalItems, MediaType.GENRE)
+    private val mediaItems = mutableSetOf<ServerMediaItem>()
+    private val libraryIds = mutableMapOf<Pair<String, String>, String>()
 
     private val playlistItems = mutableMapOf<String, List<String>>()
     private val shortcuts = mutableListOf<String>()
@@ -145,7 +126,7 @@ class FakeServiceClient : ServiceClient {
             }
 
             APICommands.MUSIC_ITEM_BY_URI -> {
-                val item = items.find { it.uri == request.getArg("uri") }!!
+                val item = mediaItems.find { it.uri == request.getArg("uri") }!!
                 Result.success(answer(request = request, result = item))
             }
 
@@ -159,14 +140,18 @@ class FakeServiceClient : ServiceClient {
                                 provider = "library",
                                 name = "Recently added albums",
                                 mediaType = MediaType.FOLDER.serverValue,
-                                items = albums,
+                                items = mediaItems
+                                    .filter { it.mediaType == MediaType.ALBUM.serverValue }
+                                    .forResponse(),
                             ),
                             ServerMediaItem(
                                 itemId = "recently_added_tracks",
                                 provider = "library",
                                 name = "Recently added tracks",
                                 mediaType = MediaType.FOLDER.serverValue,
-                                items = tracks,
+                                items = mediaItems
+                                    .filter { it.mediaType == MediaType.TRACK.serverValue }
+                                    .forResponse(),
                             ),
                         ),
                     ),
@@ -174,158 +159,62 @@ class FakeServiceClient : ServiceClient {
             }
 
             APICommands.MUSIC_SEARCH -> {
-                val searchArg = "search_query"
                 val mediaTypes =
                     (request.args!!["media_types"] as JsonArray).map { (it as JsonPrimitive).content }
                 val libraryOnly = request.getArgOrNull("library_only") == "true"
 
-                if (mediaTypes.isEmpty()) {
-                    Result.success(
-                        answer(
-                            request = request,
-                            result = SearchResult(
-                                artists = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) artists else artists + globalArtists,
-                                ),
-                                albums = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) albums else albums + globalAlbums,
-                                ),
-                                tracks = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) tracks else tracks + globalTracks,
-                                ),
-                                playlists = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) playlists else playlists + globalPlaylists,
-                                ),
-                                podcasts = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) podcasts else podcasts + globalPodcasts,
-                                ),
-                                audiobooks = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) audiobooks else audiobooks + globalAudiobooks,
-                                ),
-                                radio = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) radios else radios + globalRadios,
-                                ),
-                                genres = searchItems(
-                                    request,
-                                    searchArg,
-                                    if (libraryOnly) genres else genres + globalGenres,
-                                ),
-                            ),
-                        ),
-                    )
+                val itemsToSearch = if (libraryOnly) {
+                    mediaItems.dropNotInLibrary()
                 } else {
-                    Result.success(
-                        answer(
-                            request = request,
-                            result = SearchResult(
-                                artists = if (mediaTypes.contains(MediaType.ARTIST.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) artists else artists + globalArtists,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                                albums = if (mediaTypes.contains(MediaType.ALBUM.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) albums else albums + globalAlbums,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                                tracks = if (mediaTypes.contains(MediaType.TRACK.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) tracks else tracks + globalTracks,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                                playlists = if (mediaTypes.contains(MediaType.PLAYLIST.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) playlists else playlists + globalPlaylists,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                                podcasts = if (mediaTypes.contains(MediaType.PODCAST.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) podcasts else podcasts + globalPodcasts,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                                audiobooks = if (mediaTypes.contains(MediaType.AUDIOBOOK.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) audiobooks else audiobooks + globalAudiobooks,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                                radio = if (mediaTypes.contains(MediaType.RADIO.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) radios else radios + globalRadios,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                                genres = if (mediaTypes.contains(MediaType.GENRE.serverValue)) {
-                                    searchItems(
-                                        request,
-                                        searchArg,
-                                        if (libraryOnly) genres else genres + globalGenres,
-                                    )
-                                } else {
-                                    emptyList()
-                                },
-                            ),
-                        ),
-                    )
+                    mediaItems
                 }
+
+                val results = itemsToSearch.filter {
+                    it.name.contains(request.getArg("search_query"), ignoreCase = true)
+                }
+
+                val resultsForType: (MediaType) -> List<ServerMediaItem> = {
+                    val mediaTypeServerValue = it.serverValue
+                    if (mediaTypes.isEmpty() || mediaTypes.contains(mediaTypeServerValue)) {
+                        results.filter { it.mediaType == mediaTypeServerValue }.forResponse()
+                    } else {
+                        emptyList()
+                    }
+                }
+
+                Result.success(
+                    answer(
+                        request = request,
+                        result = SearchResult(
+                            artists = resultsForType(MediaType.ARTIST),
+                            albums = resultsForType(MediaType.ALBUM),
+                            tracks = resultsForType(MediaType.TRACK),
+                            playlists = resultsForType(MediaType.PLAYLIST),
+                            podcasts = resultsForType(MediaType.PODCAST),
+                            audiobooks = resultsForType(MediaType.AUDIOBOOK),
+                            radio = resultsForType(MediaType.RADIO),
+                            genres = resultsForType(MediaType.GENRE),
+                        ),
+                    ),
+                )
             }
 
             APICommands.musicGet(APICommands.KIND_ALBUMS) -> {
                 Result.success(
                     answer(
                         request = request,
-                        result = findItem(request, albums),
+                        result = findItem(request).forResponse(),
                     ),
                 )
             }
 
             APICommands.MUSIC_ALBUMS_ALBUM_TRACKS -> {
-                val album = findItem(request, albums)
+                val album = findItem(request)
 
                 Result.success(
                     answer(
                         request = request,
-                        result = tracks.filter { it.album == album },
+                        result = album.getAlbumTracks().forResponse(),
                     ),
                 )
             }
@@ -334,7 +223,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = searchItems(request, "search", albums),
+                        result = filterLibrary(request, MediaType.ALBUM).forResponse(),
                     ),
                 )
             }
@@ -343,7 +232,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = findItem(request, artists),
+                        result = findItem(request).forResponse(),
                     ),
                 )
             }
@@ -352,7 +241,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = searchItems(request, "search", artists),
+                        result = filterLibrary(request, MediaType.ARTIST).forResponse(),
                     ),
                 )
             }
@@ -361,7 +250,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = searchItems(request, "search", playlists),
+                        result = filterLibrary(request, MediaType.PLAYLIST).forResponse(),
                     ),
                 )
             }
@@ -370,18 +259,18 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = findItem(request, playlists),
+                        result = findItem(request).forResponse(),
                     ),
                 )
             }
 
             APICommands.MUSIC_PLAYLISTS_PLAYLIST_TRACKS -> {
-                val playlistId = request.getArg("item_id")
+                val playlist = findItem(request)
 
                 Result.success(
                     answer(
                         request = request,
-                        result = tracks.filter { playlistItems[playlistId]!!.contains(it.itemId) },
+                        result = playlist.getPlaylistTracks().forResponse(),
                     ),
                 )
             }
@@ -390,7 +279,12 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = tracks,
+                        result = mediaItems
+                            .dropNotInLibrary()
+                            .filter {
+                                it.mediaType == MediaType.TRACK.serverValue
+                            }
+                            .forResponse(),
                     ),
                 )
             }
@@ -399,7 +293,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = searchItems(request, "search", audiobooks),
+                        result = filterLibrary(request, MediaType.AUDIOBOOK).forResponse(),
                     ),
                 )
             }
@@ -408,7 +302,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = searchItems(request, "search", podcasts),
+                        result = filterLibrary(request, MediaType.PODCAST).forResponse(),
                     ),
                 )
             }
@@ -417,7 +311,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = searchItems(request, "search", radios),
+                        result = filterLibrary(request, MediaType.RADIO).forResponse(),
                     ),
                 )
             }
@@ -426,7 +320,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = searchItems(request, "search", genres),
+                        result = filterLibrary(request, MediaType.GENRE).forResponse(),
                     ),
                 )
             }
@@ -443,35 +337,35 @@ class FakeServiceClient : ServiceClient {
             APICommands.PLAYER_QUEUES_PLAY_MEDIA -> {
                 val mediaUri = ((request.args!!["media"] as JsonArray)[0] as JsonPrimitive).content
                 val startItemId = request.getArgOrNull("start_item")
-                val mediaTracks = items.find { it.uri == mediaUri }?.let { item ->
-                    when (MediaType.fromServer(item.mediaType)) {
-                        MediaType.ALBUM -> {
-                            val albumTracks = tracks.filter { it.album == item }
-                            val startIndex = if (startItemId != null) {
-                                albumTracks.indexOfFirst { it.itemId == startItemId }
-                            } else {
-                                0
+                val mediaTracks =
+                    mediaItems.find { it.uri == mediaUri }?.let { item ->
+                        when (MediaType.fromServer(item.mediaType)) {
+                            MediaType.ALBUM -> {
+                                val albumTracks = item.getAlbumTracks()
+                                val startIndex = if (startItemId != null) {
+                                    albumTracks.indexOfFirst { it.itemId == startItemId }
+                                } else {
+                                    0
+                                }
+
+                                albumTracks.drop(startIndex)
                             }
 
-                            albumTracks.drop(startIndex)
-                        }
+                            MediaType.TRACK -> listOf(item)
+                            MediaType.PLAYLIST -> {
+                                val playlistTracks = item.getPlaylistTracks()
+                                val startIndex = if (startItemId != null) {
+                                    playlistTracks.indexOfFirst { it.itemId == startItemId }
+                                } else {
+                                    0
+                                }
 
-                        MediaType.TRACK -> listOf(item)
-                        MediaType.PLAYLIST -> {
-                            val playlistTracks =
-                                tracks.filter { playlistItems[item.itemId]!!.contains(it.itemId) }
-                            val startIndex = if (startItemId != null) {
-                                playlistTracks.indexOfFirst { it.itemId == startItemId }
-                            } else {
-                                0
+                                playlistTracks.drop(startIndex)
                             }
 
-                            playlistTracks.drop(startIndex)
+                            else -> TODO()
                         }
-
-                        else -> TODO()
-                    }
-                } ?: emptyList()
+                    } ?: emptyList()
 
                 val queueId = request.getArg("queue_id")
                 updateQueue(
@@ -766,12 +660,71 @@ class FakeServiceClient : ServiceClient {
         _sessionState.update { SessionState.Disconnected.NoServerData }
     }
 
-    fun addToLibrary(vararg items: ServerMediaItem) {
-        addItems(items, this.items)
+    fun addItems(vararg items: ServerMediaItem) {
+        val itemsToAdd = items.toList()
+        itemsToAdd.forEach { item ->
+            item.artists?.let {
+                mediaItems.addAll(it)
+            }
+
+            item.album?.let {
+                mediaItems.add(it)
+            }
+        }
+
+        mediaItems.addAll(itemsToAdd)
     }
 
-    fun addToGlobalItems(vararg items: ServerMediaItem) {
-        addItems(items, globalItems)
+    fun addToLibrary(vararg items: ServerMediaItem) {
+        items.forEach { addToLibrary(it) }
+    }
+
+    fun addToLibrary(item: ServerMediaItem) {
+        libraryIds[item.globalId()] = uniqueIdGenerator.nextInt().toString()
+
+        when (MediaType.fromServer(item.mediaType)) {
+            MediaType.ALBUM -> {
+                item.getAlbumTracks().forEach {
+                    libraryIds[it.globalId()] = uniqueIdGenerator.nextInt().toString()
+                }
+            }
+
+            MediaType.PLAYLIST -> Unit
+            MediaType.ARTIST -> Unit
+            MediaType.TRACK -> Unit
+            MediaType.RADIO -> Unit
+            MediaType.AUDIOBOOK -> Unit
+            MediaType.PODCAST -> Unit
+            MediaType.PODCAST_EPISODE -> Unit
+            MediaType.GENRE -> Unit
+            MediaType.FOLDER -> Unit
+            MediaType.FLOW_STREAM -> Unit
+            MediaType.ANNOUNCEMENT -> Unit
+            MediaType.UNKNOWN -> Unit
+            null -> Unit
+        }
+    }
+
+    fun Set<ServerMediaItem>.dropNotInLibrary(): List<ServerMediaItem> {
+        return this.filter { libraryIds.containsKey(it.globalId()) }
+    }
+
+    fun ServerMediaItem.forResponse(): ServerMediaItem {
+        val libraryId = libraryIds[this.globalId()]
+        return if (libraryId != null) {
+            this.copy(
+                itemId = libraryId,
+                provider = "library",
+                album = album.let { it?.forResponse() },
+                artists = artists.let { it?.forResponse() },
+            )
+        } else {
+            this
+        }
+    }
+
+    fun Collection<ServerMediaItem>.forResponse(): List<ServerMediaItem> {
+        return this.map { it.forResponse() }
     }
 
     fun addPlayers(vararg players: ServerPlayer) {
@@ -802,30 +755,45 @@ class FakeServiceClient : ServiceClient {
         }
     }
 
-    private fun findItem(
-        request: Request,
-        items: List<ServerMediaItem>,
-    ): ServerMediaItem {
-        return items.find {
-            it.itemId == (request.args!!["item_id"]!! as JsonPrimitive).content
-        }!!
+    private fun findItem(request: Request): ServerMediaItem {
+        val itemId = request.getArg("item_id")
+        val provider = request.getArg("provider_instance_id_or_domain")
+
+        return if (provider == "library") {
+            val globalId = libraryIds.entries.first { it.value == itemId }.key
+            mediaItems.first { it.globalId() == globalId }
+        } else {
+            mediaItems.first {
+                it.providerMappings?.any { mapping ->
+                    (mapping.providerInstance == provider || mapping.providerDomain == provider) && mapping.itemId == itemId
+                } ?: false
+            }
+        }
     }
 
-    private fun searchItems(
+    private fun filterLibrary(
         request: Request,
-        requestArg: String,
-        items: Collection<ServerMediaItem>,
+        mediaType: MediaType,
     ): List<ServerMediaItem> {
-        return items.filter {
-            val nameMatches = it.name.contains(request.getArg(requestArg), ignoreCase = true)
-            val favoriteMatches = if (request.getArgOrNull("favorite") == "true") {
-                it.favorite ?: false
-            } else {
-                true
-            }
+        return mediaItems.dropNotInLibrary().filter { it.mediaType == mediaType.serverValue }
+            .filter {
+                val nameMatches = it.name.contains(request.getArg("search"), ignoreCase = true)
+                val favoriteMatches = if (request.getArgOrNull("favorite") == "true") {
+                    it.favorite ?: false
+                } else {
+                    true
+                }
 
-            nameMatches && favoriteMatches
-        }
+                nameMatches && favoriteMatches
+            }
+    }
+
+    fun ServerMediaItem.getAlbumTracks(): List<ServerMediaItem> {
+        return mediaItems.filter { it.album == this }
+    }
+
+    fun ServerMediaItem.getPlaylistTracks(): List<ServerMediaItem> {
+        return mediaItems.filter { playlistItems[this.itemId]?.contains(it.itemId) ?: false }
     }
 
     fun getQueueForPlayer(player: ServerPlayer): List<ServerMediaItem> {
@@ -915,23 +883,6 @@ class FakeServiceClient : ServiceClient {
         }
     }
 
-    private fun addItems(
-        itemsToAdd: Array<out ServerMediaItem>,
-        items: MutableSet<ServerMediaItem>,
-    ) {
-        items.addAll(itemsToAdd)
-        itemsToAdd.forEach { item ->
-            item.artists?.let {
-                items.addAll(it)
-            }
-        }
-        itemsToAdd.forEach { item ->
-            item.album?.let {
-                items.add(it)
-            }
-        }
-    }
-
     fun setPlayerAudioFormat(player: ServerPlayer, audioFormat: AudioFormat) {
         playerAudioFormats[player.playerId] = audioFormat
     }
@@ -965,16 +916,7 @@ private fun Request.getArgOrNull(arg: String): String? {
     return (args!![arg] as JsonPrimitive?)?.content
 }
 
-private class FilteredMediaTypeDelegate(
-    private val items: Set<ServerMediaItem>,
-    private val mediaType: MediaType,
-) : ReadOnlyProperty<Any?, List<ServerMediaItem>> {
-    override fun getValue(thisRef: Any?, property: KProperty<*>): List<ServerMediaItem> {
-        return items.filter { it.mediaType == mediaType.serverValue }
-    }
+private fun ServerMediaItem.globalId(): Pair<String, String> {
+    val providerMapping = this.providerMappings!![0]
+    return Pair(providerMapping.providerInstance, providerMapping.itemId)
 }
-
-private fun items(
-    items: Set<ServerMediaItem>,
-    mediaType: MediaType,
-): FilteredMediaTypeDelegate = FilteredMediaTypeDelegate(items, mediaType)
