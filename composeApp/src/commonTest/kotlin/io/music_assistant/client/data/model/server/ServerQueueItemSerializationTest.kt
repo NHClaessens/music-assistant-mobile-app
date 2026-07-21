@@ -6,7 +6,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class ServerQueueItemSerializationTest {
-
     /**
      * Required to support server v2.9 and 2.10
      */

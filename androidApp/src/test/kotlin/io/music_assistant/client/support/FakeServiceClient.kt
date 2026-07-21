@@ -938,7 +938,7 @@ class FakeServiceClient : ServiceClient {
 
     enum class LegacyVersion {
         V2_8,
-        V2_9
+        V2_9,
     }
 }
 
