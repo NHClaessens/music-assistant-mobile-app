@@ -17,20 +17,20 @@ class ClickActionConfigTest {
 
     @Test
     fun `null context resolves to play now`() {
-        val config = ClickActionConfig(context = null, prefs = trackSearchAddToQueue)
+        val config = ClickActionConfig(context = null, prefs = trackSearchAddToQueue, contextMenuPrefs = emptyMap())
         assertEquals(DefaultClickOption.PLAY_NOW, config.actionFor(testTrack()))
     }
 
     @Test
     fun `unknown kind or context resolves to play now`() {
-        val config = ClickActionConfig(context = ClickContext.LIBRARY, prefs = trackSearchAddToQueue)
+        val config = ClickActionConfig(context = ClickContext.LIBRARY, prefs = trackSearchAddToQueue, contextMenuPrefs = emptyMap())
         // TRACK has a SEARCH entry but no LIBRARY entry.
         assertEquals(DefaultClickOption.PLAY_NOW, config.actionFor(testTrack()))
     }
 
     @Test
     fun `populated lookup hit is returned`() {
-        val config = ClickActionConfig(context = ClickContext.SEARCH, prefs = trackSearchAddToQueue)
+        val config = ClickActionConfig(context = ClickContext.SEARCH, prefs = trackSearchAddToQueue, contextMenuPrefs = emptyMap())
         assertEquals(DefaultClickOption.ADD_TO_QUEUE, config.actionFor(testTrack()))
         assertEquals(ItemAction.Play(QueueOption.ADD), config.effectiveActionFor(testTrack()))
     }
@@ -40,13 +40,14 @@ class ClickActionConfigTest {
         val config = ClickActionConfig(
             context = ClickContext.DETAIL,
             prefs = mapOf(ItemKind.PLAYLIST to mapOf(ClickContext.DETAIL to DefaultClickOption.START_RADIO)),
+            contextMenuPrefs = emptyMap(),
         )
         assertEquals(ItemAction.Play(QueueOption.REPLACE), config.effectiveActionFor(testPlaylist(isDynamic = true)))
     }
 
     @Test
     fun `effectiveActionFor is null for a non-playable item`() {
-        val config = ClickActionConfig(context = ClickContext.SEARCH, prefs = trackSearchAddToQueue)
+        val config = ClickActionConfig(context = ClickContext.SEARCH, prefs = trackSearchAddToQueue, contextMenuPrefs = emptyMap())
         assertNull(config.effectiveActionFor(testTrack(isPlayable = false)))
     }
 }

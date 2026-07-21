@@ -32,7 +32,7 @@ import io.music_assistant.client.ui.compose.common.items.DefaultClickActionsDial
 import io.music_assistant.client.ui.compose.common.items.ItemAction
 import io.music_assistant.client.ui.compose.common.items.LocalClickActionConfig
 import io.music_assistant.client.ui.compose.common.items.icon
-import io.music_assistant.client.ui.compose.common.items.resolvePlayButtonActions
+import io.music_assistant.client.ui.compose.common.items.resolveConfiguredPlayButtonActions
 import io.music_assistant.client.ui.compose.common.items.title
 import io.music_assistant.client.ui.compose.common.items.toOverflowOption
 import io.music_assistant.client.ui.contentColorByLuminance
@@ -126,7 +126,13 @@ private fun PlayOverflow(
     context: ClickContext?,
     button: @Composable (() -> Unit) -> Unit,
 ) {
-    val actions = resolvePlayButtonActions(item, default, onCustomize != null)
+    val actions = resolveConfiguredPlayButtonActions(
+        item = item,
+        clickContext = LocalClickActionConfig.current.context,
+        menuConfig = LocalClickActionConfig.current.menuActionsFor(item),
+        defaultAction = default,
+        customizationAllowed = onCustomize != null,
+    )
     val options = actions.map { action ->
         action.toOverflowOption(context) {
             if (it == ItemAction.Customize) onCustomize?.invoke() else onPlayAction(it)

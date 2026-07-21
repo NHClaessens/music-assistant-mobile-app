@@ -1,7 +1,10 @@
 package io.music_assistant.client.ui.compose.common.items
 
 import io.music_assistant.client.data.model.client.ClickContext
+import io.music_assistant.client.data.model.client.ItemKind
 import io.music_assistant.client.data.model.client.QueueOption
+import io.music_assistant.client.settings.MenuActionOption
+import io.music_assistant.client.settings.defaultContextMenuActions
 import io.music_assistant.client.data.model.client.testAlbum
 import io.music_assistant.client.data.model.client.testArtist
 import io.music_assistant.client.data.model.client.testPlaylist
@@ -126,5 +129,48 @@ class ItemActionResolverTest {
                 "expected interleave for ${item::class.simpleName}",
             )
         }
+    }
+
+    @Test
+    fun `configured menu reorders long press actions`() {
+        val item = testTrack()
+        val config = listOf(
+            MenuActionOption.ADD_TO_QUEUE,
+            MenuActionOption.PLAY_NOW,
+            MenuActionOption.LIBRARY,
+        )
+        val flags = ContextMenuCallSiteFlags(
+            librarySupported = true,
+            canAddToPlaylist = false,
+            canRemoveFromPlaylist = false,
+            progressSupported = false,
+            customizationAllowed = false,
+        )
+        val actions = resolveConfiguredLongClickActions(
+            item = item,
+            clickContext = ClickContext.HOME,
+            menuConfig = config,
+            flags = flags,
+            defaultAction = null,
+        )
+        assertEquals(ItemAction.Play(QueueOption.ADD), actions.first())
+        assertEquals(ItemAction.Play(QueueOption.REPLACE), actions[1])
+    }
+
+    @Test
+    fun `configured play overflow keeps playback actions only`() {
+        val item = testAlbum()
+        val config = defaultContextMenuActions(ItemKind.ALBUM)
+        val default = ItemAction.Play(QueueOption.REPLACE)
+        val actions = resolveConfiguredPlayButtonActions(
+            item = item,
+            clickContext = ClickContext.DETAIL,
+            menuConfig = config,
+            defaultAction = default,
+            customizationAllowed = false,
+        )
+        assertFalse(default in actions)
+        assertTrue(actions.all { it.kind == ItemAction.Kind.PLAYBACK })
+        assertTrue(ItemAction.InterleaveIntoQueue in actions)
     }
 }

@@ -276,6 +276,9 @@
   <string name="settings_local_player_disabled">Local player (Sendspin protocol)</string>
   <string name="settings_local_player_enabled">Local player enabled</string>
   <string name="settings_swipe_actions">Swipe actions</string>
+  <string name="settings_context_menus">Context menus</string>
+  <string name="settings_context_menu_configure">Configure context menus</string>
+  <string name="settings_context_menus_for">%1$s</string>
   <string name="settings_swipe_actions_dialog_title">Configure swipe actions</string>
   <string name="settings_swipe_left">Swipe left</string>
   <string name="settings_swipe_right">Swipe right</string>

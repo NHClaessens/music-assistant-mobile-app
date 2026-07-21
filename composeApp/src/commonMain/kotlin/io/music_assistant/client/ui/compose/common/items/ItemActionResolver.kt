@@ -9,6 +9,7 @@ import io.music_assistant.client.data.model.client.items.Audiobook
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
+import io.music_assistant.client.settings.MenuActionOption
 
 /** Item types accepted by playlist edits (server contract, not a UI choice). */
 val AppMediaItem.supportsAddToPlaylist: Boolean
@@ -103,6 +104,100 @@ fun resolveDetailOverflowActions(
         }
     }
     if (canAddToPlaylist) add(ItemAction.AddToPlaylist)
+}
+
+enum class ContextMenuCallSite { LONG_PRESS, PLAY_OVERFLOW }
+
+data class ContextMenuCallSiteFlags(
+    val librarySupported: Boolean,
+    val canAddToPlaylist: Boolean,
+    val canRemoveFromPlaylist: Boolean,
+    val progressSupported: Boolean,
+    val customizationAllowed: Boolean,
+)
+
+fun applyContextMenuConfig(
+    configured: List<MenuActionOption>,
+    item: AppMediaItem,
+    clickContext: ClickContext?,
+    callSite: ContextMenuCallSite,
+    flags: ContextMenuCallSiteFlags,
+    defaultAction: ItemAction? = null,
+): List<ItemAction> {
+    val mapped = configured.mapNotNull { option ->
+        if (!option.isApplicableAtCallSite(callSite, flags)) return@mapNotNull null
+        option.toItemAction(item, clickContext)?.takeIf { action ->
+            action.isAllowedAtCallSite(flags)
+        }
+    }
+    val filtered = if (callSite == ContextMenuCallSite.PLAY_OVERFLOW) {
+        mapped.filter { it != defaultAction }
+    } else {
+        mapped
+    }
+    return if (defaultAction == null || callSite == ContextMenuCallSite.PLAY_OVERFLOW) {
+        filtered
+    } else {
+        listOf(defaultAction) + filtered.filterNot { it == defaultAction }
+    }
+}
+
+fun resolveConfiguredLongClickActions(
+    item: AppMediaItem,
+    clickContext: ClickContext?,
+    menuConfig: List<MenuActionOption>,
+    flags: ContextMenuCallSiteFlags,
+    defaultAction: ItemAction?,
+): List<ItemAction> = applyContextMenuConfig(
+    configured = menuConfig,
+    item = item,
+    clickContext = clickContext,
+    callSite = ContextMenuCallSite.LONG_PRESS,
+    flags = flags,
+    defaultAction = defaultAction,
+)
+
+fun resolveConfiguredPlayButtonActions(
+    item: AppMediaItem,
+    clickContext: ClickContext?,
+    menuConfig: List<MenuActionOption>,
+    defaultAction: ItemAction?,
+    customizationAllowed: Boolean,
+): List<ItemAction> = applyContextMenuConfig(
+    configured = menuConfig,
+    item = item,
+    clickContext = clickContext,
+    callSite = ContextMenuCallSite.PLAY_OVERFLOW,
+    flags = ContextMenuCallSiteFlags(
+        librarySupported = false,
+        canAddToPlaylist = false,
+        canRemoveFromPlaylist = false,
+        progressSupported = false,
+        customizationAllowed = customizationAllowed,
+    ),
+    defaultAction = defaultAction,
+)
+
+private fun MenuActionOption.isApplicableAtCallSite(
+    callSite: ContextMenuCallSite,
+    flags: ContextMenuCallSiteFlags,
+): Boolean = when (callSite) {
+    ContextMenuCallSite.PLAY_OVERFLOW -> when (this) {
+        MenuActionOption.CUSTOMIZE -> flags.customizationAllowed
+        else -> toDisplayItemAction().kind == ItemAction.Kind.PLAYBACK
+    }
+    ContextMenuCallSite.LONG_PRESS -> true
+}
+
+private fun ItemAction.isAllowedAtCallSite(flags: ContextMenuCallSiteFlags): Boolean = when (this) {
+    ItemAction.AddToPlaylist -> flags.canAddToPlaylist
+    ItemAction.RemoveFromPlaylist -> flags.canRemoveFromPlaylist
+    ItemAction.AddToLibrary, ItemAction.RemoveFromLibrary,
+    ItemAction.Favorite, ItemAction.Unfavorite,
+    -> flags.librarySupported
+    ItemAction.MarkPlayed, ItemAction.MarkUnplayed -> flags.progressSupported
+    ItemAction.Customize -> flags.customizationAllowed
+    else -> true
 }
 
 private fun AppMediaItem.isFullyPlayed(): Boolean = when (this) {

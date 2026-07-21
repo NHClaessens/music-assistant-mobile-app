@@ -162,14 +162,23 @@ fun SettingsScreen(goHome: () -> Unit, exitApp: () -> Unit) {
     val sendspinEnabled by viewModel.sendspinEnabled.collectAsStateWithLifecycle()
     val hasCrashLog by viewModel.hasCrashLog.collectAsStateWithLifecycle()
     val isPreparingShare by viewModel.isPreparingShare.collectAsStateWithLifecycle()
+    var contextMenuRoute by remember { mutableStateOf<ContextMenuSettingsRoute?>(null) }
 
-    // Only allow back navigation when authenticated
     BackHandler(enabled = true) {
-        if (isAuthenticated) {
-            goHome()
-        } else {
-            exitApp()
+        when (contextMenuRoute) {
+            is ContextMenuSettingsRoute.Edit -> contextMenuRoute = ContextMenuSettingsRoute.List
+            ContextMenuSettingsRoute.List -> contextMenuRoute = null
+            null -> if (isAuthenticated) goHome() else exitApp()
         }
+    }
+
+    if (contextMenuRoute != null) {
+        ContextMenuSettingsPage(
+            route = contextMenuRoute!!,
+            onNavigate = { contextMenuRoute = it },
+            modifier = Modifier.fillMaxSize(),
+        )
+        return
     }
 
     TopBarLayout(
@@ -340,6 +349,9 @@ fun SettingsScreen(goHome: () -> Unit, exitApp: () -> Unit) {
 
                 // Misc settings - always visible
                 SwipeActionsSection()
+                if (isAuthenticated) {
+                    ContextMenusSection(onOpen = { contextMenuRoute = ContextMenuSettingsRoute.List })
+                }
                 val shareLogsTitle = stringResource(Res.string.settings_share_logs)
                 val shareCrashLogsTitle = stringResource(Res.string.settings_share_crash_logs)
                 MiscSection(

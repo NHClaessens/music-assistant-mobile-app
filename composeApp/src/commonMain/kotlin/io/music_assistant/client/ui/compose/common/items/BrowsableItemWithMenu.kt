@@ -273,18 +273,24 @@ private fun <T : AppMediaItem> BrowsableItemWithMenu(
     ) -> Unit,
 ) {
     val clickContext = LocalClickActionConfig.current.context
+    val clickActionConfig = LocalClickActionConfig.current
     var expandedItemId by remember { mutableStateOf<String?>(null) }
     var showPlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var showRemoveConfirmation by remember { mutableStateOf(false) }
 
-    val actions = resolveLongClickActions(
-        item = item,
-        clickContext = clickContext,
+    val menuFlags = ContextMenuCallSiteFlags(
         librarySupported = item !is Genre,
         canAddToPlaylist = playlistActions != null && item.supportsAddToPlaylist,
         canRemoveFromPlaylist = false,
         progressSupported = progressActions != null && item is Audiobook,
         customizationAllowed = false,
+    )
+    val actions = resolveConfiguredLongClickActions(
+        item = item,
+        clickContext = clickContext,
+        menuConfig = clickActionConfig.menuActionsFor(item),
+        flags = menuFlags,
+        defaultAction = null,
     )
 
     Box(modifier = modifier) {

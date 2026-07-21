@@ -12,6 +12,9 @@ import io.music_assistant.client.data.model.client.itemKind
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.settings.DefaultClickOption
+import io.music_assistant.client.settings.MenuActionOption
+import io.music_assistant.client.settings.contextMenuActionsFor
+import io.music_assistant.client.ui.compose.settings.ContextMenuActionsViewModel
 import io.music_assistant.client.ui.compose.settings.DefaultClickActionsViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -23,6 +26,7 @@ import org.koin.compose.viewmodel.koinViewModel
 data class ClickActionConfig(
     val context: ClickContext?,
     val prefs: Map<ItemKind, Map<ClickContext, DefaultClickOption>>,
+    val contextMenuPrefs: Map<ItemKind, List<MenuActionOption>>,
 ) {
     fun actionFor(item: AppMediaItem): DefaultClickOption {
         val ctx = context ?: return DefaultClickOption.PLAY_NOW
@@ -32,13 +36,25 @@ data class ClickActionConfig(
 
     /** The concrete action a tap performs for [item], or null when it isn't playable. */
     fun effectiveActionFor(item: AppMediaItem): ItemAction? = actionFor(item).effectiveFor(item)
+
+    /** Configured (or default) menu order for [item]; same everywhere for a given kind. */
+    fun menuActionsFor(item: AppMediaItem): List<MenuActionOption> {
+        val kind = item.itemKind() ?: return emptyList()
+        return contextMenuActionsFor(contextMenuPrefs, kind)
+    }
 }
 
-val LocalClickActionConfig = compositionLocalOf { ClickActionConfig(null, emptyMap()) }
+val LocalClickActionConfig = compositionLocalOf {
+    ClickActionConfig(null, emptyMap(), emptyMap())
+}
 
 /** The saved preference table, loaded once from Koin near the app root (empty in tests/previews). */
 val LocalClickActionPrefs =
     compositionLocalOf<Map<ItemKind, Map<ClickContext, DefaultClickOption>>> { emptyMap() }
+
+/** The saved context-menu tables, loaded once from Koin near the app root. */
+val LocalContextMenuPrefs =
+    compositionLocalOf<Map<ItemKind, List<MenuActionOption>>> { emptyMap() }
 
 /**
  * Reads the saved tables once from Koin and exposes them via [LocalClickActionPrefs].
@@ -47,7 +63,13 @@ val LocalClickActionPrefs =
 @Composable
 fun ProvideClickActionPrefs(content: @Composable () -> Unit) {
     val prefs by koinViewModel<DefaultClickActionsViewModel>().actions.collectAsStateWithLifecycle()
-    CompositionLocalProvider(LocalClickActionPrefs provides prefs, content)
+    val menuPrefs by koinViewModel<ContextMenuActionsViewModel>().actions.collectAsStateWithLifecycle()
+    CompositionLocalProvider(
+        LocalClickActionPrefs provides prefs,
+        LocalContextMenuPrefs provides menuPrefs,
+    ) {
+        content()
+    }
 }
 
 /**
@@ -58,7 +80,11 @@ fun ProvideClickActionPrefs(content: @Composable () -> Unit) {
 @Composable
 fun ProvideClickActions(context: ClickContext?, content: @Composable () -> Unit) {
     CompositionLocalProvider(
-        LocalClickActionConfig provides ClickActionConfig(context, LocalClickActionPrefs.current),
+        LocalClickActionConfig provides ClickActionConfig(
+            context = context,
+            prefs = LocalClickActionPrefs.current,
+            contextMenuPrefs = LocalContextMenuPrefs.current,
+        ),
         content,
     )
 }

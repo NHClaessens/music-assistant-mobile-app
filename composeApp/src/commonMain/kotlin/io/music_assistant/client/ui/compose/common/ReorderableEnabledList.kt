@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -41,7 +42,8 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  * themselves; disabled items sink below and lose the drag handle. Owns its working state and
  * emits the full ordered list on every change via [onItemsChange].
  *
- * @param canDisableLast when false (default), the last enabled item can't be turned off (min 1).
+ * @param fillMaxHeight when true, the list expands to fill available height (for full screens);
+ *   otherwise capped at [MAX_DIALOG_HEIGHT] for dialogs.
  */
 @Composable
 fun <T> ReorderableEnabledList(
@@ -51,6 +53,7 @@ fun <T> ReorderableEnabledList(
     onItemsChange: (List<Pair<T, Boolean>>) -> Unit,
     modifier: Modifier = Modifier,
     canDisableLast: Boolean = false,
+    fillMaxHeight: Boolean = false,
 ) {
     val plateShape = RoundedCornerShape(12.dp)
     var items by remember { mutableStateOf(initialItems) }
@@ -65,7 +68,9 @@ fun <T> ReorderableEnabledList(
         }
 
     LazyColumn(
-        modifier = modifier.heightIn(max = MAX_DIALOG_HEIGHT),
+        modifier = modifier.then(
+            if (fillMaxHeight) Modifier.fillMaxSize() else Modifier.heightIn(max = MAX_DIALOG_HEIGHT),
+        ),
         state = listState,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

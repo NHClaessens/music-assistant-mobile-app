@@ -280,6 +280,9 @@
   <string name="settings_webrtc_description">Verbind vanaf elke locatie zonder port forwarding</string>
   <string name="settings_webrtc_disclaimer">De WebRTC-verbinding kan trager en minder betrouwbaar zijn dan een directe verbinding of een verbinding via een proxy met je server.</string>
   <string name="settings_webrtc_info">WebRTC maakt gebruik van cloudsignalering met end-to-end-encryptie. Werkt door de meeste firewalls en NAT's.</string>
+  <string name="settings_context_menus">Contextmenu's</string>
+  <string name="settings_context_menu_configure">Contextmenu's configureren</string>
+  <string name="settings_context_menus_for">%1$s</string>
   <string name="sort_artist">Artiest</string>
   <string name="sort_date_added">Datum toegevoegd</string>
   <string name="sort_date_modified">Datum gewijzigd</string>

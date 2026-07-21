@@ -231,6 +231,49 @@ class SettingsRepository(
         _defaultClickActions.update { updated }
     }
 
+    // Context menu actions keyed by item kind. JSON map of ItemKind.name -> [MenuActionOption.name].
+    // Absent keys resolve to hardcoded defaults at the call site. Legacy nested-by-context JSON is
+    // migrated on read (first stored list per kind).
+    private val _contextMenuActions = MutableStateFlow(loadContextMenuActions())
+    val contextMenuActions = _contextMenuActions.asStateFlow()
+
+    private fun loadContextMenuActions(): Map<ItemKind, List<MenuActionOption>> {
+        val raw = settings.getStringOrNull("context_menu_actions") ?: return emptyMap()
+        return runCatching {
+            runCatching {
+                myJson.decodeFromString<Map<String, List<String>>>(raw)
+            }.getOrNull()?.let { flat ->
+                return@runCatching flat.mapNotNull { (k, list) ->
+                    val kind = runCatching { ItemKind.valueOf(k) }.getOrNull() ?: return@mapNotNull null
+                    kind to list.mapNotNull { v ->
+                        runCatching { MenuActionOption.valueOf(v) }.getOrNull()
+                    }
+                }.toMap()
+            }
+            // Legacy nested-by-context JSON: keep the first non-empty list per kind.
+            myJson.decodeFromString<Map<String, Map<String, List<String>>>>(raw).mapNotNull { (k, perContext) ->
+                val kind = runCatching { ItemKind.valueOf(k) }.getOrNull() ?: return@mapNotNull null
+                val lists = perContext.values.map { list ->
+                    list.mapNotNull { v -> runCatching { MenuActionOption.valueOf(v) }.getOrNull() }
+                }
+                val actions = lists.firstOrNull { it.isNotEmpty() } ?: lists.firstOrNull().orEmpty()
+                kind to actions
+            }.toMap()
+        }.getOrDefault(emptyMap())
+    }
+
+    /** Replaces the action list for a single [kind]; other kinds are preserved. */
+    fun setContextMenuActions(kind: ItemKind, actions: List<MenuActionOption>) {
+        val updated = _contextMenuActions.value.toMutableMap().apply { put(kind, actions) }
+        settings.putString(
+            "context_menu_actions",
+            myJson.encodeToString(
+                updated.entries.associate { (k, list) -> k.name to list.map { it.name } },
+            ),
+        )
+        _contextMenuActions.update { updated }
+    }
+
     // Swipe gesture actions on list-row items, keyed by finger direction (not screen side).
     // New keys: swipe_action_on_swipe_left / swipe_action_on_swipe_right.
     // Legacy swipe_action_left / swipe_action_right used library screen-side naming and were

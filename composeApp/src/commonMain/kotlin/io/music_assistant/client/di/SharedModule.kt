@@ -36,6 +36,7 @@ import io.music_assistant.client.ui.compose.library.ItemListViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
 import io.music_assistant.client.ui.compose.search.SearchViewModel
 import io.music_assistant.client.ui.compose.settings.CarActionsViewModel
+import io.music_assistant.client.ui.compose.settings.ContextMenuActionsViewModel
 import io.music_assistant.client.ui.compose.settings.SwipeActionsViewModel
 import io.music_assistant.client.ui.compose.settings.CarDspViewModel
 import io.music_assistant.client.ui.compose.settings.DefaultClickActionsViewModel
@@ -94,6 +95,7 @@ fun sharedModule(
         factory { ActionsViewModel(get(), get(), get(), get()) }
         factory { SettingsViewModel(get(), get(), get()) }
         factory { DefaultClickActionsViewModel(get()) }
+        factory { ContextMenuActionsViewModel(get()) }
         factory { SwipeActionsViewModel(get()) }
         factory { CarActionsViewModel(get()) }
         factory { CarDspViewModel(get(), get()) }

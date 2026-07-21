@@ -256,6 +256,9 @@
   <string name="settings_version_info">Version %1$s, Schema %2$s</string>
   <string name="settings_webrtc_description">Von überall verbinden (ohne Port-Forwarding)</string>
   <string name="settings_webrtc_info">WebRTC verwendet cloud signalling und Ende-zu-Ende Verschlüsselung. Funktioniert mit den meisten Firewalls und NATs.</string>
+  <string name="settings_context_menus">Kontextmenüs</string>
+  <string name="settings_context_menu_configure">Kontextmenüs konfigurieren</string>
+  <string name="settings_context_menus_for">%1$s</string>
   <string name="sort_artist">Künstler</string>
   <string name="sort_date_added">Datum hinzugefügt</string>
   <string name="sort_date_modified">Datum geändert</string>

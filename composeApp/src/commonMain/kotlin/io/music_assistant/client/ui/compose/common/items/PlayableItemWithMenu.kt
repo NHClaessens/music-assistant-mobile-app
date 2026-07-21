@@ -207,16 +207,19 @@ private fun <T> PlayableItemWithMenu(
     // screens). Null when the item isn't playable — then a tap opens the menu instead.
     val clickActionConfig = LocalClickActionConfig.current
     val effectiveDefault = clickActionConfig.effectiveActionFor(item)
-
-    val actions = resolveLongClickActions(
-        item = item,
-        clickContext = clickActionConfig.context,
+    val menuFlags = ContextMenuCallSiteFlags(
         librarySupported = true,
         canAddToPlaylist = playlistActions != null && item.supportsAddToPlaylist,
         canRemoveFromPlaylist = onRemoveFromPlaylist != null,
         progressSupported = progressActions != null && item is PodcastEpisode,
-        defaultAction = effectiveDefault,
         customizationAllowed = true,
+    )
+    val actions = resolveConfiguredLongClickActions(
+        item = item,
+        clickContext = clickActionConfig.context,
+        menuConfig = clickActionConfig.menuActionsFor(item),
+        flags = menuFlags,
+        defaultAction = effectiveDefault,
     )
 
     val runPlayAction: (ItemAction) -> Unit = { action ->
