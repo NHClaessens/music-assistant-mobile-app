@@ -47,8 +47,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickAlbums()
-            .assertMediaDisplayed(album1.name)
-            .assertMediaDisplayed(album2.name)
+            .assertMediaDisplayed(album1)
+            .assertMediaDisplayed(album2)
     }
 
     @Test
@@ -61,8 +61,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickArtists()
-            .assertMediaDisplayed(artist1.name)
-            .assertMediaDisplayed(artist2.name)
+            .assertMediaDisplayed(artist1)
+            .assertMediaDisplayed(artist2)
     }
 
     @Test
@@ -75,8 +75,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickPlaylists()
-            .assertMediaDisplayed(playlist1.name)
-            .assertMediaDisplayed(playlist2.name)
+            .assertMediaDisplayed(playlist1)
+            .assertMediaDisplayed(playlist2)
     }
 
     @Test
@@ -89,8 +89,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickTracks()
-            .assertMediaDisplayed(track1.name)
-            .assertMediaDisplayed(track2.name)
+            .assertMediaDisplayed(track1)
+            .assertMediaDisplayed(track2)
     }
 
     @Test
@@ -103,8 +103,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickAudiobooks()
-            .assertMediaDisplayed(audiobook1.name)
-            .assertMediaDisplayed(audiobook2.name)
+            .assertMediaDisplayed(audiobook1)
+            .assertMediaDisplayed(audiobook2)
     }
 
     @Test
@@ -117,8 +117,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickPodcasts()
-            .assertMediaDisplayed(podcast1.name)
-            .assertMediaDisplayed(podcast2.name)
+            .assertMediaDisplayed(podcast1)
+            .assertMediaDisplayed(podcast2)
     }
 
     @Test
@@ -131,8 +131,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickRadio()
-            .assertMediaDisplayed(radio1.name)
-            .assertMediaDisplayed(radio2.name)
+            .assertMediaDisplayed(radio1)
+            .assertMediaDisplayed(radio2)
     }
 
     @Test
@@ -145,8 +145,8 @@ class LibraryTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickLibrary()
             .clickGenres()
-            .assertMediaDisplayed(genre1.name)
-            .assertMediaDisplayed(genre2.name)
+            .assertMediaDisplayed(genre1)
+            .assertMediaDisplayed(genre2)
     }
 
     @Test
@@ -162,8 +162,8 @@ class LibraryTest {
             .enableFilter {
                 it.enableSwitch(Res.string.filter_favorites.get())
             }
-            .assertMediaNotDisplayed(album1.name)
-            .assertMediaDisplayed(album2.name)
+            .assertMediaNotDisplayed(album1)
+            .assertMediaDisplayed(album2)
     }
 
     @Test
@@ -178,8 +178,8 @@ class LibraryTest {
             .clickAlbums()
             .openSearch()
             .search("lobe")
-            .assertMediaDisplayed(album2.name)
-            .assertMediaNotDisplayed(album1.name)
+            .assertMediaDisplayed(album2)
+            .assertMediaNotDisplayed(album1)
     }
 
     @Test

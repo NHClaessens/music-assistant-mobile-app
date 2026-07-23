@@ -66,7 +66,7 @@ class ShortcutsTest {
         serviceClient.addItems(album)
 
         launchLoggedInApp(composeTestRule, serviceClient)
-            .assertMediaDisplayed(album.name)
+            .assertMediaDisplayed(album)
     }
 
     @Test

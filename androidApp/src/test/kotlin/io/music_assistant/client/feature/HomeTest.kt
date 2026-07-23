@@ -33,13 +33,13 @@ class HomeTest {
         serviceClient.addItems(album1)
 
         val homePage = launchLoggedInApp(composeTestRule, serviceClient)
-            .assertMediaDisplayed(album1.name)
+            .assertMediaDisplayed(album1)
 
         val album2 = ServerMediaItemFixtures.album()
         serviceClient.addItems(album2)
 
         homePage.refresh()
-            .assertMediaDisplayed(album2.name)
+            .assertMediaDisplayed(album2)
     }
 
     @Test
@@ -64,10 +64,10 @@ class HomeTest {
         serviceClient.setRequestErrors(true)
         homePage.refresh()
             .assertErrorLoadingData()
-            .assertMediaNotDisplayed(album.name)
+            .assertMediaNotDisplayed(album)
 
         serviceClient.setRequestErrors(false)
         homePage.refresh()
-            .assertMediaDisplayed(album.name)
+            .assertMediaDisplayed(album)
     }
 }
