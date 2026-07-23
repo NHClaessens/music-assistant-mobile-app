@@ -153,6 +153,15 @@ class FakeServiceClient : ServiceClient {
                                     .filter { it.mediaType == MediaType.TRACK.serverValue }
                                     .forResponse(),
                             ),
+                            ServerMediaItem(
+                                itemId = "recently_added_artists",
+                                provider = "library",
+                                name = "Recently added artists",
+                                mediaType = MediaType.FOLDER.serverValue,
+                                items = mediaItems
+                                    .filter { it.mediaType == MediaType.ARTIST.serverValue }
+                                    .forResponse(),
+                            ),
                         ),
                     ),
                 )
@@ -233,6 +242,20 @@ class FakeServiceClient : ServiceClient {
                     answer(
                         request = request,
                         result = findItem(request).forResponse(),
+                    ),
+                )
+            }
+
+            APICommands.MUSIC_ARTISTS_ARTIST_ALBUMS -> {
+                val artist = findItem(request)
+
+                Result.success(
+                    answer(
+                        request = request,
+                        result = mediaItems
+                            .filter { it.mediaType == MediaType.ALBUM.serverValue }
+                            .filter { it.artists?.contains(artist) ?: false }
+                            .forResponse(),
                     ),
                 )
             }

@@ -113,6 +113,10 @@ fun ComposePage.clickSettings(): SettingsPage {
     return SettingsPage(composeTestRule).assertOnPage()
 }
 
+fun <T : ComposePage> T.assertMediaDisplayed(serverMediaItem: ServerMediaItem, withinTag: String? = null): T {
+    return assertMediaDisplayed(serverMediaItem.name, withinTag)
+}
+
 fun <T : ComposePage> T.assertMediaDisplayed(name: String, withinTag: String? = null): T {
     val matcher = if (withinTag != null) {
         withinTag(withinTag).and(hasText(name))

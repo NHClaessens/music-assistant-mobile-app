@@ -3,6 +3,7 @@ package io.music_assistant.client.support.pages
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -40,7 +41,7 @@ class ItemPage(
     )
 
     override fun assert() {
-        composeTestRule.onNodeWithText(name).assertIsDisplayed()
+        composeTestRule.onNode(hasTextExactly(name)).assertIsDisplayed()
         composeTestRule.onNodeWithText(Res.string.action_play_now.get()).assertIsDisplayed()
             .assertHasClickAction()
         assertNavBar(
