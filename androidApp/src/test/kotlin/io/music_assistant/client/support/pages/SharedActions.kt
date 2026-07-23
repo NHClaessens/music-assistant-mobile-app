@@ -39,28 +39,15 @@ fun ComposePage.clickOnMedia(
     navigationItem: String,
     withinTag: String? = null,
 ): ItemPage {
-    return clickOnMedia(
-        serverMediaItem.name,
-        MediaType.fromServer(serverMediaItem.mediaType) ?: MediaType.UNKNOWN,
-        navigationItem,
-        withinTag,
-    )
-}
-
-fun ComposePage.clickOnMedia(
-    name: String,
-    type: MediaType,
-    navigationItem: String,
-    withinTag: String? = null,
-): ItemPage {
     val matcher = if (withinTag != null) {
-        withinTag(withinTag).and(hasText(name))
+        withinTag(withinTag).and(hasText(serverMediaItem.name))
     } else {
-        hasText(name)
+        hasText(serverMediaItem.name)
     }
 
     composeTestRule.onNode(matcher).assertIsDisplayed().performClick()
-    return ItemPage(name, type, navigationItem, composeTestRule).assertOnPage()
+    val type = MediaType.fromServer(serverMediaItem.mediaType) ?: MediaType.UNKNOWN
+    return ItemPage(serverMediaItem.name, type, navigationItem, composeTestRule).assertOnPage()
 }
 
 fun <T : ComposePage> T.clickItemOption(serverMediaItem: ServerMediaItem, action: String): T {
