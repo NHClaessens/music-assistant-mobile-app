@@ -1,5 +1,6 @@
 package io.music_assistant.client.support.pages
 
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
@@ -39,13 +40,10 @@ fun ComposePage.clickOnMedia(
     navigationItem: String,
     withinTag: String? = null,
 ): ItemPage {
-    val matcher = if (withinTag != null) {
-        withinTag(withinTag).and(hasText(serverMediaItem.name))
-    } else {
-        hasText(serverMediaItem.name)
-    }
+    composeTestRule.onNode(mediaItemMatcher(serverMediaItem, withinTag))
+        .assertIsDisplayed()
+        .performClick()
 
-    composeTestRule.onNode(matcher).assertIsDisplayed().performClick()
     val type = MediaType.fromServer(serverMediaItem.mediaType) ?: MediaType.UNKNOWN
     return ItemPage(serverMediaItem.name, type, navigationItem, composeTestRule).assertOnPage()
 }
@@ -101,13 +99,7 @@ fun ComposePage.clickSettings(): SettingsPage {
 }
 
 fun <T : ComposePage> T.assertMediaDisplayed(serverMediaItem: ServerMediaItem, withinTag: String? = null): T {
-    val matcher = if (withinTag != null) {
-        withinTag(withinTag).and(hasText(serverMediaItem.name))
-    } else {
-        hasText(serverMediaItem.name)
-    }
-
-    composeTestRule.onNode(matcher).assertIsDisplayed()
+    composeTestRule.onNode(mediaItemMatcher(serverMediaItem, withinTag)).assertIsDisplayed()
     return this
 }
 
@@ -207,4 +199,12 @@ fun <T : ComposePage> T.enableFilter(action: (FilterSheetPage) -> Unit): T {
     composeTestRule.onNodeWithContentDescription(Res.string.cd_filter.get()).assertIsOn()
 
     return this
+}
+
+private fun mediaItemMatcher(item: ServerMediaItem, withinTag: String? = null): SemanticsMatcher {
+    return if (withinTag != null) {
+        withinTag(withinTag).and(hasText(item.name))
+    } else {
+        hasText(item.name)
+    }
 }
