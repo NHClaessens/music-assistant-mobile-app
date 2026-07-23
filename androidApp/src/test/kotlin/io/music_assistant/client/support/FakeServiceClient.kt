@@ -252,8 +252,11 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = mediaItems
-                            .filter { it.mediaType == MediaType.ALBUM.serverValue }
+                        result = if (request.getArg("provider_instance_id_or_domain") == "library") {
+                            mediaItems.dropNotInLibrary()
+                        } else {
+                            mediaItems
+                        }.filter { it.mediaType == MediaType.ALBUM.serverValue }
                             .filter { it.artists?.contains(artist) ?: false }
                             .forResponse(),
                     ),
@@ -708,7 +711,11 @@ class FakeServiceClient : ServiceClient {
         when (MediaType.fromServer(item.mediaType)) {
             MediaType.ALBUM -> {
                 item.getAlbumTracks().forEach {
-                    libraryIds[it.globalId()] = uniqueIdGenerator.nextInt().toString()
+                    addToLibrary(it)
+                }
+
+                item.artists?.forEach {
+                    addToLibrary(it)
                 }
             }
 
