@@ -127,7 +127,7 @@ class FakeServiceClient : ServiceClient {
 
             APICommands.MUSIC_ITEM_BY_URI -> {
                 val item = mediaItems.find { it.uri == request.getArg("uri") }!!
-                Result.success(answer(request = request, result = item))
+                Result.success(answer(request = request, result = item.enrichLibraryItems()))
             }
 
             APICommands.MUSIC_RECOMMENDATIONS -> {
@@ -141,8 +141,7 @@ class FakeServiceClient : ServiceClient {
                                 name = "Recently added albums",
                                 mediaType = MediaType.FOLDER.serverValue,
                                 items = mediaItems
-                                    .filter { it.mediaType == MediaType.ALBUM.serverValue }
-                                    .forResponse(),
+                                    .filter { it.mediaType == MediaType.ALBUM.serverValue },
                             ),
                             ServerMediaItem(
                                 itemId = "recently_added_tracks",
@@ -150,8 +149,7 @@ class FakeServiceClient : ServiceClient {
                                 name = "Recently added tracks",
                                 mediaType = MediaType.FOLDER.serverValue,
                                 items = mediaItems
-                                    .filter { it.mediaType == MediaType.TRACK.serverValue }
-                                    .forResponse(),
+                                    .filter { it.mediaType == MediaType.TRACK.serverValue },
                             ),
                             ServerMediaItem(
                                 itemId = "recently_added_artists",
@@ -159,8 +157,7 @@ class FakeServiceClient : ServiceClient {
                                 name = "Recently added artists",
                                 mediaType = MediaType.FOLDER.serverValue,
                                 items = mediaItems
-                                    .filter { it.mediaType == MediaType.ARTIST.serverValue }
-                                    .forResponse(),
+                                    .filter { it.mediaType == MediaType.ARTIST.serverValue },
                             ),
                         ),
                     ),
@@ -185,7 +182,7 @@ class FakeServiceClient : ServiceClient {
                 val resultsForType: (MediaType) -> List<ServerMediaItem> = {
                     val mediaTypeServerValue = it.serverValue
                     if (mediaTypes.isEmpty() || mediaTypes.contains(mediaTypeServerValue)) {
-                        results.filter { it.mediaType == mediaTypeServerValue }.forResponse()
+                        results.filter { it.mediaType == mediaTypeServerValue }.enrichLibraryItems()
                     } else {
                         emptyList()
                     }
@@ -212,7 +209,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = findItem(request).forResponse(),
+                        result = findItem(request).enrichLibraryItems(),
                     ),
                 )
             }
@@ -223,7 +220,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = album.getAlbumTracks().forResponse(),
+                        result = album.getAlbumTracks(),
                     ),
                 )
             }
@@ -232,7 +229,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = filterLibrary(request, MediaType.ALBUM).forResponse(),
+                        result = filterLibrary(request, MediaType.ALBUM).enrichLibraryItems(),
                     ),
                 )
             }
@@ -241,7 +238,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = findItem(request).forResponse(),
+                        result = findItem(request).enrichLibraryItems(),
                     ),
                 )
             }
@@ -253,12 +250,11 @@ class FakeServiceClient : ServiceClient {
                     answer(
                         request = request,
                         result = if (request.getArg("provider_instance_id_or_domain") == "library") {
-                            mediaItems.dropNotInLibrary()
+                            mediaItems.dropNotInLibrary().enrichLibraryItems()
                         } else {
                             mediaItems
                         }.filter { it.mediaType == MediaType.ALBUM.serverValue }
-                            .filter { it.artists?.contains(artist) ?: false }
-                            .forResponse(),
+                            .filter { it.artists?.contains(artist) ?: false },
                     ),
                 )
             }
@@ -267,7 +263,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = filterLibrary(request, MediaType.ARTIST).forResponse(),
+                        result = filterLibrary(request, MediaType.ARTIST).enrichLibraryItems(),
                     ),
                 )
             }
@@ -276,7 +272,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = filterLibrary(request, MediaType.PLAYLIST).forResponse(),
+                        result = filterLibrary(request, MediaType.PLAYLIST).enrichLibraryItems(),
                     ),
                 )
             }
@@ -285,7 +281,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = findItem(request).forResponse(),
+                        result = findItem(request).enrichLibraryItems(),
                     ),
                 )
             }
@@ -296,7 +292,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = playlist.getPlaylistTracks().forResponse(),
+                        result = playlist.getPlaylistTracks(),
                     ),
                 )
             }
@@ -310,7 +306,7 @@ class FakeServiceClient : ServiceClient {
                             .filter {
                                 it.mediaType == MediaType.TRACK.serverValue
                             }
-                            .forResponse(),
+                            .enrichLibraryItems(),
                     ),
                 )
             }
@@ -319,7 +315,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = filterLibrary(request, MediaType.AUDIOBOOK).forResponse(),
+                        result = filterLibrary(request, MediaType.AUDIOBOOK).enrichLibraryItems(),
                     ),
                 )
             }
@@ -328,7 +324,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = filterLibrary(request, MediaType.PODCAST).forResponse(),
+                        result = filterLibrary(request, MediaType.PODCAST).enrichLibraryItems(),
                     ),
                 )
             }
@@ -337,7 +333,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = filterLibrary(request, MediaType.RADIO).forResponse(),
+                        result = filterLibrary(request, MediaType.RADIO).enrichLibraryItems(),
                     ),
                 )
             }
@@ -346,7 +342,7 @@ class FakeServiceClient : ServiceClient {
                 Result.success(
                     answer(
                         request = request,
-                        result = filterLibrary(request, MediaType.GENRE).forResponse(),
+                        result = filterLibrary(request, MediaType.GENRE).enrichLibraryItems(),
                     ),
                 )
             }
@@ -739,22 +735,22 @@ class FakeServiceClient : ServiceClient {
         return this.filter { libraryIds.containsKey(it.globalId()) }
     }
 
-    fun ServerMediaItem.forResponse(): ServerMediaItem {
+    fun ServerMediaItem.enrichLibraryItems(): ServerMediaItem {
         val libraryId = libraryIds[this.globalId()]
         return if (libraryId != null) {
             this.copy(
                 itemId = libraryId,
                 provider = "library",
-                album = album.let { it?.forResponse() },
-                artists = artists.let { it?.forResponse() },
+                album = album.let { it?.enrichLibraryItems() },
+                artists = artists.let { it?.enrichLibraryItems() },
             )
         } else {
             this
         }
     }
 
-    fun Collection<ServerMediaItem>.forResponse(): List<ServerMediaItem> {
-        return this.map { it.forResponse() }
+    fun Collection<ServerMediaItem>.enrichLibraryItems(): List<ServerMediaItem> {
+        return this.map { it.enrichLibraryItems() }
     }
 
     fun addPlayers(vararg players: ServerPlayer) {
