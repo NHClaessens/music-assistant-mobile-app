@@ -12,6 +12,7 @@ import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.support.get
 import io.music_assistant.client.support.isTab
+import io.music_assistant.client.ui.compose.item.ItemDetailsScreenSemantics
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_go_to_artist
 import musicassistantclient.composeapp.generated.resources.action_play_now
@@ -100,5 +101,9 @@ class ItemPage(
     fun clickPlay(): ItemPage {
         composeTestRule.onNodeWithText(Res.string.action_play_now.get()).performClick()
         return this
+    }
+
+    fun assertMediaDisplayed(item: ServerMediaItem): ItemPage {
+        return assertMediaDisplayed(item, inScrollable = ItemDetailsScreenSemantics.LIST_TAG)
     }
 }

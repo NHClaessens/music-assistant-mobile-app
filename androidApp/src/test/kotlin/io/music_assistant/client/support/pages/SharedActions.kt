@@ -20,6 +20,7 @@ import io.music_assistant.client.support.get
 import io.music_assistant.client.support.isTab
 import io.music_assistant.client.support.withinTag
 import io.music_assistant.client.ui.compose.home.FloatingBarSemantics
+import io.music_assistant.client.ui.compose.support.inScrollable
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_pause
 import musicassistantclient.composeapp.generated.resources.action_play
@@ -99,8 +100,18 @@ fun ComposePage.clickSettings(): SettingsPage {
     return SettingsPage(composeTestRule).assertOnPage()
 }
 
-fun <T : ComposePage> T.assertMediaDisplayed(serverMediaItem: ServerMediaItem, withinTag: String? = null): T {
-    composeTestRule.onNode(mediaItemMatcher(serverMediaItem, withinTag)).assertIsDisplayed()
+fun <T : ComposePage> T.assertMediaDisplayed(
+    serverMediaItem: ServerMediaItem,
+    withinTag: String? = null,
+    inScrollable: String? = null,
+): T {
+    val matcher = mediaItemMatcher(serverMediaItem, withinTag)
+    if (inScrollable != null) {
+        composeTestRule.inScrollable(inScrollable) { onNode(matcher).assertIsDisplayed() }
+    } else {
+        composeTestRule.onNode(matcher).assertIsDisplayed()
+    }
+
     return this
 }
 

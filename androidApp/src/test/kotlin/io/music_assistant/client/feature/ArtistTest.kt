@@ -7,7 +7,6 @@ import io.music_assistant.client.support.FakeServiceClient
 import io.music_assistant.client.support.Qualifiers
 import io.music_assistant.client.support.ServerMediaItemFixtures
 import io.music_assistant.client.support.launchLoggedInApp
-import io.music_assistant.client.support.pages.assertMediaDisplayed
 import io.music_assistant.client.support.rules.createTestRuleChain
 import io.music_assistant.client.ui.compose.home.HomeScreenSemantics
 import org.junit.Rule
@@ -15,7 +14,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.java.KoinJavaComponent.inject
 import org.robolectric.annotation.Config
-import kotlin.getValue
 
 @RunWith(AndroidJUnit4::class)
 @Config(qualifiers = Qualifiers.MEDIUM_PHONE)
@@ -37,5 +35,19 @@ class ArtistTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
             .assertMediaDisplayed(album)
+    }
+
+    @Test
+    fun `shows in library and all artist albums on provider`() {
+        val artist = ServerMediaItemFixtures.artist()
+        val libraryAlbum = ServerMediaItemFixtures.album(artist = artist)
+        val nonLibraryAlbum = ServerMediaItemFixtures.album(artist = artist)
+        serviceClient.addItems(libraryAlbum, nonLibraryAlbum)
+        serviceClient.addToLibrary(libraryAlbum)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
+            .assertMediaDisplayed(libraryAlbum)
+            .assertMediaDisplayed(nonLibraryAlbum)
     }
 }
