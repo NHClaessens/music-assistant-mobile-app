@@ -6,7 +6,7 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +25,7 @@ import musicassistantclient.composeapp.generated.resources.action_pause
 import musicassistantclient.composeapp.generated.resources.action_play
 import musicassistantclient.composeapp.generated.resources.banner_no_network
 import musicassistantclient.composeapp.generated.resources.banner_reconnecting
+import musicassistantclient.composeapp.generated.resources.cd_album_item
 import musicassistantclient.composeapp.generated.resources.cd_current_player
 import musicassistantclient.composeapp.generated.resources.cd_filter
 import musicassistantclient.composeapp.generated.resources.cd_playing
@@ -49,7 +50,7 @@ fun ComposePage.clickOnMedia(
 }
 
 fun <T : ComposePage> T.clickItemOption(serverMediaItem: ServerMediaItem, action: String): T {
-    composeTestRule.onNodeWithText(serverMediaItem.name).performTouchInput { longClick() }
+    composeTestRule.onNode(mediaItemMatcher(serverMediaItem)).performTouchInput { longClick() }
     composeTestRule.onNodeWithText(action).performClick()
     return this
 }
@@ -109,13 +110,7 @@ fun <T : ComposePage> T.assertMediaNotDisplayed(serverMediaItem: ServerMediaItem
 }
 
 fun <T : ComposePage> T.playMedia(item: ServerMediaItem, withinTag: String? = null): T {
-    val matcher = if (withinTag != null) {
-        withinTag(withinTag).and(hasText(item.name))
-    } else {
-        hasText(item.name)
-    }
-
-    composeTestRule.onNode(matcher).performClick()
+    composeTestRule.onNode(mediaItemMatcher(item, withinTag)).performClick()
     return this
 }
 
@@ -202,9 +197,15 @@ fun <T : ComposePage> T.enableFilter(action: (FilterSheetPage) -> Unit): T {
 }
 
 private fun mediaItemMatcher(item: ServerMediaItem, withinTag: String? = null): SemanticsMatcher {
-    return if (withinTag != null) {
-        withinTag(withinTag).and(hasText(item.name))
+    val matcher = if (MediaType.fromServer(item.mediaType) == MediaType.ALBUM) {
+        hasContentDescription(Res.string.cd_album_item.get(item.name))
     } else {
-        hasText(item.name)
+        hasContentDescription(item.name)
+    }
+
+    return if (withinTag != null) {
+        withinTag(withinTag).and(matcher)
+    } else {
+        matcher
     }
 }

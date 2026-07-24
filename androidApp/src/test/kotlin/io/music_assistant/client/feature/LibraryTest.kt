@@ -195,7 +195,7 @@ class LibraryTest {
             .search("balloon")
             .assertNoItems()
             .clickSearchEverywhere("balloon")
-            .assertResult(album.name)
+            .assertMediaDisplayed(album)
     }
 
     @Test

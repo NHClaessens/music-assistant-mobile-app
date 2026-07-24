@@ -9,6 +9,8 @@ import io.music_assistant.client.support.ServerMediaItemFixtures
 import io.music_assistant.client.support.get
 import io.music_assistant.client.support.launchLoggedInApp
 import io.music_assistant.client.support.pages.ItemPage
+import io.music_assistant.client.support.pages.assertMediaDisplayed
+import io.music_assistant.client.support.pages.assertMediaNotDisplayed
 import io.music_assistant.client.support.pages.clickHome
 import io.music_assistant.client.support.pages.clickSearch
 import io.music_assistant.client.support.pages.enableFilter
@@ -43,7 +45,7 @@ class SearchTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickSearch()
             .search("onion")
-            .assertResult(album.name)
+            .assertMediaDisplayed(album)
             .clickOnMedia(album)
     }
 
@@ -56,13 +58,13 @@ class SearchTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickSearch()
             .search("onion")
-            .assertResult(album.name)
-            .assertResult(track.name)
+            .assertMediaDisplayed(album)
+            .assertMediaDisplayed(track)
             .enableFilter {
                 it.enableChip(Res.string.media_type_albums.get())
             }
-            .assertResult(album.name)
-            .assertNoResult(track.name)
+            .assertMediaDisplayed(album)
+            .assertMediaNotDisplayed(track)
             .clickOnMedia(album)
     }
 
@@ -81,8 +83,8 @@ class SearchTest {
             .enableFilter {
                 it.enableSwitch(Res.string.search_in_library_only.get())
             }
-            .assertResult(libraryAlbum.name)
-            .assertNoResult(globalAlbum.name)
+            .assertMediaDisplayed(libraryAlbum)
+            .assertMediaNotDisplayed(globalAlbum)
     }
 
     @Test

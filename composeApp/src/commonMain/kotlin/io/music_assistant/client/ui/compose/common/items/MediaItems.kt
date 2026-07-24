@@ -44,6 +44,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,6 +80,7 @@ import io.music_assistant.client.ui.theme.favoriteTint
 import io.music_assistant.client.utils.gridItemMinSize
 import io.music_assistant.client.utils.rowImageSize
 import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.cd_album_item
 import musicassistantclient.composeapp.generated.resources.cd_favorite
 import musicassistantclient.composeapp.generated.resources.cd_fully_played
 import musicassistantclient.composeapp.generated.resources.cd_in_progress
@@ -103,6 +106,7 @@ fun ArtistGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -167,6 +171,7 @@ fun AlbumGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -241,6 +246,7 @@ fun PlaylistGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -337,6 +343,7 @@ fun PodcastGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -433,6 +440,7 @@ internal fun TrackGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -500,6 +508,7 @@ internal fun PodcastEpisodeGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -587,6 +596,7 @@ internal fun RadioGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -647,6 +657,7 @@ internal fun AudiobookGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -741,11 +752,16 @@ private fun GridPlayableItemLabels(item: PlayableItem) {
 @Composable
 private fun GridItem(
     modifier: Modifier = Modifier,
+    description: String,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    BoxWithConstraints {
+    BoxWithConstraints(
+        modifier = Modifier.clearAndSetSemantics {
+        contentDescription = description
+    },
+    ) {
         val cellWidthModifier = if (constraints.hasBoundedWidth) {
             Modifier.fillMaxWidth()
         } else {
@@ -857,6 +873,7 @@ internal fun TrackRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = if (showTrackNumber) {
             item.trackNumber?.toString()?.let { trackNumber ->
                 {
@@ -894,6 +911,7 @@ internal fun AlbumRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             AlbumImage(item)
             Badges(
@@ -918,6 +936,7 @@ internal fun ArtistRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             ArtistImage(item)
             Badges(
@@ -942,6 +961,7 @@ internal fun PlaylistRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             PlaylistImage(item)
             Badges(
@@ -966,6 +986,7 @@ internal fun PodcastRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             PodcastImage(item)
             Badges(
@@ -990,6 +1011,7 @@ internal fun PodcastEpisodeRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             PodcastEpisodeImage(item)
             Badges(
@@ -1018,6 +1040,7 @@ internal fun RadioRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             RadioImage(item)
             Badges(
@@ -1040,6 +1063,7 @@ fun GenreGridItem(
 ) {
     GridItem(
         modifier = modifier,
+        description = contentDescription(item),
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) },
     ) {
@@ -1100,6 +1124,7 @@ internal fun GenreRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             GenreImage(item)
             Badges(
@@ -1128,11 +1153,14 @@ fun FolderCell(
             modifier = Modifier.fillMaxWidth(),
             name = item.displayName,
             subtitle = null,
+            description = contentDescription(item),
             prefixContent = { FolderImage(item) },
             onClick = { onNavigateClick(item) },
             onLongClick = {},
         )
+
         ViewMode.GRID -> GridItem(
+            description = contentDescription(item),
             onClick = { onNavigateClick(item) },
             onLongClick = {},
         ) {
@@ -1186,6 +1214,7 @@ internal fun AudiobookRowItem(
         modifier = modifier,
         name = item.displayName,
         subtitle = item.localizedSubtitle(),
+        description = contentDescription(item),
         prefixContent = {
             AudiobookImage(item)
             Badges(
@@ -1245,6 +1274,7 @@ private fun RowItem(
     modifier: Modifier = Modifier,
     name: String,
     subtitle: String?,
+    description: String,
     prefixContent: @Composable (BoxScope.() -> Unit)?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -1254,7 +1284,10 @@ private fun RowItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .clearAndSetSemantics {
+                contentDescription = description
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         prefixContent?.let {
@@ -1271,5 +1304,14 @@ private fun RowItem(
                 titleMaxLines = 2,
             )
         }
+    }
+}
+
+@Composable
+private fun contentDescription(appMediaItem: AppMediaItem): String {
+    return if (appMediaItem is Album) {
+        stringResource(Res.string.cd_album_item, appMediaItem.displayName)
+    } else {
+        appMediaItem.displayName
     }
 }
