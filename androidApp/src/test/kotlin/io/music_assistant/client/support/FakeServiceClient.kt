@@ -246,15 +246,21 @@ class FakeServiceClient : ServiceClient {
             APICommands.MUSIC_ARTISTS_ARTIST_ALBUMS -> {
                 val artist = findItem(request)
 
+                val albums = if (request.getArg("provider_instance_id_or_domain") == "library") {
+                    mediaItems.dropNotInLibrary()
+                } else {
+                    mediaItems
+                }.filter { it.mediaType == MediaType.ALBUM.serverValue }
+                    .filter { it.artists?.contains(artist) ?: false }
+
                 Result.success(
                     answer(
                         request = request,
                         result = if (request.getArg("provider_instance_id_or_domain") == "library") {
-                            mediaItems.dropNotInLibrary().enrichLibraryItems()
+                            albums.enrichLibraryItems()
                         } else {
-                            mediaItems
-                        }.filter { it.mediaType == MediaType.ALBUM.serverValue }
-                            .filter { it.artists?.contains(artist) ?: false },
+                            albums
+                        },
                     ),
                 )
             }
@@ -741,8 +747,6 @@ class FakeServiceClient : ServiceClient {
             this.copy(
                 itemId = libraryId,
                 provider = "library",
-                album = album.let { it?.enrichLibraryItems() },
-                artists = artists.let { it?.enrichLibraryItems() },
             )
         } else {
             this
