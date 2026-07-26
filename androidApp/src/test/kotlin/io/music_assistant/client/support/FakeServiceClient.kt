@@ -737,16 +737,33 @@ class FakeServiceClient : ServiceClient {
         }
     }
 
+    fun matchItem(libraryItem: ServerMediaItem, providerItem: ServerMediaItem) {
+        val libraryId = libraryIds[libraryItem.globalId()]
+        require(libraryId != null) { "Can't add match for item not in library!" }
+        libraryIds[providerItem.globalId()] = libraryId
+    }
+
     fun Set<ServerMediaItem>.dropNotInLibrary(): List<ServerMediaItem> {
         return this.filter { libraryIds.containsKey(it.globalId()) }
     }
 
     fun ServerMediaItem.enrichLibraryItems(): ServerMediaItem {
         val libraryId = libraryIds[this.globalId()]
+
         return if (libraryId != null) {
+            val matchedItems = libraryIds.entries
+                .filter { it.value == libraryId }
+                .map { it.key }
+                .flatMap { globalId ->
+                    mediaItems.filter { it.globalId() == globalId }
+                }
+
+            val providerMappings = matchedItems.map { it.providerMappings!![0] }
+
             this.copy(
                 itemId = libraryId,
                 provider = "library",
+                providerMappings = providerMappings,
             )
         } else {
             this

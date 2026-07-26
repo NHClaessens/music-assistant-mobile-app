@@ -36,17 +36,18 @@ object ServerMediaItemFixtures {
     fun artist(
         itemId: String = uniqueIdGenerator.nextInt().toString(),
         name: String = "Artist $itemId",
+        provider: Pair<String, String> = Pair(DEFAULT_PROVIDER_DOMAIN, DEFAULT_PROVIDER_INSTANCE),
     ): ServerMediaItem {
         return ServerMediaItem(
             itemId = itemId,
-            provider = DEFAULT_PROVIDER_DOMAIN,
+            provider = provider.first,
             name = name,
             mediaType = MediaType.ARTIST.serverValue,
             providerMappings = listOf(
                 ProviderMapping(
                     itemId = itemId,
-                    providerDomain = DEFAULT_PROVIDER_DOMAIN,
-                    providerInstance = DEFAULT_PROVIDER_INSTANCE,
+                    providerDomain = provider.first,
+                    providerInstance = provider.second,
                 ),
             ),
         )
