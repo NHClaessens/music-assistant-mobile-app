@@ -8,6 +8,7 @@ import io.music_assistant.client.support.FakeServiceClient
 import io.music_assistant.client.support.Qualifiers
 import io.music_assistant.client.support.ServerMediaItemFixtures
 import io.music_assistant.client.support.launchLoggedInApp
+import io.music_assistant.client.support.pages.assertMediaNotDisplayed
 import io.music_assistant.client.support.rules.createTestRuleChain
 import io.music_assistant.client.ui.compose.home.HomeScreenSemantics
 import org.junit.Rule
@@ -51,5 +52,28 @@ class ArtistTest {
             .assertMediaDisplayed(libraryAlbum, provider = ServerMediaItem.LIBRARY_PROVIDER)
             .assertMediaDisplayed(libraryAlbum)
             .assertMediaDisplayed(nonLibraryAlbum)
+    }
+
+    /**
+     * This is not the ideal behavior - we should show albums from all providers in someway. This
+     * will be fixed by https://github.com/music-assistant/mobile-app/issues/801.
+     */
+    @Test
+    fun `shows albums for one provider when artists are matched across providers`() {
+        val provider1 = ServerMediaItemFixtures.provider(domain = "domain1", instance = "instance1")
+        val provider2 = ServerMediaItemFixtures.provider(domain = "domain2", instance = "instance2")
+        val artist1 = ServerMediaItemFixtures.artist(provider = provider1)
+        val artist2 = ServerMediaItemFixtures.artist(provider = provider2)
+        val album1 = ServerMediaItemFixtures.album(artist = artist1, provider = provider1)
+        val album2 = ServerMediaItemFixtures.album(artist = artist2, provider = provider2)
+
+        serviceClient.addItems(album1, album2)
+        serviceClient.addToLibrary(artist1)
+        serviceClient.matchItem(artist1, artist2)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickOnMedia(artist1, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
+            .assertMediaDisplayed(album1, provider = provider1.first)
+            .assertMediaNotDisplayed(album2, provider = provider2.first)
     }
 }
