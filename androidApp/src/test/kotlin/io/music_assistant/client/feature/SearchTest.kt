@@ -3,6 +3,7 @@ package io.music_assistant.client.feature
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.music_assistant.client.api.ServiceClient
+import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.support.FakeServiceClient
 import io.music_assistant.client.support.Qualifiers
 import io.music_assistant.client.support.ServerMediaItemFixtures
@@ -83,7 +84,7 @@ class SearchTest {
             .enableFilter {
                 it.enableSwitch(Res.string.search_in_library_only.get())
             }
-            .assertMediaDisplayed(libraryAlbum)
+            .assertMediaDisplayed(libraryAlbum, provider = ServerMediaItem.LIBRARY_PROVIDER)
             .assertMediaNotDisplayed(globalAlbum)
     }
 

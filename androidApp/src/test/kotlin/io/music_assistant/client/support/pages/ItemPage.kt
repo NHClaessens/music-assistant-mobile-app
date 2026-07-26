@@ -75,6 +75,7 @@ class ItemPage(
                 composeTestRule.onNode(isTab(Res.string.media_type_tracks.get()))
                     .assertIsDisplayed()
             }
+
             MediaType.RADIO -> TODO()
             MediaType.AUDIOBOOK -> TODO()
             MediaType.PODCAST -> TODO()
@@ -103,7 +104,11 @@ class ItemPage(
         return this
     }
 
-    fun assertMediaDisplayed(item: ServerMediaItem): ItemPage {
-        return assertMediaDisplayed(item, inScrollable = ItemDetailsScreenSemantics.LIST_TAG)
+    fun assertMediaDisplayed(item: ServerMediaItem, provider: String? = null): ItemPage {
+        return assertMediaDisplayed(
+            item,
+            inScrollable = ItemDetailsScreenSemantics.LIST_TAG,
+            provider = provider,
+        )
     }
 }

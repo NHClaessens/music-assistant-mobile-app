@@ -1310,7 +1310,7 @@ private fun RowItem(
 @Composable
 private fun contentDescription(appMediaItem: AppMediaItem): String {
     return if (appMediaItem is Album) {
-        stringResource(Res.string.cd_album_item, appMediaItem.displayName)
+        stringResource(Res.string.cd_album_item, appMediaItem.displayName, appMediaItem.provider)
     } else {
         appMediaItem.displayName
     }

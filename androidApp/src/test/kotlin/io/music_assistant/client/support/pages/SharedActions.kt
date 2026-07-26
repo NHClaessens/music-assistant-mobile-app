@@ -41,8 +41,9 @@ fun ComposePage.clickOnMedia(
     serverMediaItem: ServerMediaItem,
     navigationItem: String,
     withinTag: String? = null,
+    provider: String? = null,
 ): ItemPage {
-    composeTestRule.onNode(mediaItemMatcher(serverMediaItem, withinTag))
+    composeTestRule.onNode(mediaItemMatcher(serverMediaItem, withinTag, provider))
         .assertIsDisplayed()
         .performClick()
 
@@ -104,8 +105,9 @@ fun <T : ComposePage> T.assertMediaDisplayed(
     serverMediaItem: ServerMediaItem,
     withinTag: String? = null,
     inScrollable: String? = null,
+    provider: String? = null,
 ): T {
-    val matcher = mediaItemMatcher(serverMediaItem, withinTag)
+    val matcher = mediaItemMatcher(serverMediaItem, withinTag, provider)
     if (inScrollable != null) {
         composeTestRule.inScrollable(inScrollable) { onNode(matcher).assertIsDisplayed() }
     } else {
@@ -115,8 +117,12 @@ fun <T : ComposePage> T.assertMediaDisplayed(
     return this
 }
 
-fun <T : ComposePage> T.assertMediaNotDisplayed(serverMediaItem: ServerMediaItem): T {
-    composeTestRule.onNodeWithText(serverMediaItem.name).assertIsNotDisplayed()
+fun <T : ComposePage> T.assertMediaNotDisplayed(
+    serverMediaItem: ServerMediaItem,
+    provider: String? = null,
+): T {
+    composeTestRule.onNode(mediaItemMatcher(serverMediaItem, provider = provider))
+        .assertIsNotDisplayed()
     return this
 }
 
@@ -207,9 +213,17 @@ fun <T : ComposePage> T.enableFilter(action: (FilterSheetPage) -> Unit): T {
     return this
 }
 
-private fun mediaItemMatcher(item: ServerMediaItem, withinTag: String? = null): SemanticsMatcher {
+private fun mediaItemMatcher(
+    item: ServerMediaItem,
+    withinTag: String? = null,
+    provider: String? = null,
+): SemanticsMatcher {
     val matcher = if (MediaType.fromServer(item.mediaType) == MediaType.ALBUM) {
-        hasContentDescription(Res.string.cd_album_item.get(item.name))
+        if (provider != null) {
+            hasContentDescription(Res.string.cd_album_item.get(item.name, provider))
+        } else {
+            hasContentDescription(Res.string.cd_album_item.get(item.name, item.provider))
+        }
     } else {
         hasContentDescription(item.name)
     }

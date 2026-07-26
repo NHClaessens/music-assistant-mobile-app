@@ -78,8 +78,23 @@ class ItemDetailsTest {
 
         composeTestRule.onAllNodes(hasText(artist.displayName)).onFirst().assertIsDisplayed()
         composeTestRule.inScrollable("LazyVerticalGrid") {
-            onNode(hasContentDescription(Res.string.cd_album_item.get(albums[0].displayName))).assertIsDisplayed()
-            onNode(hasContentDescription(Res.string.cd_album_item.get(albums[1].displayName))).assertIsDisplayed()
+            onNode(
+                hasContentDescription(
+                    Res.string.cd_album_item.get(
+                        albums[0].displayName,
+                        albums[0].provider,
+                    ),
+                ),
+            ).assertIsDisplayed()
+
+            onNode(
+                hasContentDescription(
+                    Res.string.cd_album_item.get(
+                        albums[1].displayName,
+                        albums[1].provider,
+                    ),
+                ),
+            ).assertIsDisplayed()
         }
     }
 
