@@ -296,7 +296,7 @@ class ItemDetailsViewModel(
                 }
 
                 val sources = artist.subItemSources()
-                val (_, all) = sources.firstNonEmpty { id, prov ->
+                val all = sources.flatMap { (id, prov) ->
                     fetchArtistItems(Request.Artist.getAlbums(id, prov)).filterIsInstance<Album>()
                 }
 
