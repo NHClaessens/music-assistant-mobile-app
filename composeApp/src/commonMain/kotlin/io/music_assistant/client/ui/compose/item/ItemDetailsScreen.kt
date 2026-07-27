@@ -111,7 +111,6 @@ import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.album_disc_header
 import musicassistantclient.composeapp.generated.resources.artist_section_all
 import musicassistantclient.composeapp.generated.resources.artist_section_in_library
-import musicassistantclient.composeapp.generated.resources.artist_section_top
 import musicassistantclient.composeapp.generated.resources.cd_toggle_view_mode
 import musicassistantclient.composeapp.generated.resources.item_error
 import musicassistantclient.composeapp.generated.resources.item_no_data
@@ -978,7 +977,6 @@ private fun ArtistSectionHeader(section: ArtistSection) {
         text = stringResource(
             when (section) {
                 ArtistSection.LIBRARY -> Res.string.artist_section_in_library
-                ArtistSection.TOP -> Res.string.artist_section_top
                 ArtistSection.ALL -> Res.string.artist_section_all
             },
         ),

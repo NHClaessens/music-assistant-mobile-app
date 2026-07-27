@@ -48,7 +48,7 @@ class ItemDetailsViewModel(
         val playableItemsState: DataState<List<PlayableItem>>,
         val artistsState: DataState<List<Artist>> = DataState.Loading(),
         /**
-         * An artist's Albums / Tracks tabs are split into Library / Top / All sub-sections;
+         * An artist's Albums / Tracks tabs are split into Library / All sub-sections;
          * these back the ARTIST_ALBUMS / ARTIST_TRACKS tabs instead of [albumsState] /
          * [playableItemsState]. Null for non-artist items.
          */
@@ -258,7 +258,7 @@ class ItemDetailsViewModel(
     }
 
     /**
-     * Ordered candidate `(itemId, provider)` sources for an artist's Top/All sub-lists. A library
+     * Ordered candidate `(itemId, provider)` sources for an artist's All sub-lists. A library
      * artist fans out over its provider mappings (its own "library" identity would only return the
      * owned subset); a non-library artist is already its own source.
      */
@@ -294,28 +294,17 @@ class ItemDetailsViewModel(
                 } else {
                     emptyList()
                 }
-                // All and Top are resolved independently: each takes the first source provider that
-                // returns items for that query. A provider can expose All albums but no Top (or vice
-                // versa), so coupling them to one provider would hide a section that actually exists.
+
                 val sources = artist.subItemSources()
                 val (_, all) = sources.firstNonEmpty { id, prov ->
                     fetchArtistItems(Request.Artist.getAlbums(id, prov)).filterIsInstance<Album>()
                 }
-                val (_, top) = sources.firstNonEmpty { id, prov ->
-                    fetchArtistItems(
-                        Request.Artist.getTopAlbums(
-                            id,
-                            prov,
-                        ),
-                    ).filterIsInstance<Album>()
-                }
 
-                rawArtistAlbums.set(library, top, all)
+                rawArtistAlbums.set(library, all)
                 _state.update {
                     it.copy(
                         artistAlbumSections = ArtistSections(
                             library = library.sectionState(artist.isInLibrary) { clientSorted(sort) },
-                            top = DataState.Data(top),
                             all = DataState.Data(all.clientSorted(sort)),
                         ),
                     )
@@ -351,14 +340,13 @@ class ItemDetailsViewModel(
                     ).filterIsInstance<Track>()
                 }
 
-                rawArtistTracks.set(library, top, all)
+                rawArtistTracks.set(library, top)
                 _state.update {
                     it.copy(
                         artistTrackSections = ArtistSections(
                             library = library.sectionState(artist.isInLibrary) {
                                 clientSorted(sort, SubItemContext.ARTIST_TRACKS)
                             },
-                            top = DataState.Data(top),
                             all = DataState.Data(
                                 all.clientSorted(
                                     sort,
@@ -618,7 +606,7 @@ class ItemDetailsViewModel(
     fun onAlbumsSortChanged(context: SubItemContext, sortOption: SortOption) {
         settingsRepository.setSortOption(context, sortOption)
         _state.update { st ->
-            // Artist tabs re-sort Library + All in place; Top stays in server order.
+            // Artist tabs re-sort Library + All in place
             val sections = st.artistAlbumSections
             if (sections != null) {
                 st.copy(
@@ -739,7 +727,7 @@ private fun ItemDetailsViewModel.State.itemOrNull(): AppMediaItem? = when (itemS
 
 /**
  * The [DataState] driving this tab's loading/selection. For the artist tabs it's the aggregate of
- * the Library/Top/All sub-sections; for the others, the single backing list. Chapters are carried
+ * the Library/All sub-sections; for the others, the single backing list. Chapters are carried
  * by the item itself.
  */
 private fun ItemDetailsTab.subState(
@@ -764,62 +752,51 @@ private fun DataState<out List<*>>.hasItems(): Boolean = when (this) {
     else -> false
 }
 
-/**
- * An artist tab's three sub-sections. Order of display is Library → Top → All; each is hidden when
- * it has no items. [library] is [DataState.NoData] for non-library artists.
- */
 data class ArtistSections<T>(
     val library: DataState<List<T>> = DataState.NoData(),
-    val top: DataState<List<T>> = DataState.NoData(),
     val all: DataState<List<T>> = DataState.NoData(),
 ) {
     /** Loading while any section is; otherwise the concatenation, for tab loading/selection checks. */
     fun aggregate(): DataState<List<T>> = when {
-        library is DataState.Loading || top is DataState.Loading || all is DataState.Loading ->
+        library is DataState.Loading  || all is DataState.Loading ->
             DataState.Loading()
 
         else -> DataState.Data(
-            (library.dataOrNull ?: emptyList()) +
-                    (top.dataOrNull ?: emptyList()) +
-                    (all.dataOrNull ?: emptyList()),
+            (library.dataOrNull ?: emptyList()) + (all.dataOrNull ?: emptyList()),
         )
     }
 
     /** Ordered (label-bearing) sections for rendering; callers skip the empty ones. */
     fun ordered(): List<Pair<ArtistSection, DataState<List<T>>>> =
-        listOf(ArtistSection.LIBRARY to library, ArtistSection.TOP to top, ArtistSection.ALL to all)
+        listOf(ArtistSection.LIBRARY to library, ArtistSection.ALL to all)
 
     fun mapData(transform: (List<T>) -> List<T>): ArtistSections<T> = copy(
         library = library.mapData(transform),
-        top = top.mapData(transform),
         all = all.mapData(transform),
     )
 
     companion object {
         fun <T> loading() =
-            ArtistSections<T>(DataState.Loading(), DataState.Loading(), DataState.Loading())
+            ArtistSections<T>(DataState.Loading(), DataState.Loading())
 
-        fun <T> error() = ArtistSections<T>(DataState.Error(), DataState.Error(), DataState.Error())
+        fun <T> error() = ArtistSections<T>(DataState.Error(), DataState.Error())
     }
 }
 
-enum class ArtistSection { LIBRARY, TOP, ALL }
+enum class ArtistSection { LIBRARY, ALL }
 
 /** Mutable unsorted caches for an artist tab's three subsections; see [ItemDetailsViewModel.rawArtistAlbums]. */
 private class RawSections<T : AppMediaItem> {
     var library: List<T> = emptyList()
-    var top: List<T> = emptyList()
     var all: List<T> = emptyList()
 
-    fun set(library: List<T>, top: List<T>, all: List<T>) {
+    fun set(library: List<T>, all: List<T>) {
         this.library = library
-        this.top = top
         this.all = all
     }
 
     fun replace(changed: T) {
         library = library.replacing(changed)
-        top = top.replacing(changed)
         all = all.replacing(changed)
     }
 }
