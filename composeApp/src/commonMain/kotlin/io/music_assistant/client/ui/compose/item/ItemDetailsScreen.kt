@@ -749,7 +749,7 @@ private fun DetailGrid(
     CompositionLocalProvider(LocalOverscrollFactory provides null) {
         LazyVerticalGrid(
             state = gridState,
-            modifier = Modifier.fillMaxSize().testTag("LazyVerticalGrid"),
+            modifier = Modifier.fillMaxSize().testTag(ItemDetailsScreenSemantics.LIST_TAG),
             columns = GridCells.Adaptive(minSize = gridItemMinSize()),
             contentPadding = gridPadding,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1169,6 +1169,10 @@ private fun ChapterRow(
             )
         }
     }
+}
+
+object ItemDetailsScreenSemantics {
+    const val LIST_TAG = "LazyVerticalGrid"
 }
 
 @Preview

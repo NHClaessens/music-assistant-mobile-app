@@ -270,6 +270,7 @@ private fun getCategories(
                     title = it.displayName.toDisplayString(),
                     items = it.items.orEmpty(),
                     lazyListKey = it.lazyListKey(),
+                    tag = HomeScreenSemantics.rowTag(it.itemId),
                 )
             }
 
@@ -352,6 +353,7 @@ class HomeScreenState(
 }
 
 object HomeScreenSemantics {
+    fun rowTag(categoryId: String): String = "Row:$categoryId"
     const val SHORTCUTS_ROW_TAG = "ShortcutsRow"
     const val LIST_TAG = "List"
 }
