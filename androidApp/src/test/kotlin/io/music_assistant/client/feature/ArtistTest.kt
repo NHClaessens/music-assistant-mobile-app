@@ -54,12 +54,8 @@ class ArtistTest {
             .assertMediaDisplayed(nonLibraryAlbum)
     }
 
-    /**
-     * This is not the ideal behavior - we should show albums from all providers in someway. This
-     * will be fixed by https://github.com/music-assistant/mobile-app/issues/801.
-     */
     @Test
-    fun `shows albums for one provider when artists are matched across providers`() {
+    fun `shows albums for all providers when artists are matched across providers`() {
         val provider1 = ServerMediaItemFixtures.provider(domain = "domain1", instance = "instance1")
         val provider2 = ServerMediaItemFixtures.provider(domain = "domain2", instance = "instance2")
         val artist1 = ServerMediaItemFixtures.artist(provider = provider1)
@@ -74,6 +70,6 @@ class ArtistTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(artist1, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
             .assertMediaDisplayed(album1, provider = provider1.first)
-            .assertMediaNotDisplayed(album2, provider = provider2.first)
+            .assertMediaDisplayed(album2, provider = provider2.first)
     }
 }
