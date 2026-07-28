@@ -104,6 +104,12 @@ class ItemPage(
         return this
     }
 
+    fun switchProvider(current: String, new: String): ItemPage {
+        composeTestRule.onNodeWithText(current).performClick()
+        composeTestRule.onNodeWithText(new).performClick()
+        return this
+    }
+
     fun assertMediaDisplayed(item: ServerMediaItem, provider: String? = null): ItemPage {
         return assertMediaDisplayed(
             item,
