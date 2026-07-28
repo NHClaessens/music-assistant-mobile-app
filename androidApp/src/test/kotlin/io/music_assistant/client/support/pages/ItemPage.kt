@@ -56,13 +56,7 @@ class ItemPage(
         )
 
         when (type) {
-            MediaType.ARTIST -> {
-                composeTestRule.onNode(isTab(Res.string.media_type_albums.get()))
-                    .assertIsDisplayed()
-                composeTestRule.onNode(isTab(Res.string.media_type_tracks.get()))
-                    .assertIsDisplayed()
-            }
-
+            MediaType.ARTIST -> Unit
             MediaType.ALBUM -> {
                 composeTestRule.onNode(isTab(Res.string.media_type_tracks.get()))
                     .assertIsDisplayed()

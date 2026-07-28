@@ -733,8 +733,6 @@ private fun ItemDetailsViewModel.State.itemOrNull(): AppMediaItem? = when (itemS
 private fun ItemDetailsTab.subState(
     state: ItemDetailsViewModel.State,
 ): DataState<out List<Any>> = when (this) {
-    ItemDetailsTab.ARTIST_ALBUMS -> state.artistAlbumSections?.aggregate() ?: DataState.NoData()
-    ItemDetailsTab.ARTIST_TRACKS -> state.artistTrackSections?.aggregate() ?: DataState.NoData()
     ItemDetailsTab.GENRE_ALBUMS -> state.albumsState
     ItemDetailsTab.ALBUM_TRACKS,
     ItemDetailsTab.PLAYLIST_ITEMS,

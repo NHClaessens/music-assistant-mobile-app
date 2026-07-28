@@ -438,10 +438,24 @@ private fun ItemContent(
             // selectedTab is null exactly while sub-lists load (for an item that has tabs), so it
             // doubles as the loading gate: show the hero + a single spinner, tabs hidden.
             val currentTab = state.selectedTab
-            if (tabs.isEmpty()) {
+
+            val gridState = rememberLazyGridState()
+            if (item is Artist) {
+                ArtistContent(
+                    sections = state.artistAlbumSections ?: ArtistSections.loading(),
+                    viewModeProvider = viewModeProvider,
+                    onNavigateClick = onNavigateClick,
+                    onPlayChildClick = onPlayChildClick,
+                    playlistActions = playlistActions,
+                    libraryActions = libraryActions,
+                    providerIconFetcher = providerIconFetcher,
+                    contentPadding = contentPadding,
+                    heroSlot = heroSlot,
+                    gridState = gridState,
+                )
+            } else if (tabs.isEmpty()) {
                 heroSlot()
             } else {
-                val gridState = rememberLazyGridState()
                 if (currentTab == null) {
                     Box(modifier = Modifier.weight(1f)) {
                         DetailGrid(
@@ -625,33 +639,6 @@ private fun TabContent(
     gridState: LazyGridState,
 ) {
     when (tab) {
-        ItemDetailsTab.ARTIST_ALBUMS -> ArtistAlbumsTabContent(
-            sections = state.artistAlbumSections ?: ArtistSections.loading(),
-            viewModeProvider = viewModeProvider,
-            onNavigateClick = onNavigateClick,
-            onPlayChildClick = onPlayChildClick,
-            playlistActions = playlistActions,
-            libraryActions = libraryActions,
-            providerIconFetcher = providerIconFetcher,
-            contentPadding = contentPadding,
-            heroSlot = heroSlot,
-            tabsSlot = tabsSlot,
-            gridState = gridState,
-        )
-
-        ItemDetailsTab.ARTIST_TRACKS -> ArtistTracksTabContent(
-            sections = state.artistTrackSections ?: ArtistSections.loading(),
-            viewModeProvider = viewModeProvider,
-            onPlayChildClick = onPlayChildClick,
-            playlistActions = playlistActions,
-            libraryActions = libraryActions,
-            providerIconFetcher = providerIconFetcher,
-            contentPadding = contentPadding,
-            heroSlot = heroSlot,
-            tabsSlot = tabsSlot,
-            gridState = gridState,
-        )
-
         ItemDetailsTab.GENRE_ALBUMS -> AlbumsTabContent(
             albumsState = state.albumsState,
             viewModeProvider = viewModeProvider,
@@ -1022,7 +1009,7 @@ private inline fun <T> LazyGridScope.artistSectionsBody(
 }
 
 @Composable
-private fun ArtistAlbumsTabContent(
+private fun ArtistContent(
     sections: ArtistSections<Album>,
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onNavigateClick: (AppMediaItem) -> Unit,
@@ -1032,11 +1019,10 @@ private fun ArtistAlbumsTabContent(
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
-    tabsSlot: @Composable () -> Unit,
     gridState: LazyGridState,
 ) {
     val viewMode = viewModeProvider(MediaType.ALBUM)
-    DetailGrid(contentPadding, heroSlot, tabsSlot, gridState) {
+    DetailGrid(contentPadding, heroSlot, null, gridState) {
         artistSectionsBody(sections) { section, albums ->
             val albumKeys = albums.lazyListOccurrenceKeys()
             itemsIndexed(
@@ -1054,46 +1040,6 @@ private fun ArtistAlbumsTabContent(
                     onNavigateClick = onNavigateClick,
                     onPlayOption = onPlayChildClick,
                     playlistActions = playlistActions,
-                    libraryActions = libraryActions,
-                    providerIconFetcher = providerIconFetcher,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ArtistTracksTabContent(
-    sections: ArtistSections<Track>,
-    viewModeProvider: @Composable (MediaType) -> ViewMode,
-    onPlayChildClick: PlayHandler<AppMediaItem>,
-    playlistActions: PlaylistActions,
-    libraryActions: LibraryActions,
-    providerIconFetcher: @Composable (Modifier, String) -> Unit,
-    contentPadding: PaddingValues,
-    heroSlot: @Composable () -> Unit,
-    tabsSlot: @Composable () -> Unit,
-    gridState: LazyGridState,
-) {
-    val viewMode = viewModeProvider(MediaType.TRACK)
-    DetailGrid(contentPadding, heroSlot, tabsSlot, gridState) {
-        artistSectionsBody(sections) { section, tracks ->
-            val trackKeys = tracks.playableLazyListOccurrenceKeys()
-            itemsIndexed(
-                items = tracks,
-                key = { index, _ -> "track-${section.name}-${trackKeys[index]}" },
-                span = when (viewMode) {
-                    ViewMode.LIST -> { _, _ -> GridItemSpan(maxLineSpan) }
-                    ViewMode.GRID -> null
-                },
-            ) { _, track ->
-                TrackWithMenu(
-                    item = track,
-                    viewMode = viewMode,
-                    showTrackNumber = false,
-                    onPlayOption = onPlayChildClick,
-                    playlistActions = playlistActions,
-                    onRemoveFromPlaylist = null,
                     libraryActions = libraryActions,
                     providerIconFetcher = providerIconFetcher,
                 )
