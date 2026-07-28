@@ -69,10 +69,10 @@ class ArtistTest {
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(artist1, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
-            .assertMediaDisplayed(album1, provider = provider1.first)
-            .assertMediaNotDisplayed(album2, provider = provider2.first)
-            .switchProvider(provider1.first, provider2.first)
-            .assertMediaNotDisplayed(album1, provider = provider1.first)
-            .assertMediaDisplayed(album2, provider = provider2.first)
+            .assertMediaDisplayed(album1, provider = provider1.domain)
+            .assertMediaNotDisplayed(album2, provider = provider2.domain)
+            .switchProvider(provider1.domain, provider2.domain)
+            .assertMediaNotDisplayed(album1, provider = provider1.domain)
+            .assertMediaDisplayed(album2, provider = provider2.domain)
     }
 }

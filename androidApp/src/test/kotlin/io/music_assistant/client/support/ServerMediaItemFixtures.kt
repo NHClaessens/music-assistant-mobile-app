@@ -13,11 +13,11 @@ object ServerMediaItemFixtures {
         name: String = "Album $itemId",
         artist: ServerMediaItem = artist(),
         favorite: Boolean? = null,
-        provider: Pair<String, String> = Pair(DEFAULT_PROVIDER_DOMAIN, DEFAULT_PROVIDER_INSTANCE),
+        provider: Provider = Provider(DEFAULT_PROVIDER_DOMAIN, DEFAULT_PROVIDER_INSTANCE),
     ): ServerMediaItem {
         return ServerMediaItem(
             itemId = itemId,
-            provider = provider.first,
+            provider = provider.domain,
             name = name,
             mediaType = MediaType.ALBUM.serverValue,
             artists = listOf(artist),
@@ -27,8 +27,8 @@ object ServerMediaItemFixtures {
             providerMappings = listOf(
                 ProviderMapping(
                     itemId = itemId,
-                    providerDomain = provider.first,
-                    providerInstance = provider.second,
+                    providerDomain = provider.domain,
+                    providerInstance = provider.instance,
                 ),
             ),
         )
@@ -37,18 +37,18 @@ object ServerMediaItemFixtures {
     fun artist(
         itemId: String = uniqueIdGenerator.nextInt().toString(),
         name: String = "Artist $itemId",
-        provider: Pair<String, String> = Pair(DEFAULT_PROVIDER_DOMAIN, DEFAULT_PROVIDER_INSTANCE),
+        provider: Provider = Provider(DEFAULT_PROVIDER_DOMAIN, DEFAULT_PROVIDER_INSTANCE),
     ): ServerMediaItem {
         return ServerMediaItem(
             itemId = itemId,
-            provider = provider.first,
+            provider = provider.domain,
             name = name,
             mediaType = MediaType.ARTIST.serverValue,
             providerMappings = listOf(
                 ProviderMapping(
                     itemId = itemId,
-                    providerDomain = provider.first,
-                    providerInstance = provider.second,
+                    providerDomain = provider.domain,
+                    providerInstance = provider.instance,
                 ),
             ),
         )
@@ -182,10 +182,12 @@ object ServerMediaItemFixtures {
     fun provider(
         domain: String = DEFAULT_PROVIDER_DOMAIN,
         instance: String = DEFAULT_PROVIDER_INSTANCE,
-    ): Pair<String, String> {
-        return Pair(domain, instance)
+    ): Provider {
+        return Provider(domain, instance)
     }
 
     private const val DEFAULT_PROVIDER_DOMAIN = "test-domain"
     private const val DEFAULT_PROVIDER_INSTANCE = "test-instance"
+
+    data class Provider(val domain: String, val instance: String)
 }
