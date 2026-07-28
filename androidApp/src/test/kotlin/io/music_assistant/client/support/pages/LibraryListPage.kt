@@ -12,7 +12,6 @@ import androidx.compose.ui.test.performTextInput
 import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.support.get
 import musicassistantclient.composeapp.generated.resources.Res
-import musicassistantclient.composeapp.generated.resources.library_empty
 import musicassistantclient.composeapp.generated.resources.library_quick_search
 import musicassistantclient.composeapp.generated.resources.library_search_global
 import musicassistantclient.composeapp.generated.resources.nav_home
@@ -57,11 +56,6 @@ class LibraryListPage(private val type: String, composeTestRule: ComposeTestRule
     fun openSearch(): LibraryListPage {
         composeTestRule.onNodeWithContentDescription(Res.string.library_quick_search.get())
             .performClick()
-        return this
-    }
-
-    fun assertNoItems(): LibraryListPage {
-        composeTestRule.onNodeWithText(Res.string.library_empty.get()).assertIsDisplayed()
         return this
     }
 

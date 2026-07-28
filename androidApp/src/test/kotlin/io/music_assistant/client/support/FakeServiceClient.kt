@@ -741,8 +741,8 @@ class FakeServiceClient : ServiceClient {
         mediaItemStore.setPlaylist(playlist, *tracks)
     }
 
-    fun setRequestErrors(reachable: Boolean) {
-        this.requestErrors = reachable
+    fun setRequestErrors(requestError: Boolean) {
+        this.requestErrors = requestError
     }
 
     fun setLegacyVersion(version: LegacyVersion) {
