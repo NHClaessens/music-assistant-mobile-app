@@ -53,7 +53,6 @@ class ItemDetailsViewModel(
          * [playableItemsState]. Null for non-artist items.
          */
         val artistAlbumSections: ArtistSections<Album>? = null,
-        val artistTrackSections: ArtistSections<Track>? = null,
         /** Lazily loaded on demand from the artist overflow menu; NoData until then. */
         val similarArtistsState: DataState<List<Artist>> = DataState.NoData(),
         val albumsSortOption: SortOption? = null,
@@ -82,10 +81,6 @@ class ItemDetailsViewModel(
 
     private var rawAlbums: List<Album> = emptyList()
     private var rawPlayableItems: List<PlayableItem> = emptyList()
-
-    // Unsorted per-section caches for the artist tabs, so a sort change re-sorts without refetching
-    // (Top intentionally keeps server order, so it's never re-sorted). Mirror [rawAlbums].
-    private val rawArtistTracks = RawSections<Track>()
 
     private val _toasts = MutableSharedFlow<String>()
     val toasts = _toasts.asSharedFlow()
@@ -174,13 +169,11 @@ class ItemDetailsViewModel(
                         albumsState = DataState.NoData(),
                         playableItemsState = DataState.NoData(),
                         artistAlbumSections = ArtistSections.loading(),
-                        artistTrackSections = ArtistSections.loading(),
                         albumsSortOption = settingsRepository.getSortOption(SubItemContext.ARTIST_ALBUMS),
                         playableItemsSortOption = settingsRepository.getSortOption(SubItemContext.ARTIST_TRACKS),
                     )
                 }
                 loadArtistAlbumSections(item)
-                loadArtistTrackSections(item)
                 // Prefetch similar artists in the background so the sheet opens warm: the server's
                 // first per-artist lookup (lastfm + matching) is the slow part, so we pay it while
                 // the user browses albums/tracks rather than on the menu tap.
@@ -268,17 +261,6 @@ class ItemDetailsViewModel(
             listOf(itemId to provider)
         }
 
-    /** First source (in order) whose [fetch] returns items, paired with those items; else null + []. */
-    private suspend fun <T> List<Pair<String, String>>.firstNonEmpty(
-        fetch: suspend (String, String) -> List<T>,
-    ): Pair<Pair<String, String>?, List<T>> {
-        for (src in this) {
-            val items = fetch(src.first, src.second)
-            if (items.isNotEmpty()) return src to items
-        }
-        return null to emptyList()
-    }
-
     private suspend fun fetchArtistItems(request: Request): List<AppMediaItem> =
         mediaItemRepository.fetchMediaItems(request).getOrNull() ?: emptyList()
 
@@ -311,53 +293,6 @@ class ItemDetailsViewModel(
             } catch (e: Exception) {
                 Logger.e("Failed to load artist album sections", e)
                 _state.update { it.copy(artistAlbumSections = ArtistSections.error()) }
-            }
-        }
-    }
-
-    private fun loadArtistTrackSections(artist: Artist) {
-        viewModelScope.launch {
-            try {
-                val sort = _state.value.playableItemsSortOption
-                    ?: SortConfig.defaultFor(SubItemContext.ARTIST_TRACKS)
-                val library = if (artist.isInLibrary) {
-                    fetchArtistItems(Request.Artist.getTracks(artist.itemId, artist.provider))
-                        .filterIsInstance<Track>()
-                } else {
-                    emptyList()
-                }
-                val sources = artist.subItemSources()
-                val (_, all) = sources.firstNonEmpty { id, prov ->
-                    fetchArtistItems(Request.Artist.getTracks(id, prov)).filterIsInstance<Track>()
-                }
-                val (_, top) = sources.firstNonEmpty { id, prov ->
-                    fetchArtistItems(
-                        Request.Artist.getTopTracks(
-                            id,
-                            prov,
-                        ),
-                    ).filterIsInstance<Track>()
-                }
-
-                rawArtistTracks.set(library, top)
-                _state.update {
-                    it.copy(
-                        artistTrackSections = ArtistSections(
-                            library = library.sectionState(artist.isInLibrary) {
-                                clientSorted(sort, SubItemContext.ARTIST_TRACKS)
-                            },
-                            all = DataState.Data(
-                                all.clientSorted(
-                                    sort,
-                                    SubItemContext.ARTIST_TRACKS,
-                                ),
-                            ),
-                        ),
-                    )
-                }
-            } catch (e: Exception) {
-                Logger.e("Failed to load artist track sections", e)
-                _state.update { it.copy(artistTrackSections = ArtistSections.error()) }
             }
         }
     }
@@ -605,36 +540,15 @@ class ItemDetailsViewModel(
     fun onPlayableItemsSortChanged(context: SubItemContext, sortOption: SortOption) {
         settingsRepository.setSortOption(context, sortOption)
         _state.update { st ->
-            val sections = st.artistTrackSections
-            if (sections != null) {
-                st.copy(
-                    playableItemsSortOption = sortOption,
-                    artistTrackSections = sections.copy(
-                        library = sections.library.reSorted(
-                            rawArtistTracks.library.clientSorted(
-                                sortOption,
-                                context,
-                            ),
-                        ),
-                        all = sections.all.reSorted(
-                            rawArtistTracks.all.clientSorted(
-                                sortOption,
-                                context,
-                            ),
-                        ),
+            st.copy(
+                playableItemsSortOption = sortOption,
+                playableItemsState = DataState.Data(
+                    rawPlayableItems.clientSorted(
+                        sortOption,
+                        context,
                     ),
-                )
-            } else {
-                st.copy(
-                    playableItemsSortOption = sortOption,
-                    playableItemsState = DataState.Data(
-                        rawPlayableItems.clientSorted(
-                            sortOption,
-                            context,
-                        ),
-                    ),
-                )
-            }
+                ),
+            )
         }
     }
 
@@ -666,15 +580,6 @@ class ItemDetailsViewModel(
             }
 
             is PlayableItem -> {
-                (changed as? Track)?.let { track ->
-                    _state.value.artistTrackSections?.let { sections ->
-                        rawArtistTracks.replace(track)
-                        _state.update { s ->
-                            s.copy(artistTrackSections = sections.mapData { it.replacing(track) })
-                        }
-                        return
-                    }
-                }
                 val tracksData =
                     (_state.value.playableItemsState as? DataState.Data)?.data ?: return
                 val updated = tracksData.map { existing ->
@@ -738,32 +643,6 @@ data class ArtistSections<T>(
         fun <T> error() = ArtistSections<T>(DataState.Error(), DataState.Error())
     }
 }
-
-/** Mutable unsorted caches for an artist tab's three subsections; see [ItemDetailsViewModel.rawArtistAlbums]. */
-private class RawSections<T : AppMediaItem> {
-    var library: List<T> = emptyList()
-    var all: List<T> = emptyList()
-
-    fun set(library: List<T>, all: List<T>) {
-        this.library = library
-        this.all = all
-    }
-
-    fun replace(changed: T) {
-        library = library.replacing(changed)
-        all = all.replacing(changed)
-    }
-}
-
-/** NoData when [inLibrary] is false; otherwise Data of the [transform]ed (sorted) list. */
-private inline fun <T> List<T>.sectionState(
-    inLibrary: Boolean,
-    transform: List<T>.() -> List<T>,
-): DataState<List<T>> = if (inLibrary) DataState.Data(transform()) else DataState.NoData()
-
-/** Replace a Data section's contents with [sorted]; leave non-Data (NoData/Error) untouched. */
-private fun <T> DataState<List<T>>.reSorted(sorted: List<T>): DataState<List<T>> =
-    if (this is DataState.Data) DataState.Data(sorted) else this
 
 private inline fun <T> DataState<List<T>>.mapData(transform: (List<T>) -> List<T>): DataState<List<T>> =
     if (this is DataState.Data) DataState.Data(transform(data)) else this
