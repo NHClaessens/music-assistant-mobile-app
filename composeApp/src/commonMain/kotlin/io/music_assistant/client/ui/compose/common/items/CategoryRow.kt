@@ -3,6 +3,7 @@ package io.music_assistant.client.ui.compose.common.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
@@ -12,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +42,7 @@ data class ItemCategory(
 @Composable
 fun CategoryRow(
     itemCategory: ItemCategory,
+    actions: @Composable () -> Unit = {},
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayClick: PlayHandler<AppMediaItem>,
     playlistActions: PlaylistActions,
@@ -49,6 +52,7 @@ fun CategoryRow(
 ) {
     CategoryRow(
         title = itemCategory.title.string(),
+        actions = actions,
         onNavigateClick = onNavigateClick,
         onPlayClick = onPlayClick,
         mediaItems = itemCategory.items,
@@ -63,6 +67,7 @@ fun CategoryRow(
 @Composable
 fun CategoryRow(
     title: String,
+    actions: @Composable () -> Unit = {},
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayClick: PlayHandler<AppMediaItem>,
     mediaItems: List<AppMediaItem>,
@@ -75,16 +80,25 @@ fun CategoryRow(
     val rowListState = rememberLazyListState()
 
     Column {
-        Text(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Row {
+                actions()
+            }
+        }
 
         val modifier = if (rowTag != null) {
             Modifier.testTag(rowTag)

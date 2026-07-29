@@ -296,11 +296,14 @@ class ItemDetailsViewModel(
                 }
 
                 val sources = artist.subItemSources()
-                val all = sources.flatMap { (id, prov) ->
-                    fetchArtistItems(Request.Artist.getAlbums(id, prov)).filterIsInstance<Album>()
+                val albumsByProvider = sources.associate { (instance, domain) ->
+                    domain to fetchArtistItems(Request.Artist.getAlbums(instance, domain))
+                        .filterIsInstance<Album>()
                 }
 
+                val all = albumsByProvider[sources.first().second]!!
                 rawArtistAlbums.set(library, all)
+
                 _state.update {
                     it.copy(
                         artistAlbumSections = ArtistSections(
