@@ -250,18 +250,6 @@ class ItemDetailsViewModel(
         }
     }
 
-    /**
-     * Ordered candidate `(itemId, provider)` sources for an artist's All sub-lists. A library
-     * artist fans out over its provider mappings (its own "library" identity would only return the
-     * owned subset); a non-library artist is already its own source.
-     */
-    private fun Artist.subItemSources(): List<Pair<String, String>> =
-        if (isInLibrary) {
-            providerMappings?.map { it.itemId to it.providerInstance } ?: emptyList()
-        } else {
-            listOf(itemId to provider)
-        }
-
     private suspend fun fetchArtistItems(request: Request): List<AppMediaItem> =
         mediaItemRepository.fetchMediaItems(request).getOrNull() ?: emptyList()
 
@@ -275,13 +263,18 @@ class ItemDetailsViewModel(
                     emptyList()
                 }
 
-                val sources = artist.subItemSources()
-                val albumsByProvider = sources.associate { (instance, domain) ->
-                    domain to fetchArtistItems(Request.Artist.getAlbums(instance, domain))
+                val sources = artist.providerMappings ?: emptyList()
+                val albumsByProvider = sources.associate { (itemId, domain, instance) ->
+                    domain to fetchArtistItems(Request.Artist.getAlbums(itemId, instance))
                         .filterIsInstance<Album>()
                 }
 
-                val all = albumsByProvider[sources.first().second]!!
+                val firstProvider = albumsByProvider.entries.first()
+                val all = ProviderList(
+                    selectedDomain = firstProvider.key,
+                    items = firstProvider.value,
+                    options = albumsByProvider.keys.toList(),
+                )
 
                 _state.update {
                     it.copy(
@@ -628,22 +621,35 @@ private fun DataState<out List<*>>.hasItems(): Boolean = when (this) {
     else -> false
 }
 
-data class ArtistSections<T>(
+data class ArtistSections<T : AppMediaItem>(
     val library: DataState<List<T>> = DataState.NoData(),
-    val all: DataState<List<T>> = DataState.NoData(),
+    val all: DataState<ProviderList<T>> = DataState.NoData(),
 ) {
     fun mapData(transform: (List<T>) -> List<T>): ArtistSections<T> = copy(
         library = library.mapData(transform),
-        all = all.mapData(transform),
+        all = all.mapData {
+            it.copy(items = transform(it.items))
+        },
     )
 
+    fun isNotEmpty(): Boolean {
+        return (library is DataState.Data && library.data.isNotEmpty()) ||
+                (all is DataState.Data && all.data.items.isNotEmpty())
+    }
+
     companion object {
-        fun <T> loading() =
+        fun <T : AppMediaItem> loading() =
             ArtistSections<T>(DataState.Loading(), DataState.Loading())
 
-        fun <T> error() = ArtistSections<T>(DataState.Error(), DataState.Error())
+        fun <T : AppMediaItem> error() = ArtistSections<T>(DataState.Error(), DataState.Error())
     }
 }
+
+data class ProviderList<T : AppMediaItem>(
+    val selectedDomain: String,
+    val items: List<T>,
+    val options: List<String>,
+)
 
 private fun <T : AppMediaItem> List<T>.replacing(changed: T): List<T> =
     map { if (it.itemId == changed.itemId) changed else it }

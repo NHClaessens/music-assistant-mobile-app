@@ -22,11 +22,12 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -42,6 +43,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -88,7 +90,6 @@ import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.CategoryRow
-import io.music_assistant.client.ui.compose.common.items.ItemCategory
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.PlayHandler
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
@@ -104,7 +105,6 @@ import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
 import io.music_assistant.client.ui.compose.common.rememberDynamicColorsEnabled
 import io.music_assistant.client.ui.compose.common.rememberExtractedColorsSource
 import io.music_assistant.client.ui.compose.common.rememberToastState
-import io.music_assistant.client.ui.compose.common.toDisplayString
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
 import io.music_assistant.client.ui.fullBleed
@@ -958,52 +958,64 @@ private fun ArtistContent(
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
 ) {
-    val categories = buildList {
-        if (sections.library is DataState.Data && sections.library.data.isNotEmpty()) {
-            add(
-                ItemCategory(
-                    id = "library",
-                    title = Res.string.artist_section_in_library.toDisplayString(),
-                    items = sections.library.data,
-                ),
-            )
-        }
-
-        if (sections.all is DataState.Data && sections.all.data.isNotEmpty()) {
-            add(
-                ItemCategory(
-                    id = "library",
-                    title = Res.string.artist_section_all.toDisplayString(),
-                    items = sections.all.data,
-                ),
-            )
-        }
-    }
-
     LazyColumn(
         modifier = Modifier.testTag(ItemDetailsScreenSemantics.LIST_TAG),
         contentPadding = contentPadding,
     ) {
         item { heroSlot() }
-        if (!categories.isEmpty()) {
-            items(categories) {
-                CategoryRow(
-                    itemCategory = it,
-                    actions = {
-                        FilterChip(
-                            selected = true,
-                            onClick = {},
-                            label = {
-                                Text(it.items.first().provider)
-                            },
-                        )
-                    },
-                    onNavigateClick = onNavigateClick,
-                    onPlayClick = onPlayChildClick,
-                    playlistActions = playlistActions,
-                    libraryActions = libraryActions,
-                    providerIconFetcher = providerIconFetcher,
-                )
+        if (sections.isNotEmpty()) {
+            if (sections.library is DataState.Data) {
+                item {
+                    CategoryRow(
+                        title = stringResource(Res.string.artist_section_in_library),
+                        mediaItems = sections.library.data,
+                        onNavigateClick = onNavigateClick,
+                        onPlayClick = onPlayChildClick,
+                        playlistActions = playlistActions,
+                        libraryActions = libraryActions,
+                        providerIconFetcher = providerIconFetcher,
+                    )
+                }
+            }
+
+            if (sections.all is DataState.Data) {
+                val all = sections.all.data
+                item {
+                    CategoryRow(
+                        title = stringResource(Res.string.artist_section_all),
+                        actions = {
+                            Box {
+                                var expanded by remember { mutableStateOf(false) }
+
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { expanded = true },
+                                    label = {
+                                        Text(all.selectedDomain)
+                                    },
+                                )
+
+                                DropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false },
+                                ) {
+                                    all.options.forEach {
+                                        DropdownMenuItem(
+                                            text = { Text(it) },
+                                            onClick = {},
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        mediaItems = sections.all.data.items,
+                        onNavigateClick = onNavigateClick,
+                        onPlayClick = onPlayChildClick,
+                        playlistActions = playlistActions,
+                        libraryActions = libraryActions,
+                        providerIconFetcher = providerIconFetcher,
+                    )
+                }
             }
         } else {
             item { CenteredText(stringResource(Res.string.library_empty)) }
