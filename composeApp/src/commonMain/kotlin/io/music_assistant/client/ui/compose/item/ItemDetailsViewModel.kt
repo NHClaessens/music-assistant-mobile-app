@@ -26,6 +26,7 @@ import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.DataState
+import io.music_assistant.client.ui.compose.common.mapData
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -643,9 +644,6 @@ data class ArtistSections<T>(
         fun <T> error() = ArtistSections<T>(DataState.Error(), DataState.Error())
     }
 }
-
-private inline fun <T> DataState<List<T>>.mapData(transform: (List<T>) -> List<T>): DataState<List<T>> =
-    if (this is DataState.Data) DataState.Data(transform(data)) else this
 
 private fun <T : AppMediaItem> List<T>.replacing(changed: T): List<T> =
     map { if (it.itemId == changed.itemId) changed else it }
