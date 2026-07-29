@@ -23,6 +23,7 @@ import io.music_assistant.client.data.model.client.items.Podcast
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RecommendationFolder
 import io.music_assistant.client.data.model.client.items.Track
+import io.music_assistant.client.data.model.server.ProviderMapping
 import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.DataState
@@ -254,6 +255,9 @@ class ItemDetailsViewModel(
         mediaItemRepository.fetchMediaItems(request).getOrNull() ?: emptyList()
 
     private fun loadArtistAlbumSections(artist: Artist) {
+        val mappings = artist.providerMappings ?: emptyList()
+        loadAlbumsForProvider(mappings.first())
+
         viewModelScope.launch {
             try {
                 val library = if (artist.isInLibrary) {
@@ -263,30 +267,35 @@ class ItemDetailsViewModel(
                     emptyList()
                 }
 
-                val sources = artist.providerMappings ?: emptyList()
-                val albumsByProvider = sources.associate { (itemId, domain, instance) ->
-                    domain to fetchArtistItems(Request.Artist.getAlbums(itemId, instance))
-                        .filterIsInstance<Album>()
-                }
-
-                val firstProvider = albumsByProvider.entries.first()
-                val all = ProviderList(
-                    selectedDomain = firstProvider.key,
-                    items = firstProvider.value,
-                    options = albumsByProvider.keys.toList(),
-                )
-
                 _state.update {
                     it.copy(
-                        artistAlbumSections = ArtistSections(
+                        artistAlbumSections = (it.artistAlbumSections ?: ArtistSections()).copy(
                             library = DataState.Data(library),
-                            all = DataState.Data(all),
                         ),
                     )
                 }
             } catch (e: Exception) {
                 Logger.e("Failed to load artist album sections", e)
                 _state.update { it.copy(artistAlbumSections = ArtistSections.error()) }
+            }
+        }
+    }
+
+    fun loadAlbumsForProvider(mapping: ProviderMapping) {
+        viewModelScope.launch {
+            val albums = fetchArtistItems(
+                Request.Artist.getAlbums(
+                    mapping.itemId,
+                    mapping.providerInstance,
+                ),
+            ).filterIsInstance<Album>()
+
+            _state.update {
+                it.copy(
+                    artistAlbumSections = (it.artistAlbumSections ?: ArtistSections()).copy(
+                        all = DataState.Data(ProviderList(mapping.providerDomain, albums)),
+                    ),
+                )
             }
         }
     }
@@ -646,9 +655,8 @@ data class ArtistSections<T : AppMediaItem>(
 }
 
 data class ProviderList<T : AppMediaItem>(
-    val selectedDomain: String,
+    val domain: String,
     val items: List<T>,
-    val options: List<String>,
 )
 
 private fun <T : AppMediaItem> List<T>.replacing(changed: T): List<T> =

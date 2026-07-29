@@ -78,6 +78,7 @@ import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.stringResource
 import io.music_assistant.client.data.model.client.toClickContext
+import io.music_assistant.client.data.model.server.ProviderMapping
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.CenteredProgress
 import io.music_assistant.client.ui.compose.common.CenteredText
@@ -172,6 +173,7 @@ fun ItemDetailsScreen(
         onPlayableItemsSortChanged = itemDetailsViewModel::onPlayableItemsSortChanged,
         onTabSelected = itemDetailsViewModel::onTabSelected,
         onLoadSimilarArtists = itemDetailsViewModel::loadSimilarArtists,
+        onMappingSelected = itemDetailsViewModel::loadAlbumsForProvider,
     )
 }
 
@@ -200,6 +202,7 @@ fun ItemDetails(
     onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit = { _, _ -> },
     onTabSelected: (ItemDetailsTab) -> Unit = {},
     onLoadSimilarArtists: () -> Unit = {},
+    onMappingSelected: (ProviderMapping) -> Unit = { },
 ) {
     val playlistActions = object : PlaylistActions {
         override suspend fun getEditablePlaylists(): List<Playlist> {
@@ -271,6 +274,7 @@ fun ItemDetails(
         onTabSelected = onTabSelected,
         onLoadSimilarArtists = onLoadSimilarArtists,
         contentPadding = contentPadding,
+        onMappingSelected = onMappingSelected,
     )
 }
 
@@ -302,6 +306,7 @@ private fun ItemChildren(
     onTabSelected: (ItemDetailsTab) -> Unit,
     onLoadSimilarArtists: () -> Unit,
     contentPadding: PaddingValues,
+    onMappingSelected: (ProviderMapping) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val itemState = state.itemState) {
@@ -322,7 +327,6 @@ private fun ItemChildren(
                 ItemContent(
                     item = item,
                     state = state,
-                    viewModeProvider = viewModeProvider,
                     onNavigateClick = onNavigateClick,
                     onPlayItemClick = onPlayItemClick,
                     onPlayChildClick = onPlayChildClick,
@@ -334,11 +338,13 @@ private fun ItemChildren(
                     providerIconFetcher = providerIconFetcher,
                     fetchColors = fetchColors,
                     onBack = onBack,
+                    viewModeProvider = viewModeProvider,
                     onToggleViewMode = onToggleViewMode,
                     onPlayableItemsSortChanged = onPlayableItemsSortChanged,
                     contentPadding = contentPadding,
                     onTabSelected = onTabSelected,
                     onLoadSimilarArtists = onLoadSimilarArtists,
+                    onMappingSelected = onMappingSelected,
                 )
             }
 
@@ -375,6 +381,7 @@ private fun ItemContent(
     contentPadding: PaddingValues,
     onTabSelected: (ItemDetailsTab) -> Unit,
     onLoadSimilarArtists: () -> Unit,
+    onMappingSelected: (ProviderMapping) -> Unit,
 ) {
     // Tabs, the loading gate, and the selected tab are all derived in ItemDetailsViewModel.State.
     val tabs = state.tabs
@@ -439,6 +446,7 @@ private fun ItemContent(
             val gridState = rememberLazyGridState()
             if (item is Artist) {
                 ArtistContent(
+                    artist = item,
                     sections = state.artistAlbumSections ?: ArtistSections.loading(),
                     onNavigateClick = onNavigateClick,
                     onPlayChildClick = onPlayChildClick,
@@ -447,6 +455,7 @@ private fun ItemContent(
                     providerIconFetcher = providerIconFetcher,
                     contentPadding = contentPadding,
                     heroSlot = heroSlot,
+                    onMappingSelected = onMappingSelected,
                 )
             } else if (tabs.isEmpty()) {
                 heroSlot()
@@ -910,9 +919,9 @@ private fun PlayablesTabContent(
             // any other sort intentionally mixes discs, so headers would lie. Requiring every
             // track to carry a disc number avoids a bogus "Disc null" header on partial tags.
             val sectionByDisc = parentItem is Album &&
-                playableItemsSortOption?.field == SortField.ORIGINAL &&
-                tracks.all { it is Track && it.discNumber != null } &&
-                tracks.mapNotNull { (it as? Track)?.discNumber }.distinct().size > 1
+                    playableItemsSortOption?.field == SortField.ORIGINAL &&
+                    tracks.all { it is Track && it.discNumber != null } &&
+                    tracks.mapNotNull { (it as? Track)?.discNumber }.distinct().size > 1
             if (sectionByDisc) {
                 tracks.forEachIndexed { index, track ->
                     // Gate guarantees a non-null disc; Original sort keeps discs contiguous.
@@ -949,6 +958,7 @@ private fun DiscHeader(disc: Int) {
 
 @Composable
 private fun ArtistContent(
+    artist: Artist,
     sections: ArtistSections<Album>,
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayChildClick: PlayHandler<AppMediaItem>,
@@ -957,6 +967,7 @@ private fun ArtistContent(
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
+    onMappingSelected: (ProviderMapping) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.testTag(ItemDetailsScreenSemantics.LIST_TAG),
@@ -984,31 +995,36 @@ private fun ArtistContent(
                     CategoryRow(
                         title = stringResource(Res.string.artist_section_all),
                         actions = {
-                            Box {
-                                var expanded by remember { mutableStateOf(false) }
+                            if (artist.providerMappings != null) {
+                                Box {
+                                    var expanded by remember { mutableStateOf(false) }
 
-                                FilterChip(
-                                    selected = true,
-                                    onClick = { expanded = true },
-                                    label = {
-                                        Text(all.selectedDomain)
-                                    },
-                                )
+                                    FilterChip(
+                                        selected = true,
+                                        onClick = { expanded = true },
+                                        label = {
+                                            Text(all.domain)
+                                        },
+                                    )
 
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false },
-                                ) {
-                                    all.options.forEach {
-                                        DropdownMenuItem(
-                                            text = { Text(it) },
-                                            onClick = {},
-                                        )
+                                    DropdownMenu(
+                                        expanded = expanded,
+                                        onDismissRequest = { expanded = false },
+                                    ) {
+                                        artist.providerMappings.forEach {
+                                            DropdownMenuItem(
+                                                text = { Text(it.providerDomain) },
+                                                onClick = {
+                                                    expanded = false
+                                                    onMappingSelected(it)
+                                                },
+                                            )
+                                        }
                                     }
                                 }
                             }
                         },
-                        mediaItems = sections.all.data.items,
+                        mediaItems = all.items,
                         onNavigateClick = onNavigateClick,
                         onPlayClick = onPlayChildClick,
                         playlistActions = playlistActions,
