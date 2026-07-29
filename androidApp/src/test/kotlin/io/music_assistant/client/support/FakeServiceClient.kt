@@ -472,6 +472,18 @@ class FakeServiceClient : ServiceClient {
                 Result.success(Answer(JsonObject(emptyMap())))
             }
 
+            APICommands.MUSIC_ARTISTS_TOP_TRACKS -> {
+                val artist = findItem(request)
+                val tracks = mediaItemStore.getTracksByArtist(artist, topOnly = true)
+
+                Result.success(
+                    answer(
+                        request = request,
+                        result = tracks,
+                    ),
+                )
+            }
+
             else -> {
                 Result.failure(UnsupportedOperationException())
             }
@@ -739,6 +751,10 @@ class FakeServiceClient : ServiceClient {
 
     fun setPlaylist(playlist: ServerMediaItem, vararg tracks: ServerMediaItem) {
         mediaItemStore.setPlaylist(playlist, *tracks)
+    }
+
+    fun setTopTracks(artist: ServerMediaItem, vararg tracks: ServerMediaItem) {
+        mediaItemStore.setTopTracks(artist, *tracks)
     }
 
     fun setRequestErrors(requestError: Boolean) {
