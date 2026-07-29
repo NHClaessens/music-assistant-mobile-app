@@ -28,9 +28,7 @@ import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.mapData
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -83,9 +81,6 @@ class ItemDetailsViewModel(
 
     private var rawAlbums: List<Album> = emptyList()
     private var rawPlayableItems: List<PlayableItem> = emptyList()
-
-    private val _toasts = MutableSharedFlow<String>()
-    val toasts = _toasts.asSharedFlow()
 
     fun viewMode(mediaType: MediaType) = settingsRepository.viewMode(mediaType)
 

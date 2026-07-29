@@ -86,8 +86,6 @@ import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.ExtractedColors
 import io.music_assistant.client.ui.compose.common.ExtractedColorsSource
 import io.music_assistant.client.ui.compose.common.SortChip
-import io.music_assistant.client.ui.compose.common.ToastHost
-import io.music_assistant.client.ui.compose.common.ToastState
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.CategoryRow
@@ -105,7 +103,6 @@ import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
 import io.music_assistant.client.ui.compose.common.rememberDynamicColorsEnabled
 import io.music_assistant.client.ui.compose.common.rememberExtractedColorsSource
-import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
 import io.music_assistant.client.ui.fullBleed
@@ -134,14 +131,6 @@ fun ItemDetailsScreen(
     contentPadding: PaddingValues,
 ) {
     val state by itemDetailsViewModel.state.collectAsStateWithLifecycle()
-    val toastState = rememberToastState()
-
-    // Collect toasts
-    LaunchedEffect(Unit) {
-        itemDetailsViewModel.toasts.collect { toast ->
-            toastState.showToast(toast)
-        }
-    }
 
     ItemDetails(
         contentPadding = contentPadding,
@@ -151,7 +140,6 @@ fun ItemDetailsScreen(
             itemDetailsViewModel.viewMode(type).collectAsStateWithLifecycle().value
         },
         onToggleViewMode = itemDetailsViewModel::toggleViewMode,
-        toastState = toastState,
         onNavigateToItem = onNavigateToItem,
         geEditablePlaylists = actionsViewModel::getEditablePlaylists,
         createPlaylist = actionsViewModel::createPlaylist,
@@ -184,7 +172,6 @@ fun ItemDetails(
     onBack: () -> Unit = {},
     viewModeProvider: @Composable (MediaType) -> ViewMode = { ViewMode.LIST },
     onToggleViewMode: (MediaType) -> Unit = {},
-    toastState: ToastState = rememberToastState(),
     onNavigateToItem: (String, MediaType, String) -> Unit = { _, _, _ -> },
     geEditablePlaylists: suspend () -> List<Playlist> = suspend { emptyList() },
     fetchColors: ExtractedColorsSource? = null,
@@ -242,7 +229,6 @@ fun ItemDetails(
 
     ItemChildren(
         state = state,
-        toastState = toastState,
         viewModeProvider = viewModeProvider,
         onNavigateClick = { item ->
             when (item) {
@@ -288,7 +274,6 @@ private fun ItemDetailsTab.stringResource(): StringResource? = when (this) {
 @Composable
 private fun ItemChildren(
     state: ItemDetailsViewModel.State,
-    toastState: ToastState,
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayItemClick: (QueueOption, Boolean) -> Unit,
@@ -350,13 +335,6 @@ private fun ItemChildren(
 
             is DataState.NoData -> CenteredText(stringResource(Res.string.item_no_data))
         }
-
-        ToastHost(
-            toastState = toastState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 48.dp),
-        )
     }
 }
 
