@@ -85,7 +85,6 @@ class ItemDetailsViewModel(
 
     // Unsorted per-section caches for the artist tabs, so a sort change re-sorts without refetching
     // (Top intentionally keeps server order, so it's never re-sorted). Mirror [rawAlbums].
-    private val rawArtistAlbums = RawSections<Album>()
     private val rawArtistTracks = RawSections<Track>()
 
     private val _toasts = MutableSharedFlow<String>()
@@ -286,8 +285,6 @@ class ItemDetailsViewModel(
     private fun loadArtistAlbumSections(artist: Artist) {
         viewModelScope.launch {
             try {
-                val sort = _state.value.albumsSortOption
-                    ?: SortConfig.defaultFor(SubItemContext.ARTIST_ALBUMS)
                 val library = if (artist.isInLibrary) {
                     fetchArtistItems(Request.Artist.getAlbums(artist.itemId, artist.provider))
                         .filterIsInstance<Album>()
@@ -302,13 +299,12 @@ class ItemDetailsViewModel(
                 }
 
                 val all = albumsByProvider[sources.first().second]!!
-                rawArtistAlbums.set(library, all)
 
                 _state.update {
                     it.copy(
                         artistAlbumSections = ArtistSections(
-                            library = library.sectionState(artist.isInLibrary) { clientSorted(sort) },
-                            all = DataState.Data(all.clientSorted(sort)),
+                            library = DataState.Data(library),
+                            all = DataState.Data(all),
                         ),
                     )
                 }
@@ -606,32 +602,6 @@ class ItemDetailsViewModel(
         }
     }
 
-    fun onAlbumsSortChanged(context: SubItemContext, sortOption: SortOption) {
-        settingsRepository.setSortOption(context, sortOption)
-        _state.update { st ->
-            // Artist tabs re-sort Library + All in place
-            val sections = st.artistAlbumSections
-            if (sections != null) {
-                st.copy(
-                    albumsSortOption = sortOption,
-                    artistAlbumSections = sections.copy(
-                        library = sections.library.reSorted(
-                            rawArtistAlbums.library.clientSorted(
-                                sortOption,
-                            ),
-                        ),
-                        all = sections.all.reSorted(rawArtistAlbums.all.clientSorted(sortOption)),
-                    ),
-                )
-            } else {
-                st.copy(
-                    albumsSortOption = sortOption,
-                    albumsState = DataState.Data(rawAlbums.clientSorted(sortOption)),
-                )
-            }
-        }
-    }
-
     fun onPlayableItemsSortChanged(context: SubItemContext, sortOption: SortOption) {
         settingsRepository.setSortOption(context, sortOption)
         _state.update { st ->
@@ -684,7 +654,6 @@ class ItemDetailsViewModel(
 
             is Album -> {
                 _state.value.artistAlbumSections?.let { sections ->
-                    rawArtistAlbums.replace(changed)
                     _state.update { s ->
                         s.copy(artistAlbumSections = sections.mapData { it.replacing(changed) })
                     }
@@ -757,20 +726,6 @@ data class ArtistSections<T>(
     val library: DataState<List<T>> = DataState.NoData(),
     val all: DataState<List<T>> = DataState.NoData(),
 ) {
-    /** Loading while any section is; otherwise the concatenation, for tab loading/selection checks. */
-    fun aggregate(): DataState<List<T>> = when {
-        library is DataState.Loading  || all is DataState.Loading ->
-            DataState.Loading()
-
-        else -> DataState.Data(
-            (library.dataOrNull ?: emptyList()) + (all.dataOrNull ?: emptyList()),
-        )
-    }
-
-    /** Ordered (label-bearing) sections for rendering; callers skip the empty ones. */
-    fun ordered(): List<Pair<ArtistSection, DataState<List<T>>>> =
-        listOf(ArtistSection.LIBRARY to library, ArtistSection.ALL to all)
-
     fun mapData(transform: (List<T>) -> List<T>): ArtistSections<T> = copy(
         library = library.mapData(transform),
         all = all.mapData(transform),
@@ -783,8 +738,6 @@ data class ArtistSections<T>(
         fun <T> error() = ArtistSections<T>(DataState.Error(), DataState.Error())
     }
 }
-
-enum class ArtistSection { LIBRARY, ALL }
 
 /** Mutable unsorted caches for an artist tab's three subsections; see [ItemDetailsViewModel.rawArtistAlbums]. */
 private class RawSections<T : AppMediaItem> {

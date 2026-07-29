@@ -169,7 +169,6 @@ fun ItemDetailsScreen(
         onPlayClick = itemDetailsViewModel::onPlayClick,
         onChapterClick = itemDetailsViewModel::onChapterClick,
         onChildPlayClick = itemDetailsViewModel::onPlayClick,
-        onAlbumsSortChanged = itemDetailsViewModel::onAlbumsSortChanged,
         onPlayableItemsSortChanged = itemDetailsViewModel::onPlayableItemsSortChanged,
         onTabSelected = itemDetailsViewModel::onTabSelected,
         onLoadSimilarArtists = itemDetailsViewModel::loadSimilarArtists,
@@ -198,7 +197,6 @@ fun ItemDetails(
     onPlayClick: (QueueOption, Boolean) -> Unit = { _, _ -> },
     onChapterClick: (Int) -> Unit = {},
     onChildPlayClick: PlayHandler<AppMediaItem> = { _, _, _, _ -> },
-    onAlbumsSortChanged: (SubItemContext, SortOption) -> Unit = { _, _ -> },
     onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit = { _, _ -> },
     onTabSelected: (ItemDetailsTab) -> Unit = {},
     onLoadSimilarArtists: () -> Unit = {},
@@ -269,7 +267,6 @@ fun ItemDetails(
         fetchColors = fetchColors,
         onBack = onBack,
         onToggleViewMode = onToggleViewMode,
-        onAlbumsSortChanged = onAlbumsSortChanged,
         onPlayableItemsSortChanged = onPlayableItemsSortChanged,
         onTabSelected = onTabSelected,
         onLoadSimilarArtists = onLoadSimilarArtists,
@@ -301,7 +298,6 @@ private fun ItemChildren(
     fetchColors: ExtractedColorsSource?,
     onBack: () -> Unit,
     onToggleViewMode: (MediaType) -> Unit,
-    onAlbumsSortChanged: (SubItemContext, SortOption) -> Unit,
     onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit,
     onTabSelected: (ItemDetailsTab) -> Unit,
     onLoadSimilarArtists: () -> Unit,
@@ -339,7 +335,6 @@ private fun ItemChildren(
                     fetchColors = fetchColors,
                     onBack = onBack,
                     onToggleViewMode = onToggleViewMode,
-                    onAlbumsSortChanged = onAlbumsSortChanged,
                     onPlayableItemsSortChanged = onPlayableItemsSortChanged,
                     contentPadding = contentPadding,
                     onTabSelected = onTabSelected,
@@ -376,7 +371,6 @@ private fun ItemContent(
     onBack: () -> Unit,
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onToggleViewMode: (MediaType) -> Unit,
-    onAlbumsSortChanged: (SubItemContext, SortOption) -> Unit,
     onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit,
     contentPadding: PaddingValues,
     onTabSelected: (ItemDetailsTab) -> Unit,
@@ -478,7 +472,6 @@ private fun ItemContent(
                             onTabSelected = { onTabSelected(tabs[it]) },
                             albumsSortOption = state.albumsSortOption,
                             playableItemsSortOption = state.playableItemsSortOption,
-                            onAlbumsSortChanged = onAlbumsSortChanged,
                             onPlayableItemsSortChanged = onPlayableItemsSortChanged,
                             viewModeProvider = viewModeProvider,
                             onToggleViewMode = onToggleViewMode,
@@ -533,7 +526,6 @@ private fun TabsBar(
     onTabSelected: (Int) -> Unit,
     albumsSortOption: SortOption?,
     playableItemsSortOption: SortOption?,
-    onAlbumsSortChanged: (SubItemContext, SortOption) -> Unit,
     onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit,
     viewModeProvider: @Composable (MediaType) -> ViewMode,
     onToggleViewMode: (MediaType) -> Unit,
@@ -596,11 +588,7 @@ private fun TabsBar(
                     currentSort = currentSort,
                     availableFields = availableFields,
                     onSortChanged = { opt ->
-                        if (sortCtx == SubItemContext.ARTIST_ALBUMS) {
-                            onAlbumsSortChanged(sortCtx, opt)
-                        } else {
-                            onPlayableItemsSortChanged(sortCtx, opt)
-                        }
+                        onPlayableItemsSortChanged(sortCtx, opt)
                     },
                 )
             }
