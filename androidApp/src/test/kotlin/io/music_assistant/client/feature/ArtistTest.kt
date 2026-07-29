@@ -30,7 +30,7 @@ class ArtistTest {
     private val serviceClient: FakeServiceClient by inject(ServiceClient::class.java)
 
     @Test
-    fun `show artist albums`() {
+    fun `shows artist albums`() {
         val artist = ServerMediaItemFixtures.artist()
         val album = ServerMediaItemFixtures.album(artist = artist)
         serviceClient.addItems(album)
@@ -38,6 +38,20 @@ class ArtistTest {
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
             .assertMediaDisplayed(album)
+    }
+
+    @Test
+    fun `shows artist top tracks`() {
+        val artist = ServerMediaItemFixtures.artist()
+        val track1 = ServerMediaItemFixtures.track(artists = listOf(artist))
+        val track2 = ServerMediaItemFixtures.track(artists = listOf(artist))
+        serviceClient.addItems(track1, track2)
+        serviceClient.setTopTracks(artist, track2)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
+            .assertMediaDisplayed(track2)
+            .assertMediaNotDisplayed(track1)
     }
 
     @Test

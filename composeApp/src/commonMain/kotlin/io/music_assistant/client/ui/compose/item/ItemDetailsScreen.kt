@@ -112,6 +112,7 @@ import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.album_disc_header
 import musicassistantclient.composeapp.generated.resources.artist_section_all
 import musicassistantclient.composeapp.generated.resources.artist_section_in_library
+import musicassistantclient.composeapp.generated.resources.artist_section_top
 import musicassistantclient.composeapp.generated.resources.cd_toggle_view_mode
 import musicassistantclient.composeapp.generated.resources.item_error
 import musicassistantclient.composeapp.generated.resources.item_no_data
@@ -425,7 +426,7 @@ private fun ItemContent(
             if (item is Artist) {
                 ArtistContent(
                     artist = item,
-                    sections = state.artistAlbumSections ?: ArtistSections.loading(),
+                    sections = state.artistSections ?: ArtistSections.loading(),
                     onNavigateClick = onNavigateClick,
                     onPlayChildClick = onPlayChildClick,
                     playlistActions = playlistActions,
@@ -937,7 +938,7 @@ private fun DiscHeader(disc: Int) {
 @Composable
 private fun ArtistContent(
     artist: Artist,
-    sections: ArtistSections<Album>,
+    sections: ArtistSections,
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayChildClick: PlayHandler<AppMediaItem>,
     playlistActions: PlaylistActions,
@@ -1003,6 +1004,20 @@ private fun ArtistContent(
                             }
                         },
                         mediaItems = all.items,
+                        onNavigateClick = onNavigateClick,
+                        onPlayClick = onPlayChildClick,
+                        playlistActions = playlistActions,
+                        libraryActions = libraryActions,
+                        providerIconFetcher = providerIconFetcher,
+                    )
+                }
+            }
+
+            if (sections.topTracks is DataState.Data) {
+                item {
+                    CategoryRow(
+                        title = stringResource(Res.string.artist_section_top),
+                        mediaItems = sections.topTracks.data,
                         onNavigateClick = onNavigateClick,
                         onPlayClick = onPlayChildClick,
                         playlistActions = playlistActions,

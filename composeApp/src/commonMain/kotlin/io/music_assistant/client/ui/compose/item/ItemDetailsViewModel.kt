@@ -52,7 +52,7 @@ class ItemDetailsViewModel(
          * these back the ARTIST_ALBUMS / ARTIST_TRACKS tabs instead of [albumsState] /
          * [playableItemsState]. Null for non-artist items.
          */
-        val artistAlbumSections: ArtistSections<Album>? = null,
+        val artistSections: ArtistSections? = null,
         /** Lazily loaded on demand from the artist overflow menu; NoData until then. */
         val similarArtistsState: DataState<List<Artist>> = DataState.NoData(),
         val albumsSortOption: SortOption? = null,
@@ -165,7 +165,7 @@ class ItemDetailsViewModel(
                     it.copy(
                         albumsState = DataState.NoData(),
                         playableItemsState = DataState.NoData(),
-                        artistAlbumSections = ArtistSections.loading(),
+                        artistSections = ArtistSections.loading(),
                         albumsSortOption = settingsRepository.getSortOption(SubItemContext.ARTIST_ALBUMS),
                         playableItemsSortOption = settingsRepository.getSortOption(SubItemContext.ARTIST_TRACKS),
                     )
@@ -250,9 +250,6 @@ class ItemDetailsViewModel(
         mediaItemRepository.fetchMediaItems(request).getOrNull() ?: emptyList()
 
     private fun loadArtistAlbumSections(artist: Artist) {
-        val mappings = artist.providerMappings ?: emptyList()
-        loadAlbumsForProvider(mappings.first())
-
         viewModelScope.launch {
             try {
                 val library = if (artist.isInLibrary) {
@@ -264,16 +261,21 @@ class ItemDetailsViewModel(
 
                 _state.update {
                     it.copy(
-                        artistAlbumSections = (it.artistAlbumSections ?: ArtistSections()).copy(
+                        artistSections = (it.artistSections ?: ArtistSections()).copy(
                             library = DataState.Data(library),
                         ),
                     )
                 }
             } catch (e: Exception) {
                 Logger.e("Failed to load artist album sections", e)
-                _state.update { it.copy(artistAlbumSections = ArtistSections.error()) }
+                _state.update { it.copy(artistSections = ArtistSections.error()) }
             }
         }
+
+        val mappings = artist.providerMappings ?: emptyList()
+        val firstMapping = mappings.first()
+        loadAlbumsForProvider(firstMapping)
+        loadTopTracksForProvider(firstMapping)
     }
 
     fun loadAlbumsForProvider(mapping: ProviderMapping) {
@@ -287,8 +289,27 @@ class ItemDetailsViewModel(
 
             _state.update {
                 it.copy(
-                    artistAlbumSections = (it.artistAlbumSections ?: ArtistSections()).copy(
+                    artistSections = (it.artistSections ?: ArtistSections()).copy(
                         all = DataState.Data(ProviderList(mapping.providerDomain, albums)),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun loadTopTracksForProvider(mapping: ProviderMapping) {
+        viewModelScope.launch {
+            val tracks = fetchArtistItems(
+                Request.Artist.getTopTracks(
+                    mapping.itemId,
+                    mapping.providerInstance,
+                ),
+            ).filterIsInstance<Track>()
+
+            _state.update {
+                it.copy(
+                    artistSections = (it.artistSections ?: ArtistSections()).copy(
+                        topTracks = DataState.Data(tracks),
                     ),
                 )
             }
@@ -565,9 +586,16 @@ class ItemDetailsViewModel(
             }
 
             is Album -> {
-                _state.value.artistAlbumSections?.let { sections ->
+                _state.value.artistSections?.let { sections ->
                     _state.update { s ->
-                        s.copy(artistAlbumSections = sections.mapData { it.replacing(changed) })
+                        s.copy(
+                            artistSections = sections.copy(
+                                library = sections.library.mapData { it.replacing(changed) },
+                                all = sections.all.mapData {
+                                    it.copy(items = it.items.replacing(changed))
+                                },
+                            ),
+                        )
                     }
                     return
                 }
@@ -625,27 +653,20 @@ private fun DataState<out List<*>>.hasItems(): Boolean = when (this) {
     else -> false
 }
 
-data class ArtistSections<T : AppMediaItem>(
-    val library: DataState<List<T>> = DataState.NoData(),
-    val all: DataState<ProviderList<T>> = DataState.NoData(),
+data class ArtistSections(
+    val library: DataState<List<Album>> = DataState.NoData(),
+    val all: DataState<ProviderList<Album>> = DataState.NoData(),
+    val topTracks: DataState<List<Track>> = DataState.NoData(),
 ) {
-    fun mapData(transform: (List<T>) -> List<T>): ArtistSections<T> = copy(
-        library = library.mapData(transform),
-        all = all.mapData {
-            it.copy(items = transform(it.items))
-        },
-    )
-
     fun isNotEmpty(): Boolean {
         return (library is DataState.Data && library.data.isNotEmpty()) ||
-                (all is DataState.Data && all.data.items.isNotEmpty())
+                (all is DataState.Data && all.data.items.isNotEmpty()) ||
+                (topTracks is DataState.Data && topTracks.data.isNotEmpty())
     }
 
     companion object {
-        fun <T : AppMediaItem> loading() =
-            ArtistSections<T>(DataState.Loading(), DataState.Loading())
-
-        fun <T : AppMediaItem> error() = ArtistSections<T>(DataState.Error(), DataState.Error())
+        fun loading() = ArtistSections(DataState.Loading(), DataState.Loading())
+        fun error() = ArtistSections(DataState.Error(), DataState.Error())
     }
 }
 
