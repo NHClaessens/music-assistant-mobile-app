@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -179,8 +180,11 @@ class AudioStreamManager(
         }
 
         try {
+            isStreaming = false
+            playbackJob?.cancelAndJoin()
+            playbackJob = null
+
             streamConfig = config
-            isStreaming = true
             // Create and configure decoder atomically under lock
             val (outputCodec, outputBitDepth) = decoderLock.withLock {
                 audioDecoder?.release()
@@ -238,6 +242,7 @@ class AudioStreamManager(
                 currentSinkConfig = newSinkConfig
             }
 
+            isStreaming = true
             queueLock.withLock {
                 queue.clear()
                 lastConsumedTs = Long.MIN_VALUE
@@ -429,7 +434,7 @@ class AudioStreamManager(
         logger.i { "Stopping stream" }
         isStreaming = false
         _isStarved.value = false
-        playbackJob?.cancel()
+        playbackJob?.cancelAndJoin()
         playbackJob = null
 
         queueLock.withLock {
