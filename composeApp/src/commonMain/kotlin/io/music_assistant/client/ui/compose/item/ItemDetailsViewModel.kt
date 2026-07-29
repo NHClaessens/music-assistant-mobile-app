@@ -52,7 +52,7 @@ class ItemDetailsViewModel(
          * these back the ARTIST_ALBUMS / ARTIST_TRACKS tabs instead of [albumsState] /
          * [playableItemsState]. Null for non-artist items.
          */
-        val artistSections: ArtistSections? = null,
+        val artistSections: ArtistSections = ArtistSections(),
         /** Lazily loaded on demand from the artist overflow menu; NoData until then. */
         val similarArtistsState: DataState<List<Artist>> = DataState.NoData(),
         val albumsSortOption: SortOption? = null,
@@ -261,7 +261,7 @@ class ItemDetailsViewModel(
 
                 _state.update {
                     it.copy(
-                        artistSections = (it.artistSections ?: ArtistSections()).copy(
+                        artistSections = it.artistSections.copy(
                             library = DataState.Data(library),
                         ),
                     )
@@ -289,7 +289,7 @@ class ItemDetailsViewModel(
 
             _state.update {
                 it.copy(
-                    artistSections = (it.artistSections ?: ArtistSections()).copy(
+                    artistSections = it.artistSections.copy(
                         all = DataState.Data(ProviderList(mapping.providerDomain, albums)),
                     ),
                 )
@@ -308,7 +308,7 @@ class ItemDetailsViewModel(
 
             _state.update {
                 it.copy(
-                    artistSections = (it.artistSections ?: ArtistSections()).copy(
+                    artistSections = it.artistSections.copy(
                         topTracks = DataState.Data(tracks),
                     ),
                 )
@@ -586,7 +586,7 @@ class ItemDetailsViewModel(
             }
 
             is Album -> {
-                _state.value.artistSections?.let { sections ->
+                _state.value.artistSections.let { sections ->
                     _state.update { s ->
                         s.copy(
                             artistSections = sections.copy(
@@ -597,8 +597,8 @@ class ItemDetailsViewModel(
                             ),
                         )
                     }
-                    return
                 }
+
                 val albumsData = (_state.value.albumsState as? DataState.Data)?.data ?: return
                 val updated = albumsData.map { if (it.itemId == changed.itemId) changed else it }
                 rawAlbums = rawAlbums.map { if (it.itemId == changed.itemId) changed else it }
@@ -606,6 +606,18 @@ class ItemDetailsViewModel(
             }
 
             is PlayableItem -> {
+                if (changed is Track) {
+                    _state.value.artistSections.let { sections ->
+                        _state.update { s ->
+                            s.copy(
+                                artistSections = sections.copy(
+                                    topTracks = sections.topTracks.mapData { it.replacing(changed) },
+                                ),
+                            )
+                        }
+                    }
+                }
+
                 val tracksData =
                     (_state.value.playableItemsState as? DataState.Data)?.data ?: return
                 val updated = tracksData.map { existing ->

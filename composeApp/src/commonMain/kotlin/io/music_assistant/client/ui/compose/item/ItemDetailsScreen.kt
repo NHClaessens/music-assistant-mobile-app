@@ -426,7 +426,7 @@ private fun ItemContent(
             if (item is Artist) {
                 ArtistContent(
                     artist = item,
-                    sections = state.artistSections ?: ArtistSections.loading(),
+                    sections = state.artistSections,
                     onNavigateClick = onNavigateClick,
                     onPlayChildClick = onPlayChildClick,
                     playlistActions = playlistActions,
