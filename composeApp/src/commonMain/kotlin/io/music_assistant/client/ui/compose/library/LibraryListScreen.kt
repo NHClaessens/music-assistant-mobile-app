@@ -118,7 +118,6 @@ fun LibraryListScreen(
                 libraryActions = actionsViewModel,
                 progressActions = actionsViewModel,
                 contentPadding = contentPadding,
-                mediaType = state.mediaType,
                 viewMode = state.viewMode,
                 hasMore = state.hasMore,
                 isLoadingMore = state.isLoadingMore,
@@ -130,6 +129,7 @@ fun LibraryListScreen(
                         null
                     }
                 },
+                showPlaylistCreate = state.mediaType == MediaType.PLAYLIST,
             )
         }
 

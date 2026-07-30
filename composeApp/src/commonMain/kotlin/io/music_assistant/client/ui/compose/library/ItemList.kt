@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Plus
-import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.DataState
@@ -61,12 +60,12 @@ fun ItemList(
     libraryActions: LibraryActions,
     progressActions: ProgressActions,
     contentPadding: PaddingValues,
-    mediaType: MediaType,
     viewMode: ViewMode,
     hasMore: Boolean = false,
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     onGlobalSearch: (() -> Unit)? = null,
+    showPlaylistCreate: Boolean = false,
 ) {
     var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
     if (showCreatePlaylistDialog) {
@@ -99,7 +98,7 @@ fun ItemList(
                             EmptyState(onGlobalSearch)
                         } else {
                             Column(modifier = Modifier.fillMaxSize()) {
-                                if (mediaType == MediaType.PLAYLIST) {
+                                if (showPlaylistCreate) {
                                     OutlinedButton(
                                         modifier = Modifier
                                             .fillMaxWidth()
