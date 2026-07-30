@@ -59,6 +59,7 @@ object ServerMediaItemFixtures {
         name: String = "Track $itemId",
         album: ServerMediaItem? = album(),
         artists: List<ServerMediaItem>? = album?.artists ?: listOf(artist()),
+        provider: Provider = Provider(DEFAULT_PROVIDER_DOMAIN, DEFAULT_PROVIDER_INSTANCE),
     ): ServerMediaItem {
         return ServerMediaItem(
             itemId = itemId,
@@ -72,8 +73,8 @@ object ServerMediaItemFixtures {
             providerMappings = listOf(
                 ProviderMapping(
                     itemId = itemId,
-                    providerDomain = DEFAULT_PROVIDER_DOMAIN,
-                    providerInstance = DEFAULT_PROVIDER_INSTANCE,
+                    providerDomain = provider.domain,
+                    providerInstance = provider.instance,
                 ),
             ),
         )

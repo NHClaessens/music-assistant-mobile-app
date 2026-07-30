@@ -165,7 +165,8 @@ fun ItemDetailsScreen(
         onPlayableItemsSortChanged = itemDetailsViewModel::onPlayableItemsSortChanged,
         onTabSelected = itemDetailsViewModel::onTabSelected,
         onLoadSimilarArtists = itemDetailsViewModel::loadSimilarArtists,
-        onMappingSelected = itemDetailsViewModel::loadAlbumsForProvider,
+        onAlbumMappingChanged = itemDetailsViewModel::loadAlbumsForProvider,
+        onTrackMappingChanged = itemDetailsViewModel::loadTopTracksForProvider,
     )
 }
 
@@ -193,7 +194,8 @@ fun ItemDetails(
     onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit = { _, _ -> },
     onTabSelected: (ItemDetailsTab) -> Unit = {},
     onLoadSimilarArtists: () -> Unit = {},
-    onMappingSelected: (ProviderMapping) -> Unit = { },
+    onAlbumMappingChanged: (ProviderMapping) -> Unit = { },
+    onTrackMappingChanged: (ProviderMapping) -> Unit = { },
 ) {
     val playlistActions = object : PlaylistActions {
         override suspend fun getEditablePlaylists(): List<Playlist> {
@@ -264,7 +266,8 @@ fun ItemDetails(
         onTabSelected = onTabSelected,
         onLoadSimilarArtists = onLoadSimilarArtists,
         contentPadding = contentPadding,
-        onMappingSelected = onMappingSelected,
+        onAlbumMappingChanged = onAlbumMappingChanged,
+        onTrackMappingChanged = onTrackMappingChanged,
     )
 }
 
@@ -295,7 +298,8 @@ private fun ItemChildren(
     onTabSelected: (ItemDetailsTab) -> Unit,
     onLoadSimilarArtists: () -> Unit,
     contentPadding: PaddingValues,
-    onMappingSelected: (ProviderMapping) -> Unit,
+    onAlbumMappingChanged: (ProviderMapping) -> Unit,
+    onTrackMappingChanged: (ProviderMapping) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val itemState = state.itemState) {
@@ -333,7 +337,8 @@ private fun ItemChildren(
                     contentPadding = contentPadding,
                     onTabSelected = onTabSelected,
                     onLoadSimilarArtists = onLoadSimilarArtists,
-                    onMappingSelected = onMappingSelected,
+                    onAlbumMappingChanged = onAlbumMappingChanged,
+                    onTrackMappingChanged = onTrackMappingChanged,
                 )
             }
 
@@ -363,7 +368,8 @@ private fun ItemContent(
     contentPadding: PaddingValues,
     onTabSelected: (ItemDetailsTab) -> Unit,
     onLoadSimilarArtists: () -> Unit,
-    onMappingSelected: (ProviderMapping) -> Unit,
+    onAlbumMappingChanged: (ProviderMapping) -> Unit,
+    onTrackMappingChanged: (ProviderMapping) -> Unit,
 ) {
     // Tabs, the loading gate, and the selected tab are all derived in ItemDetailsViewModel.State.
     val tabs = state.tabs
@@ -437,7 +443,8 @@ private fun ItemContent(
                     providerIconFetcher = providerIconFetcher,
                     contentPadding = contentPadding,
                     heroSlot = heroSlot,
-                    onMappingSelected = onMappingSelected,
+                    onAlbumMappingChanged = onAlbumMappingChanged,
+                    onTrackMappingChanged = onTrackMappingChanged,
                 )
             } else if (tabs.isEmpty()) {
                 heroSlot()
@@ -949,7 +956,8 @@ private fun ArtistContent(
     providerIconFetcher: @Composable (Modifier, String) -> Unit,
     contentPadding: PaddingValues,
     heroSlot: @Composable () -> Unit,
-    onMappingSelected: (ProviderMapping) -> Unit,
+    onAlbumMappingChanged: (ProviderMapping) -> Unit,
+    onTrackMappingChanged: (ProviderMapping) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.testTag(ItemDetailsScreenSemantics.LIST_TAG),
@@ -973,48 +981,19 @@ private fun ArtistContent(
 
             if (sections.all is DataState.Data) {
                 val all = sections.all.data
+
                 item {
                     val rowTitle = stringResource(Res.string.artist_section_all)
                     CategoryRow(
                         title = rowTitle,
                         actions = {
                             if (artist.providerMappings != null) {
-                                Box {
-                                    var expanded by remember { mutableStateOf(false) }
-
-                                    val provider = all.domain
-                                    val chipContentDescription = stringResource(
-                                        Res.string.cd_provider_filter,
-                                        rowTitle,
-                                        provider,
-                                    )
-
-                                    FilterChip(
-                                        modifier = Modifier.semantics {
-                                            contentDescription = chipContentDescription
-                                        },
-                                        selected = true,
-                                        onClick = { expanded = true },
-                                        label = {
-                                            Text(provider)
-                                        },
-                                    )
-
-                                    DropdownMenu(
-                                        expanded = expanded,
-                                        onDismissRequest = { expanded = false },
-                                    ) {
-                                        artist.providerMappings.forEach {
-                                            DropdownMenuItem(
-                                                text = { Text(it.providerDomain) },
-                                                onClick = {
-                                                    expanded = false
-                                                    onMappingSelected(it)
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
+                                ProviderSelector(
+                                    currentProvider = all.domain,
+                                    subject = rowTitle,
+                                    onMappingSelected = onAlbumMappingChanged,
+                                    providerMappings = artist.providerMappings,
+                                )
                             }
                         },
                         mediaItems = all.items,
@@ -1028,10 +1007,23 @@ private fun ArtistContent(
             }
 
             if (sections.topTracks is DataState.Data) {
+                val topTracks = sections.topTracks.data
+
                 item {
+                    val rowTitle = stringResource(Res.string.artist_section_top)
                     CategoryRow(
-                        title = stringResource(Res.string.artist_section_top),
-                        mediaItems = sections.topTracks.data,
+                        title = rowTitle,
+                        actions = {
+                            if (artist.providerMappings != null) {
+                                ProviderSelector(
+                                    currentProvider = topTracks.domain,
+                                    subject = rowTitle,
+                                    onMappingSelected = onTrackMappingChanged,
+                                    providerMappings = artist.providerMappings,
+                                )
+                            }
+                        },
+                        mediaItems = sections.topTracks.data.items,
                         onNavigateClick = onNavigateClick,
                         onPlayClick = onPlayChildClick,
                         playlistActions = playlistActions,
@@ -1042,6 +1034,51 @@ private fun ArtistContent(
             }
         } else {
             item { CenteredText(stringResource(Res.string.library_empty)) }
+        }
+    }
+}
+
+@Composable
+private fun ProviderSelector(
+    currentProvider: String,
+    subject: String,
+    onMappingSelected: (ProviderMapping) -> Unit,
+    providerMappings: List<ProviderMapping>,
+) {
+    Box {
+        var expanded by remember { mutableStateOf(false) }
+
+        val provider = currentProvider
+        val chipContentDescription = stringResource(
+            Res.string.cd_provider_filter,
+            subject,
+            provider,
+        )
+
+        FilterChip(
+            modifier = Modifier.semantics {
+                contentDescription = chipContentDescription
+            },
+            selected = true,
+            onClick = { expanded = true },
+            label = {
+                Text(provider)
+            },
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            providerMappings.forEach {
+                DropdownMenuItem(
+                    text = { Text(it.providerDomain) },
+                    onClick = {
+                        expanded = false
+                        onMappingSelected(it)
+                    },
+                )
+            }
         }
     }
 }

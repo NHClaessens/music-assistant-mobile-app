@@ -309,7 +309,7 @@ class ItemDetailsViewModel(
             _state.update {
                 it.copy(
                     artistSections = it.artistSections.copy(
-                        topTracks = DataState.Data(tracks),
+                        topTracks = DataState.Data(ProviderList(mapping.providerDomain, tracks)),
                     ),
                 )
             }
@@ -611,7 +611,9 @@ class ItemDetailsViewModel(
                         _state.update { s ->
                             s.copy(
                                 artistSections = sections.copy(
-                                    topTracks = sections.topTracks.mapData { it.replacing(changed) },
+                                    topTracks = sections.topTracks.mapData {
+                                        it.copy(items = it.items.replacing(changed))
+                                    },
                                 ),
                             )
                         }
@@ -668,17 +670,17 @@ private fun DataState<out List<*>>.hasItems(): Boolean = when (this) {
 data class ArtistSections(
     val library: DataState<List<Album>> = DataState.NoData(),
     val all: DataState<ProviderList<Album>> = DataState.NoData(),
-    val topTracks: DataState<List<Track>> = DataState.NoData(),
+    val topTracks: DataState<ProviderList<Track>> = DataState.NoData(),
 ) {
     fun isNotEmpty(): Boolean {
         return (library is DataState.Data && library.data.isNotEmpty()) ||
                 (all is DataState.Data && all.data.items.isNotEmpty()) ||
-                (topTracks is DataState.Data && topTracks.data.isNotEmpty())
+                (topTracks is DataState.Data && topTracks.data.items.isNotEmpty())
     }
 
     companion object {
-        fun loading() = ArtistSections(DataState.Loading(), DataState.Loading())
-        fun error() = ArtistSections(DataState.Error(), DataState.Error())
+        fun loading() = ArtistSections(DataState.Loading(), DataState.Loading(), DataState.Loading())
+        fun error() = ArtistSections(DataState.Error(), DataState.Error(), DataState.Error())
     }
 }
 
