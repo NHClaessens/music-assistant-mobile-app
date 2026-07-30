@@ -9,6 +9,7 @@ import io.music_assistant.client.support.Qualifiers
 import io.music_assistant.client.support.ServerMediaItemFixtures
 import io.music_assistant.client.support.get
 import io.music_assistant.client.support.launchLoggedInApp
+import io.music_assistant.client.support.pages.assertMediaDisplayed
 import io.music_assistant.client.support.pages.assertMediaNotDisplayed
 import io.music_assistant.client.support.pages.assertNoItems
 import io.music_assistant.client.support.rules.createTestRuleChain
@@ -41,6 +42,18 @@ class ArtistTest {
 
         launchLoggedInApp(composeTestRule, serviceClient)
             .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
+            .assertMediaDisplayed(album)
+    }
+
+    @Test
+    fun `can view all artist albums`() {
+        val artist = ServerMediaItemFixtures.artist()
+        val album = ServerMediaItemFixtures.album(artist = artist)
+        serviceClient.addItems(album)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
+            .clickViewAll(Res.string.artist_section_all.get())
             .assertMediaDisplayed(album)
     }
 

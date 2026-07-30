@@ -21,6 +21,7 @@ import musicassistantclient.composeapp.generated.resources.action_go_to_artist
 import musicassistantclient.composeapp.generated.resources.action_play_now
 import musicassistantclient.composeapp.generated.resources.cd_more
 import musicassistantclient.composeapp.generated.resources.cd_provider_filter
+import musicassistantclient.composeapp.generated.resources.cd_view_all
 import musicassistantclient.composeapp.generated.resources.media_type_albums
 import musicassistantclient.composeapp.generated.resources.media_type_tracks
 import musicassistantclient.composeapp.generated.resources.nav_home
@@ -116,5 +117,12 @@ class ItemPage(
             inScrollable = ItemDetailsScreenSemantics.LIST_TAG,
             provider = provider,
         )
+    }
+
+    fun clickViewAll(row: String): ItemListPage {
+        composeTestRule
+            .onNodeWithContentDescription(Res.string.cd_view_all.get(row))
+            .performClick()
+        return ItemListPage(row, navigationItem, composeTestRule).assertOnPage()
     }
 }

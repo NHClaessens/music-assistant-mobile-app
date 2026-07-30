@@ -2,8 +2,6 @@ package io.music_assistant.client.support.pages
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -14,27 +12,11 @@ import io.music_assistant.client.support.get
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.library_quick_search
 import musicassistantclient.composeapp.generated.resources.library_search_global
-import musicassistantclient.composeapp.generated.resources.nav_home
 import musicassistantclient.composeapp.generated.resources.nav_library
-import musicassistantclient.composeapp.generated.resources.nav_search
-import musicassistantclient.composeapp.generated.resources.nav_settings
 import musicassistantclient.composeapp.generated.resources.search_query_label
 
-class LibraryListPage(private val type: String, composeTestRule: ComposeTestRule) :
-    ComposePage(composeTestRule) {
-    override fun assert() {
-        composeTestRule.onAllNodesWithText(type).onFirst().assertIsDisplayed()
-        assertNavBar(
-            items = listOf(
-                Res.string.nav_home.get(),
-                Res.string.nav_library.get(),
-                Res.string.nav_search.get(),
-                Res.string.nav_settings.get(),
-            ),
-            selected = Res.string.nav_library.get(),
-        )
-    }
-
+class LibraryListPage(type: String, composeTestRule: ComposeTestRule) :
+    ItemListPage(type, Res.string.nav_library.get(), composeTestRule) {
     fun clickOnMedia(item: ServerMediaItem): ItemPage {
         return clickOnMedia(
             item,
