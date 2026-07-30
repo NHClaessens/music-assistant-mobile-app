@@ -64,10 +64,10 @@ import io.music_assistant.client.ui.compose.item.ItemDetailsScreen
 import io.music_assistant.client.ui.compose.item.ItemDetailsViewModel
 import io.music_assistant.client.ui.compose.library.BrowseScreen
 import io.music_assistant.client.ui.compose.library.BrowseViewModel
-import io.music_assistant.client.ui.compose.library.ItemListScreen
-import io.music_assistant.client.ui.compose.library.ItemListViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategory
+import io.music_assistant.client.ui.compose.library.LibraryListScreen
+import io.music_assistant.client.ui.compose.library.LibraryListViewModel
 import io.music_assistant.client.ui.compose.library.LibraryScreen
 import io.music_assistant.client.ui.compose.library.LibraryScreenState
 import io.music_assistant.client.ui.compose.nav.AdaptiveNavigationBarLayout
@@ -397,12 +397,12 @@ private fun mainNavEntryProvider(
         }
 
         entry<MainNav.ItemList> {
-            val itemListViewModel = koinViewModel<ItemListViewModel> {
+            val libraryListViewModel = koinViewModel<LibraryListViewModel> {
                 parametersOf(it.mediaType)
             }
 
-            ItemListScreen(
-                itemListViewModel = itemListViewModel,
+            LibraryListScreen(
+                libraryListViewModel = libraryListViewModel,
                 contentPadding = contentPadding,
                 actionsViewModel = actionsViewModel,
                 onBack = { multiBackStack.removeLastOrNull() },
