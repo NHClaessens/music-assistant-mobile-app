@@ -256,8 +256,7 @@ class AudioStreamManager(
             // armed guard with no running consumer would leave us silent. Also stop any consumer
             // this call managed to launch on the detached playback scope.
             streamConfig = null
-            playbackJob?.cancel()
-            playbackJob = null
+            stopPlaybackThread(join = false)
             throw e
         }
     }
@@ -307,9 +306,13 @@ class AudioStreamManager(
      * Consumer: decode the oldest frame from sorted queue and write PCM to AudioTrack.
      * Runs on high-priority [audioDispatcher]. Paced by blocking AudioTrack.write().
      */
-    private suspend fun stopPlaybackThread() {
+    private suspend fun stopPlaybackThread(join: Boolean = true) {
         isStreaming = false
-        playbackJob?.cancelAndJoin()
+        if (join) {
+            playbackJob?.cancelAndJoin()
+        } else {
+            playbackJob?.cancel()
+        }
         playbackJob = null
     }
 
