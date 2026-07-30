@@ -233,74 +233,6 @@ fun ItemDetails(
         }
     }
 
-    ItemChildren(
-        state = state,
-        viewModeProvider = viewModeProvider,
-        onNavigateClick = { item ->
-            when (item) {
-                is Artist,
-                is Album,
-                is Playlist,
-                is Podcast,
-                is Audiobook,
-                is Genre,
-                    -> {
-                    onNavigateToItem(item.itemId, item.mediaType, item.provider)
-                }
-
-                else -> Unit
-            }
-        },
-        onPlayItemClick = onPlayClick,
-        onPlayChildClick = onChildPlayClick,
-        onChapterClick = onChapterClick,
-        playlistActions = playlistActions,
-        progressActions = progressActions,
-        onRemoveFromPlaylist = onRemoveFromPlaylist,
-        libraryActions = libraryActions,
-        providerIconFetcher = providerIconFetcher,
-        fetchColors = fetchColors,
-        onBack = onBack,
-        onToggleViewMode = onToggleViewMode,
-        onPlayableItemsSortChanged = onPlayableItemsSortChanged,
-        onTabSelected = onTabSelected,
-        onLoadSimilarArtists = onLoadSimilarArtists,
-        contentPadding = contentPadding,
-        onAlbumMappingChanged = onAlbumMappingChanged,
-        onTrackMappingChanged = onTrackMappingChanged,
-    )
-}
-
-/** Tab label. Chapters have a dedicated string; every other tab borrows its media-type label. */
-private fun ItemDetailsTab.stringResource(): StringResource? = when (this) {
-    ItemDetailsTab.AUDIOBOOK_CHAPTERS -> Res.string.media_type_chapters
-    ItemDetailsTab.PODCAST_EPISODES -> Res.string.media_type_episodes
-    else -> viewMediaType?.stringResource()
-}
-
-@Composable
-private fun ItemChildren(
-    state: ItemDetailsViewModel.State,
-    viewModeProvider: @Composable (MediaType) -> ViewMode,
-    onNavigateClick: (AppMediaItem) -> Unit,
-    onPlayItemClick: (QueueOption, Boolean) -> Unit,
-    onPlayChildClick: PlayHandler<AppMediaItem>,
-    onChapterClick: (Int) -> Unit,
-    playlistActions: PlaylistActions,
-    progressActions: ProgressActions? = null,
-    onRemoveFromPlaylist: (String, Int) -> Unit,
-    libraryActions: LibraryActions,
-    providerIconFetcher: (@Composable (Modifier, String) -> Unit),
-    fetchColors: ExtractedColorsSource?,
-    onBack: () -> Unit,
-    onToggleViewMode: (MediaType) -> Unit,
-    onPlayableItemsSortChanged: (SubItemContext, SortOption) -> Unit,
-    onTabSelected: (ItemDetailsTab) -> Unit,
-    onLoadSimilarArtists: () -> Unit,
-    contentPadding: PaddingValues,
-    onAlbumMappingChanged: (ProviderMapping) -> Unit,
-    onTrackMappingChanged: (ProviderMapping) -> Unit,
-) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val itemState = state.itemState) {
             is DataState.Loading -> CenteredProgress()
@@ -320,9 +252,23 @@ private fun ItemChildren(
                 ItemContent(
                     item = item,
                     state = state,
-                    onNavigateClick = onNavigateClick,
-                    onPlayItemClick = onPlayItemClick,
-                    onPlayChildClick = onPlayChildClick,
+                    onNavigateClick = { item: AppMediaItem ->
+                        when (item) {
+                            is Artist,
+                            is Album,
+                            is Playlist,
+                            is Podcast,
+                            is Audiobook,
+                            is Genre,
+                                -> {
+                                onNavigateToItem(item.itemId, item.mediaType, item.provider)
+                            }
+
+                            else -> Unit
+                        }
+                    },
+                    onPlayItemClick = onPlayClick,
+                    onPlayChildClick = onChildPlayClick,
                     onChapterClick = onChapterClick,
                     playlistActions = playlistActions,
                     progressActions = progressActions,
@@ -345,6 +291,13 @@ private fun ItemChildren(
             is DataState.NoData -> CenteredText(stringResource(Res.string.item_no_data))
         }
     }
+}
+
+/** Tab label. Chapters have a dedicated string; every other tab borrows its media-type label. */
+private fun ItemDetailsTab.stringResource(): StringResource? = when (this) {
+    ItemDetailsTab.AUDIOBOOK_CHAPTERS -> Res.string.media_type_chapters
+    ItemDetailsTab.PODCAST_EPISODES -> Res.string.media_type_episodes
+    else -> viewMediaType?.stringResource()
 }
 
 @Composable
