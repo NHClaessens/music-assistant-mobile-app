@@ -75,6 +75,10 @@ class QueueTest {
             .clickOnMedia(album)
             .clickPlay()
             .expandPlayer(player1.displayName, playing = true, item = track.name)
-            .transferQueue(player2.displayName)
+            .transferQueue(player2.displayName) {
+                composeTestRule.waitUntil {
+                    serviceClient.getCurrentlyPlaying(player2.playerId) == track
+                }
+            }
     }
 }
