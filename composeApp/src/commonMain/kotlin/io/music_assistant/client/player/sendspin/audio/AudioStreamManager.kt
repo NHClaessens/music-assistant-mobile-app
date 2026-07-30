@@ -180,9 +180,7 @@ class AudioStreamManager(
         }
 
         try {
-            isStreaming = false
-            playbackJob?.cancelAndJoin()
-            playbackJob = null
+            stopPlaybackThread()
 
             streamConfig = config
             // Create and configure decoder atomically under lock
@@ -309,6 +307,12 @@ class AudioStreamManager(
      * Consumer: decode the oldest frame from sorted queue and write PCM to AudioTrack.
      * Runs on high-priority [audioDispatcher]. Paced by blocking AudioTrack.write().
      */
+    private suspend fun stopPlaybackThread() {
+        isStreaming = false
+        playbackJob?.cancelAndJoin()
+        playbackJob = null
+    }
+
     private fun startPlaybackThread() {
         playbackJob?.cancel()
         playbackJob = CoroutineScope(audioDispatcher + SupervisorJob()).launch {
@@ -432,10 +436,8 @@ class AudioStreamManager(
 
     override suspend fun stopStream() = streamLifecycleLock.withLock {
         logger.i { "Stopping stream" }
-        isStreaming = false
         _isStarved.value = false
-        playbackJob?.cancelAndJoin()
-        playbackJob = null
+        stopPlaybackThread()
 
         queueLock.withLock {
             queue.clear()
