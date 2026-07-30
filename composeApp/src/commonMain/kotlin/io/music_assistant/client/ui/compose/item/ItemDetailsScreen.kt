@@ -51,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -113,6 +115,7 @@ import musicassistantclient.composeapp.generated.resources.album_disc_header
 import musicassistantclient.composeapp.generated.resources.artist_section_all
 import musicassistantclient.composeapp.generated.resources.artist_section_in_library
 import musicassistantclient.composeapp.generated.resources.artist_section_top
+import musicassistantclient.composeapp.generated.resources.cd_provider_filter
 import musicassistantclient.composeapp.generated.resources.cd_toggle_view_mode
 import musicassistantclient.composeapp.generated.resources.item_error
 import musicassistantclient.composeapp.generated.resources.item_no_data
@@ -971,18 +974,29 @@ private fun ArtistContent(
             if (sections.all is DataState.Data) {
                 val all = sections.all.data
                 item {
+                    val rowTitle = stringResource(Res.string.artist_section_all)
                     CategoryRow(
-                        title = stringResource(Res.string.artist_section_all),
+                        title = rowTitle,
                         actions = {
                             if (artist.providerMappings != null) {
                                 Box {
                                     var expanded by remember { mutableStateOf(false) }
 
+                                    val provider = all.domain
+                                    val chipContentDescription = stringResource(
+                                        Res.string.cd_provider_filter,
+                                        rowTitle,
+                                        provider,
+                                    )
+
                                     FilterChip(
+                                        modifier = Modifier.semantics {
+                                            contentDescription = chipContentDescription
+                                        },
                                         selected = true,
                                         onClick = { expanded = true },
                                         label = {
-                                            Text(all.domain)
+                                            Text(provider)
                                         },
                                     )
 

@@ -102,6 +102,7 @@
   <string name="cd_unmute">Unmute</string>
   <string name="cd_vinyl_record">Vinyl Record</string>
   <string name="cd_album_item">Album "%1$s" from %2$s</string>
+  <string name="cd_provider_filter">Filtering %1$s by provider %2$s</string>
   <string name="clickctx_album">Album</string>
   <string name="clickctx_artist">Artist</string>
   <string name="clickctx_browse">Browse</string>

@@ -3,7 +3,10 @@ package io.music_assistant.client.support.pages
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasTextExactly
+import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,6 +20,7 @@ import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_go_to_artist
 import musicassistantclient.composeapp.generated.resources.action_play_now
 import musicassistantclient.composeapp.generated.resources.cd_more
+import musicassistantclient.composeapp.generated.resources.cd_provider_filter
 import musicassistantclient.composeapp.generated.resources.media_type_albums
 import musicassistantclient.composeapp.generated.resources.media_type_tracks
 import musicassistantclient.composeapp.generated.resources.nav_home
@@ -98,9 +102,11 @@ class ItemPage(
         return this
     }
 
-    fun switchProvider(current: String, new: String): ItemPage {
-        composeTestRule.onNodeWithText(current).performClick()
-        composeTestRule.onNodeWithText(new).performClick()
+    fun switchProvider(row: String, current: String, new: String): ItemPage {
+        composeTestRule
+            .onNodeWithContentDescription(Res.string.cd_provider_filter.get(row, current))
+            .performClick()
+        composeTestRule.onNode(hasAnyAncestor(isPopup()).and(hasText(new))).performClick()
         return this
     }
 

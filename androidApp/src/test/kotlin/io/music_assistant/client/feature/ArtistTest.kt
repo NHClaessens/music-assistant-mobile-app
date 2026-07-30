@@ -7,11 +7,14 @@ import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.support.FakeServiceClient
 import io.music_assistant.client.support.Qualifiers
 import io.music_assistant.client.support.ServerMediaItemFixtures
+import io.music_assistant.client.support.get
 import io.music_assistant.client.support.launchLoggedInApp
 import io.music_assistant.client.support.pages.assertMediaNotDisplayed
 import io.music_assistant.client.support.pages.assertNoItems
 import io.music_assistant.client.support.rules.createTestRuleChain
 import io.music_assistant.client.ui.compose.home.HomeScreenSemantics
+import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.artist_section_all
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -86,7 +89,7 @@ class ArtistTest {
             .clickOnMedia(artist1, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
             .assertMediaDisplayed(album1, provider = provider1.domain)
             .assertMediaNotDisplayed(album2, provider = provider2.domain)
-            .switchProvider(provider1.domain, provider2.domain)
+            .switchProvider(Res.string.artist_section_all.get(), provider1.domain, provider2.domain)
             .assertMediaNotDisplayed(album1, provider = provider1.domain)
             .assertMediaDisplayed(album2, provider = provider2.domain)
     }
