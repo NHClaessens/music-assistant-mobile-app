@@ -1000,6 +1000,21 @@ private fun ArtistContent(
                                     providerMappings = artist.providerMappings,
                                 )
                             }
+
+                            if (topTracks.itemList != null) {
+                                val viewAllContentDescription =
+                                    stringResource(Res.string.cd_view_all, rowTitle)
+                                TextButton(
+                                    modifier = Modifier.semantics {
+                                        contentDescription = viewAllContentDescription
+                                    },
+                                    onClick = {
+                                        onNavigateToList(rowTitle, topTracks.itemList)
+                                    },
+                                ) {
+                                    Text("View all")
+                                }
+                            }
                         },
                         mediaItems = sections.topTracks.data.items,
                         onNavigateClick = onNavigateClick,

@@ -26,6 +26,11 @@ class ItemListViewModel(
                     itemList.artistId,
                     itemList.providerInstance,
                 )
+
+                is ItemList.ArtistTopTracks -> Request.Artist.getTopTracks(
+                    itemList.artistId,
+                    itemList.providerInstance,
+                )
             }
 
             val items = mediaItemRepository.fetchMediaItems(request).getOrNull() ?: emptyList()
@@ -44,4 +49,7 @@ class ItemListViewModel(
 sealed interface ItemList {
     @Serializable
     data class ArtistAlbums(val providerInstance: String, val artistId: String) : ItemList
+
+    @Serializable
+    data class ArtistTopTracks(val providerInstance: String, val artistId: String) : ItemList
 }

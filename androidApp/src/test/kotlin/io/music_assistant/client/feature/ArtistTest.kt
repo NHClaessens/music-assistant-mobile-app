@@ -72,6 +72,19 @@ class ArtistTest {
     }
 
     @Test
+    fun `can view all artist top tracks`() {
+        val artist = ServerMediaItemFixtures.artist()
+        val track = ServerMediaItemFixtures.track(artists = listOf(artist))
+        serviceClient.addItems(track)
+        serviceClient.setTopTracks(artist, track)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
+            .clickViewAll(Res.string.artist_section_top.get())
+            .assertMediaDisplayed(track)
+    }
+
+    @Test
     fun `shows in library and all artist albums on provider`() {
         val artist = ServerMediaItemFixtures.artist()
         val libraryAlbum = ServerMediaItemFixtures.album(artist = artist)

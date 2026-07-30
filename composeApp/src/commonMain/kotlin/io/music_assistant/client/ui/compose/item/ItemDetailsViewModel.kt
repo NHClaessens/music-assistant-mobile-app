@@ -308,17 +308,26 @@ class ItemDetailsViewModel(
 
     fun loadTopTracksForProvider(mapping: ProviderMapping) {
         viewModelScope.launch {
+            val itemId = mapping.itemId
+            val providerInstance = mapping.providerInstance
+
             val tracks = fetchArtistItems(
                 Request.Artist.getTopTracks(
-                    mapping.itemId,
-                    mapping.providerInstance,
+                    itemId,
+                    providerInstance,
                 ),
             ).filterIsInstance<Track>()
 
             _state.update {
                 it.copy(
                     artistSections = it.artistSections.copy(
-                        topTracks = DataState.Data(Section(tracks, providerDomain = mapping.providerDomain)),
+                        topTracks = DataState.Data(
+                            Section(
+                                tracks,
+                                providerDomain = mapping.providerDomain,
+                                itemList = ItemList.ArtistTopTracks(providerInstance, itemId),
+                            ),
+                        ),
                     ),
                 )
             }
