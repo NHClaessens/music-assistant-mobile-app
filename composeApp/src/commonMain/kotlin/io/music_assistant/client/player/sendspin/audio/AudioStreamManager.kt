@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -179,8 +180,9 @@ class AudioStreamManager(
         }
 
         try {
+            stopPlaybackThread()
+
             streamConfig = config
-            isStreaming = true
             // Create and configure decoder atomically under lock
             val (outputCodec, outputBitDepth) = decoderLock.withLock {
                 audioDecoder?.release()
@@ -238,6 +240,7 @@ class AudioStreamManager(
                 currentSinkConfig = newSinkConfig
             }
 
+            isStreaming = true
             queueLock.withLock {
                 queue.clear()
                 lastConsumedTs = Long.MIN_VALUE
@@ -253,8 +256,7 @@ class AudioStreamManager(
             // armed guard with no running consumer would leave us silent. Also stop any consumer
             // this call managed to launch on the detached playback scope.
             streamConfig = null
-            playbackJob?.cancel()
-            playbackJob = null
+            stopPlaybackThread(join = false)
             throw e
         }
     }
@@ -304,6 +306,16 @@ class AudioStreamManager(
      * Consumer: decode the oldest frame from sorted queue and write PCM to AudioTrack.
      * Runs on high-priority [audioDispatcher]. Paced by blocking AudioTrack.write().
      */
+    private suspend fun stopPlaybackThread(join: Boolean = true) {
+        isStreaming = false
+        if (join) {
+            playbackJob?.cancelAndJoin()
+        } else {
+            playbackJob?.cancel()
+        }
+        playbackJob = null
+    }
+
     private fun startPlaybackThread() {
         playbackJob?.cancel()
         playbackJob = CoroutineScope(audioDispatcher + SupervisorJob()).launch {
@@ -427,10 +439,8 @@ class AudioStreamManager(
 
     override suspend fun stopStream() = streamLifecycleLock.withLock {
         logger.i { "Stopping stream" }
-        isStreaming = false
         _isStarved.value = false
-        playbackJob?.cancel()
-        playbackJob = null
+        stopPlaybackThread()
 
         queueLock.withLock {
             queue.clear()
