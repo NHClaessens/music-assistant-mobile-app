@@ -55,7 +55,7 @@ fun ItemList(
     data: DataState<List<AppMediaItem>>,
     onNavigateClick: (AppMediaItem) -> Unit,
     onPlayClick: PlayHandler<AppMediaItem>,
-    onCreatePlaylist: (String) -> Unit,
+    onCreatePlaylist: ((String) -> Unit)? = null,
     playlistActions: PlaylistActions,
     libraryActions: LibraryActions,
     progressActions: ProgressActions,
@@ -65,10 +65,9 @@ fun ItemList(
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     onGlobalSearch: (() -> Unit)? = null,
-    showPlaylistCreate: Boolean = false,
 ) {
     var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
-    if (showCreatePlaylistDialog) {
+    if (onCreatePlaylist != null && showCreatePlaylistDialog) {
         CreatePlaylistDialog(
             onDismiss = { showCreatePlaylistDialog = false },
             onCreate = {
@@ -98,7 +97,7 @@ fun ItemList(
                             EmptyState(onGlobalSearch)
                         } else {
                             Column(modifier = Modifier.fillMaxSize()) {
-                                if (showPlaylistCreate) {
+                                if (onCreatePlaylist != null) {
                                     OutlinedButton(
                                         modifier = Modifier
                                             .fillMaxWidth()

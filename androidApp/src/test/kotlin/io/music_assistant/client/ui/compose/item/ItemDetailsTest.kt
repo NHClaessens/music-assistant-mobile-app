@@ -67,7 +67,7 @@ class ItemDetailsTest {
                     itemState = DataState.Data(artist),
                     albumsState = DataState.NoData(),
                     playableItemsState = DataState.NoData(),
-                    artistSections = ArtistSections(library = DataState.Data(albums)),
+                    artistSections = ArtistSections(library = DataState.Data(Section(albums))),
                 ),
                 geEditablePlaylists = suspend { emptyList() },
                 fetchColors = NoColors,

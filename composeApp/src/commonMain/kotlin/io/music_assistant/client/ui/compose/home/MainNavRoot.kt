@@ -62,6 +62,8 @@ import io.music_assistant.client.ui.compose.home.players.DspSettingsViewModel
 import io.music_assistant.client.ui.compose.home.players.PlayersPager
 import io.music_assistant.client.ui.compose.item.ItemDetailsScreen
 import io.music_assistant.client.ui.compose.item.ItemDetailsViewModel
+import io.music_assistant.client.ui.compose.item.ItemListScreen
+import io.music_assistant.client.ui.compose.item.ItemListViewModel
 import io.music_assistant.client.ui.compose.library.BrowseScreen
 import io.music_assistant.client.ui.compose.library.BrowseViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
@@ -186,7 +188,7 @@ fun MainNavigationRoot(
                 multiBackStack.currentBackStack = 1
                 multiBackStack.resetCurrentBackStack()
                 // /library/<category> → push the category list onto the Library tab.
-                dest.mediaType?.let { multiBackStack.add(MainNav.ItemList(it)) }
+                dest.mediaType?.let { multiBackStack.add(MainNav.LibraryList(it)) }
             }
 
             DeepLinkDestination.Search -> {
@@ -390,13 +392,13 @@ private fun mainNavEntryProvider(
                     if (category == LibraryCategory.BROWSE) {
                         multiBackStack.add(MainNav.Browse(path = null, title = null))
                     } else {
-                        category.mediaType?.let { multiBackStack.add(MainNav.ItemList(it)) }
+                        category.mediaType?.let { multiBackStack.add(MainNav.LibraryList(it)) }
                     }
                 },
             )
         }
 
-        entry<MainNav.ItemList> {
+        entry<MainNav.LibraryList> {
             val libraryListViewModel = koinViewModel<LibraryListViewModel> {
                 parametersOf(it.mediaType)
             }
@@ -479,6 +481,40 @@ private fun mainNavEntryProvider(
             )
         }
 
+        entry<MainNav.ItemList> {
+            val itemListViewModel = koinViewModel<ItemListViewModel> {
+                parametersOf(it.itemList)
+            }
+
+            ItemListScreen(
+                title = it.title,
+                itemListViewModel = itemListViewModel,
+                actionsViewModel = actionsViewModel,
+                onNavigateClick = { item ->
+                    when (item) {
+                        is Artist,
+                        is Album,
+                        is Playlist,
+                        is Podcast,
+                        is Audiobook,
+                        is Genre,
+                            -> {
+                            multiBackStack.add(
+                                MainNav.ItemDetails(
+                                    itemId = item.itemId,
+                                    mediaType = item.mediaType,
+                                    providerId = item.provider,
+                                ),
+                            )
+                        }
+
+                        else -> Unit
+                    }
+                },
+                contentPadding = contentPadding,
+            )
+        }
+
         entry<MainNav.ItemDetails> {
             val itemDetailsViewModel = koinViewModel<ItemDetailsViewModel> {
                 parametersOf(it.itemId, it.mediaType, it.providerId)
@@ -496,6 +532,9 @@ private fun mainNavEntryProvider(
                             providerId = providerId,
                         ),
                     )
+                },
+                onNavigateToList = { title, itemList ->
+                    multiBackStack.add(MainNav.ItemList(title, itemList))
                 },
                 contentPadding = contentPadding,
             )
@@ -554,7 +593,7 @@ private sealed interface MainNav : NavKey {
     data object Library : MainNav
 
     @Serializable
-    data class ItemList(val mediaType: MediaType) : MainNav
+    data class LibraryList(val mediaType: MediaType) : MainNav
 
     /**
      * One level of the folder-style Browse tree. [path] is the server browse path (null = root);
@@ -583,6 +622,9 @@ private sealed interface MainNav : NavKey {
 
     @Serializable
     data object Search : MainNav
+
+    @Serializable
+    data class ItemList(val title: String, val itemList: io.music_assistant.client.ui.compose.item.ItemList) : MainNav
 }
 
 @Composable
@@ -594,13 +636,14 @@ private fun rememberMainNavBackStack(bottom: MainNav) = rememberNavBackStack(
                 polymorphic(NavKey::class) {
                     subclass(MainNav.Landing::class, MainNav.Landing.serializer())
                     subclass(MainNav.Library::class, MainNav.Library.serializer())
-                    subclass(MainNav.ItemList::class, MainNav.ItemList.serializer())
+                    subclass(MainNav.LibraryList::class, MainNav.LibraryList.serializer())
                     subclass(MainNav.Browse::class, MainNav.Browse.serializer())
                     subclass(
                         MainNav.ItemDetails::class,
                         MainNav.ItemDetails.serializer(),
                     )
                     subclass(MainNav.Search::class, MainNav.Search.serializer())
+                    subclass(MainNav.ItemList::class, MainNav.ItemList.serializer())
                 }
             }
         },

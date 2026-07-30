@@ -38,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -117,6 +118,7 @@ import musicassistantclient.composeapp.generated.resources.artist_section_in_lib
 import musicassistantclient.composeapp.generated.resources.artist_section_top
 import musicassistantclient.composeapp.generated.resources.cd_provider_filter
 import musicassistantclient.composeapp.generated.resources.cd_toggle_view_mode
+import musicassistantclient.composeapp.generated.resources.cd_view_all
 import musicassistantclient.composeapp.generated.resources.item_error
 import musicassistantclient.composeapp.generated.resources.item_no_data
 import musicassistantclient.composeapp.generated.resources.library_empty
@@ -132,6 +134,7 @@ fun ItemDetailsScreen(
     actionsViewModel: ActionsViewModel,
     onBack: () -> Unit,
     onNavigateToItem: (String, MediaType, String) -> Unit,
+    onNavigateToList: (String, ItemList) -> Unit,
     contentPadding: PaddingValues,
 ) {
     val state by itemDetailsViewModel.state.collectAsStateWithLifecycle()
@@ -145,6 +148,7 @@ fun ItemDetailsScreen(
         },
         onToggleViewMode = itemDetailsViewModel::toggleViewMode,
         onNavigateToItem = onNavigateToItem,
+        onNavigateToList = onNavigateToList,
         geEditablePlaylists = actionsViewModel::getEditablePlaylists,
         createPlaylist = actionsViewModel::createPlaylist,
         addToPlaylist = actionsViewModel::addToPlaylist,
@@ -178,6 +182,7 @@ fun ItemDetails(
     viewModeProvider: @Composable (MediaType) -> ViewMode = { ViewMode.LIST },
     onToggleViewMode: (MediaType) -> Unit = {},
     onNavigateToItem: (String, MediaType, String) -> Unit = { _, _, _ -> },
+    onNavigateToList: (String, ItemList) -> Unit = { _, _ -> },
     geEditablePlaylists: suspend () -> List<Playlist> = suspend { emptyList() },
     fetchColors: ExtractedColorsSource? = null,
     createPlaylist: suspend (String) -> Playlist? = { null },
@@ -267,6 +272,7 @@ fun ItemDetails(
                             else -> Unit
                         }
                     },
+                    onNavigateToList = onNavigateToList,
                     onPlayItemClick = onPlayClick,
                     onPlayChildClick = onChildPlayClick,
                     onChapterClick = onChapterClick,
@@ -305,6 +311,7 @@ private fun ItemContent(
     item: AppMediaItem,
     state: ItemDetailsViewModel.State,
     onNavigateClick: (AppMediaItem) -> Unit,
+    onNavigateToList: (String, ItemList) -> Unit,
     onPlayItemClick: (QueueOption, Boolean) -> Unit,
     onPlayChildClick: PlayHandler<AppMediaItem>,
     onChapterClick: (Int) -> Unit,
@@ -390,6 +397,7 @@ private fun ItemContent(
                     artist = item,
                     sections = state.artistSections,
                     onNavigateClick = onNavigateClick,
+                    onNavigateToList = onNavigateToList,
                     onPlayChildClick = onPlayChildClick,
                     playlistActions = playlistActions,
                     libraryActions = libraryActions,
@@ -903,6 +911,7 @@ private fun ArtistContent(
     artist: Artist,
     sections: ArtistSections,
     onNavigateClick: (AppMediaItem) -> Unit,
+    onNavigateToList: (String, ItemList) -> Unit,
     onPlayChildClick: PlayHandler<AppMediaItem>,
     playlistActions: PlaylistActions,
     libraryActions: LibraryActions,
@@ -920,9 +929,10 @@ private fun ArtistContent(
         if (sections.isNotEmpty()) {
             if (sections.library is DataState.Data) {
                 item {
+                    val rowTitle = stringResource(Res.string.artist_section_in_library)
                     CategoryRow(
-                        title = stringResource(Res.string.artist_section_in_library),
-                        mediaItems = sections.library.data,
+                        title = rowTitle,
+                        mediaItems = sections.library.data.items,
                         onNavigateClick = onNavigateClick,
                         onPlayClick = onPlayChildClick,
                         playlistActions = playlistActions,
@@ -940,13 +950,28 @@ private fun ArtistContent(
                     CategoryRow(
                         title = rowTitle,
                         actions = {
-                            if (artist.providerMappings != null) {
+                            if (artist.providerMappings != null && all.providerDomain != null) {
                                 ProviderSelector(
-                                    currentProvider = all.domain,
+                                    currentProvider = all.providerDomain,
                                     subject = rowTitle,
                                     onMappingSelected = onAlbumMappingChanged,
                                     providerMappings = artist.providerMappings,
                                 )
+                            }
+
+                            if (sections.all.data.itemList != null) {
+                                val viewAllContentDescription =
+                                    stringResource(Res.string.cd_view_all, rowTitle)
+                                TextButton(
+                                    modifier = Modifier.semantics {
+                                        contentDescription = viewAllContentDescription
+                                    },
+                                    onClick = {
+                                        onNavigateToList(rowTitle, sections.all.data.itemList)
+                                    },
+                                ) {
+                                    Text("View all")
+                                }
                             }
                         },
                         mediaItems = all.items,
@@ -967,9 +992,9 @@ private fun ArtistContent(
                     CategoryRow(
                         title = rowTitle,
                         actions = {
-                            if (artist.providerMappings != null) {
+                            if (artist.providerMappings != null && topTracks.providerDomain != null) {
                                 ProviderSelector(
-                                    currentProvider = topTracks.domain,
+                                    currentProvider = topTracks.providerDomain,
                                     subject = rowTitle,
                                     onMappingSelected = onTrackMappingChanged,
                                     providerMappings = artist.providerMappings,
@@ -1009,9 +1034,10 @@ private fun ProviderSelector(
         )
 
         FilterChip(
-            modifier = Modifier.semantics {
-                contentDescription = chipContentDescription
-            },
+            modifier = Modifier
+                .semantics {
+                    contentDescription = chipContentDescription
+                },
             selected = true,
             onClick = { expanded = true },
             label = {

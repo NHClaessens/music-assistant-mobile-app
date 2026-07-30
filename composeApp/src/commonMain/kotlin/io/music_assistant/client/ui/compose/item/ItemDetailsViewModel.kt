@@ -262,7 +262,7 @@ class ItemDetailsViewModel(
                 _state.update {
                     it.copy(
                         artistSections = it.artistSections.copy(
-                            library = DataState.Data(library),
+                            library = DataState.Data(Section(library)),
                         ),
                     )
                 }
@@ -280,17 +280,26 @@ class ItemDetailsViewModel(
 
     fun loadAlbumsForProvider(mapping: ProviderMapping) {
         viewModelScope.launch {
+            val itemId = mapping.itemId
+            val providerInstance = mapping.providerInstance
+
             val albums = fetchArtistItems(
                 Request.Artist.getAlbums(
-                    mapping.itemId,
-                    mapping.providerInstance,
+                    itemId,
+                    providerInstance,
                 ),
             ).filterIsInstance<Album>()
 
             _state.update {
                 it.copy(
                     artistSections = it.artistSections.copy(
-                        all = DataState.Data(ProviderList(mapping.providerDomain, albums)),
+                        all = DataState.Data(
+                            Section(
+                                albums,
+                                providerDomain = mapping.providerDomain,
+                                itemList = ItemList.ArtistAlbums(providerInstance, itemId),
+                            ),
+                        ),
                     ),
                 )
             }
@@ -309,7 +318,7 @@ class ItemDetailsViewModel(
             _state.update {
                 it.copy(
                     artistSections = it.artistSections.copy(
-                        topTracks = DataState.Data(ProviderList(mapping.providerDomain, tracks)),
+                        topTracks = DataState.Data(Section(tracks, providerDomain = mapping.providerDomain)),
                     ),
                 )
             }
@@ -590,7 +599,9 @@ class ItemDetailsViewModel(
                     _state.update { s ->
                         s.copy(
                             artistSections = sections.copy(
-                                library = sections.library.mapData { it.replacing(changed) },
+                                library = sections.library.mapData {
+                                    it.copy(items = it.items.replacing(changed))
+                                },
                                 all = sections.all.mapData {
                                     it.copy(items = it.items.replacing(changed))
                                 },
@@ -668,25 +679,28 @@ private fun DataState<out List<*>>.hasItems(): Boolean = when (this) {
 }
 
 data class ArtistSections(
-    val library: DataState<List<Album>> = DataState.NoData(),
-    val all: DataState<ProviderList<Album>> = DataState.NoData(),
-    val topTracks: DataState<ProviderList<Track>> = DataState.NoData(),
+    val library: DataState<Section<Album>> = DataState.NoData(),
+    val all: DataState<Section<Album>> = DataState.NoData(),
+    val topTracks: DataState<Section<Track>> = DataState.NoData(),
 ) {
     fun isNotEmpty(): Boolean {
-        return (library is DataState.Data && library.data.isNotEmpty()) ||
+        return (library is DataState.Data && library.data.items.isNotEmpty()) ||
                 (all is DataState.Data && all.data.items.isNotEmpty()) ||
                 (topTracks is DataState.Data && topTracks.data.items.isNotEmpty())
     }
 
     companion object {
-        fun loading() = ArtistSections(DataState.Loading(), DataState.Loading(), DataState.Loading())
+        fun loading() =
+            ArtistSections(DataState.Loading(), DataState.Loading(), DataState.Loading())
+
         fun error() = ArtistSections(DataState.Error(), DataState.Error(), DataState.Error())
     }
 }
 
-data class ProviderList<T : AppMediaItem>(
-    val domain: String,
+data class Section<T : AppMediaItem>(
     val items: List<T>,
+    val itemList: ItemList? = null,
+    val providerDomain: String? = null,
 )
 
 private fun <T : AppMediaItem> List<T>.replacing(changed: T): List<T> =

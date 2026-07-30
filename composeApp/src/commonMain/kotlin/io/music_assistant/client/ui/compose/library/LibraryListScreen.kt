@@ -113,7 +113,7 @@ fun LibraryListScreen(
                 onPlayClick = { item, option, radio, _ ->
                     libraryListViewModel.onPlayClick(item, option, radio)
                 },
-                onCreatePlaylist = libraryListViewModel::createPlaylist,
+                onCreatePlaylist = if (state.mediaType == MediaType.PLAYLIST) libraryListViewModel::createPlaylist else null,
                 playlistActions = actionsViewModel,
                 libraryActions = actionsViewModel,
                 progressActions = actionsViewModel,
@@ -129,7 +129,6 @@ fun LibraryListScreen(
                         null
                     }
                 },
-                showPlaylistCreate = state.mediaType == MediaType.PLAYLIST,
             )
         }
 
