@@ -1,6 +1,10 @@
 package io.music_assistant.client.ui.compose.item
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -11,6 +15,9 @@ import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.library.ItemList
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
+import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.common_back
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun ItemListScreen(
@@ -18,17 +25,30 @@ fun ItemListScreen(
     itemListViewModel: ItemListViewModel,
     actionsViewModel: ActionsViewModel,
     onNavigateClick: (AppMediaItem) -> Unit,
+    onBack: () -> Unit,
     contentPadding: PaddingValues,
 ) {
     val state by itemListViewModel.state.collectAsStateWithLifecycle()
 
     TopBarLayout(
-        topBar = { TopAppBar(title = { Text(title) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            stringResource(Res.string.common_back),
+                        )
+                    }
+                },
+            )
+        },
     ) {
         ItemList(
             data = state.items,
             onNavigateClick = onNavigateClick,
-            onPlayClick = { _, _, _, _ ->  },
+            onPlayClick = { _, _, _, _ -> },
             playlistActions = actionsViewModel,
             libraryActions = actionsViewModel,
             progressActions = actionsViewModel,

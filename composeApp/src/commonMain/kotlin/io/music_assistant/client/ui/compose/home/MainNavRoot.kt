@@ -511,6 +511,7 @@ private fun mainNavEntryProvider(
                         else -> Unit
                     }
                 },
+                onBack = { multiBackStack.removeLastOrNull() },
                 contentPadding = contentPadding,
             )
         }
