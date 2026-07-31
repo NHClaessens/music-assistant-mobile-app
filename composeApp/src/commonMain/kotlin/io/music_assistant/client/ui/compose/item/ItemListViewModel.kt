@@ -39,11 +39,12 @@ class ItemListViewModel(
                 )
             }
 
-            val items = mediaItemRepository.fetchMediaItems(request).getOrNull() ?: emptyList()
-            _state.update {
-                it.copy(
-                    items = DataState.Data(items),
-                )
+            mediaItemRepository.fetchMediaItems(request) { items ->
+                _state.update {
+                    it.copy(
+                        items = DataState.Data(items),
+                    )
+                }
             }
         }
     }
