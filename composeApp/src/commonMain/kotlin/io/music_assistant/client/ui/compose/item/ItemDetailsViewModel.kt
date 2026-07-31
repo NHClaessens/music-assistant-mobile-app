@@ -264,7 +264,7 @@ class ItemDetailsViewModel(
                         artistSections = it.artistSections.copy(
                             library = DataState.Data(
                                 Section(
-                                    items = library,
+                                    items = library.take(ARTIST_SECTION_LIMIT),
                                     itemList = ItemList.ArtistLibrary(artist.itemId),
                                 ),
                             ),
@@ -300,7 +300,7 @@ class ItemDetailsViewModel(
                     artistSections = it.artistSections.copy(
                         all = DataState.Data(
                             Section(
-                                albums,
+                                albums.take(ARTIST_SECTION_LIMIT),
                                 providerDomain = mapping.providerDomain,
                                 itemList = ItemList.ArtistAlbums(providerInstance, itemId),
                             ),
@@ -328,7 +328,7 @@ class ItemDetailsViewModel(
                     artistSections = it.artistSections.copy(
                         topTracks = DataState.Data(
                             Section(
-                                tracks,
+                                tracks.take(ARTIST_SECTION_LIMIT),
                                 providerDomain = mapping.providerDomain,
                                 itemList = ItemList.ArtistTopTracks(providerInstance, itemId),
                             ),
@@ -658,6 +658,10 @@ class ItemDetailsViewModel(
 
             else -> Unit
         }
+    }
+
+    companion object {
+        const val ARTIST_SECTION_LIMIT = 10
     }
 }
 
