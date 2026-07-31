@@ -16,6 +16,7 @@ import io.music_assistant.client.support.rules.createTestRuleChain
 import io.music_assistant.client.ui.compose.home.HomeScreenSemantics
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.artist_section_all
+import musicassistantclient.composeapp.generated.resources.artist_section_in_library
 import musicassistantclient.composeapp.generated.resources.artist_section_top
 import org.junit.Rule
 import org.junit.Test
@@ -97,6 +98,19 @@ class ArtistTest {
             .assertMediaDisplayed(libraryAlbum, provider = ServerMediaItem.LIBRARY_PROVIDER)
             .assertMediaDisplayed(libraryAlbum)
             .assertMediaDisplayed(nonLibraryAlbum)
+    }
+
+    @Test
+    fun `can view all library albums`() {
+        val artist = ServerMediaItemFixtures.artist()
+        val album = ServerMediaItemFixtures.album(artist = artist)
+        serviceClient.addItems(album)
+        serviceClient.addToLibrary(album)
+
+        launchLoggedInApp(composeTestRule, serviceClient)
+            .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
+            .clickViewAll(Res.string.artist_section_in_library.get())
+            .assertMediaDisplayed(album, provider = ServerMediaItem.LIBRARY_PROVIDER)
     }
 
     @Test

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.data.model.client.items.AppMediaItem
+import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.ui.compose.common.DataState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,11 @@ class ItemListViewModel(
                     itemList.artistId,
                     itemList.providerInstance,
                 )
+
+                is ItemList.ArtistLibrary -> Request.Artist.getAlbums(
+                    itemList.artistId,
+                    ServerMediaItem.LIBRARY_PROVIDER,
+                )
             }
 
             val items = mediaItemRepository.fetchMediaItems(request).getOrNull() ?: emptyList()
@@ -52,4 +58,7 @@ sealed interface ItemList {
 
     @Serializable
     data class ArtistTopTracks(val providerInstance: String, val artistId: String) : ItemList
+
+    @Serializable
+    data class ArtistLibrary(val artistId: String) : ItemList
 }

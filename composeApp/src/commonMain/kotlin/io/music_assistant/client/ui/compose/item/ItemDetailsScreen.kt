@@ -932,6 +932,15 @@ private fun ArtistContent(
                     val rowTitle = stringResource(Res.string.artist_section_in_library)
                     CategoryRow(
                         title = rowTitle,
+                        actions = {
+                            if (sections.library.data.itemList != null) {
+                                ViewAllButton(
+                                    rowTitle = rowTitle,
+                                    onNavigateToList = onNavigateToList,
+                                    itemList = sections.library.data.itemList,
+                                )
+                            }
+                        },
                         mediaItems = sections.library.data.items,
                         onNavigateClick = onNavigateClick,
                         onPlayClick = onPlayChildClick,
@@ -960,18 +969,11 @@ private fun ArtistContent(
                             }
 
                             if (sections.all.data.itemList != null) {
-                                val viewAllContentDescription =
-                                    stringResource(Res.string.cd_view_all, rowTitle)
-                                TextButton(
-                                    modifier = Modifier.semantics {
-                                        contentDescription = viewAllContentDescription
-                                    },
-                                    onClick = {
-                                        onNavigateToList(rowTitle, sections.all.data.itemList)
-                                    },
-                                ) {
-                                    Text("View all")
-                                }
+                                ViewAllButton(
+                                    rowTitle = rowTitle,
+                                    onNavigateToList = onNavigateToList,
+                                    itemList = sections.all.data.itemList,
+                                )
                             }
                         },
                         mediaItems = all.items,
@@ -1002,21 +1004,14 @@ private fun ArtistContent(
                             }
 
                             if (topTracks.itemList != null) {
-                                val viewAllContentDescription =
-                                    stringResource(Res.string.cd_view_all, rowTitle)
-                                TextButton(
-                                    modifier = Modifier.semantics {
-                                        contentDescription = viewAllContentDescription
-                                    },
-                                    onClick = {
-                                        onNavigateToList(rowTitle, topTracks.itemList)
-                                    },
-                                ) {
-                                    Text("View all")
-                                }
+                                ViewAllButton(
+                                    rowTitle = rowTitle,
+                                    onNavigateToList = onNavigateToList,
+                                    itemList = topTracks.itemList,
+                                )
                             }
                         },
-                        mediaItems = sections.topTracks.data.items,
+                        mediaItems = topTracks.items,
                         onNavigateClick = onNavigateClick,
                         onPlayClick = onPlayChildClick,
                         playlistActions = playlistActions,
@@ -1028,6 +1023,25 @@ private fun ArtistContent(
         } else {
             item { CenteredText(stringResource(Res.string.library_empty)) }
         }
+    }
+}
+
+@Composable
+private fun ViewAllButton(
+    rowTitle: String,
+    onNavigateToList: (String, ItemList) -> Unit,
+    itemList: ItemList,
+) {
+    val viewAllContentDescription = stringResource(Res.string.cd_view_all, rowTitle)
+    TextButton(
+        modifier = Modifier.semantics {
+            contentDescription = viewAllContentDescription
+        },
+        onClick = {
+            onNavigateToList(rowTitle, itemList)
+        },
+    ) {
+        Text("View all")
     }
 }
 

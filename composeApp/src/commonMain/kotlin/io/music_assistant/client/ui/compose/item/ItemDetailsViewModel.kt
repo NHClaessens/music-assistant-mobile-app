@@ -262,7 +262,12 @@ class ItemDetailsViewModel(
                 _state.update {
                     it.copy(
                         artistSections = it.artistSections.copy(
-                            library = DataState.Data(Section(library)),
+                            library = DataState.Data(
+                                Section(
+                                    items = library,
+                                    itemList = ItemList.ArtistLibrary(artist.itemId),
+                                ),
+                            ),
                         ),
                     )
                 }
