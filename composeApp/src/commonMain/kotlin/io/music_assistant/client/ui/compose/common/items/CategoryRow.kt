@@ -39,6 +39,7 @@ import io.music_assistant.client.data.model.client.items.Podcast
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
+import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.DisplayString
 import io.music_assistant.client.ui.compose.item.ItemList
 import musicassistantclient.composeapp.generated.resources.Res
@@ -61,6 +62,34 @@ data class ItemCategory<T>(
         val labelTransform: (T) -> DisplayString,
         val contentDescription: StringResource,
     )
+}
+
+@Composable
+fun <T, U> CategoryRow(
+    data: DataState<T>,
+    itemCategoryProvider: (T) -> ItemCategory<U>,
+    onNavigateClick: (AppMediaItem) -> Unit,
+    onNavigateToList: (String, ItemList) -> Unit = { _, _ -> },
+    onOptionSelected: (U) -> Unit = {},
+    onPlayClick: PlayHandler<AppMediaItem>,
+    playlistActions: PlaylistActions,
+    libraryActions: LibraryActions,
+    progressActions: ProgressActions? = null,
+    providerIconFetcher: (@Composable (Modifier, String) -> Unit),
+) {
+    if (data is DataState.Data) {
+        CategoryRow(
+            itemCategory = itemCategoryProvider(data.data),
+            onNavigateClick = onNavigateClick,
+            onNavigateToList = onNavigateToList,
+            onOptionSelected = onOptionSelected,
+            onPlayClick = onPlayClick,
+            playlistActions = playlistActions,
+            libraryActions = libraryActions,
+            progressActions = progressActions,
+            providerIconFetcher = providerIconFetcher,
+        )
+    }
 }
 
 @Composable

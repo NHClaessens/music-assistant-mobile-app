@@ -929,24 +929,24 @@ private fun ArtistContent(
     ) {
         item { heroSlot() }
         if (sections.isNotEmpty()) {
-            if (sections.library is DataState.Data) {
-                item {
-                    val itemCategory = ItemCategory<Nothing>(
-                        id = "library",
-                        title = Res.string.artist_section_in_library.toDisplayString(),
-                        items = sections.library.data.items,
-                        list = sections.library.data.itemList,
-                    )
-
-                    CategoryRow(
-                        itemCategory = itemCategory,
-                        onNavigateClick = onNavigateClick,
-                        onPlayClick = onPlayChildClick,
-                        playlistActions = playlistActions,
-                        libraryActions = libraryActions,
-                        providerIconFetcher = providerIconFetcher,
-                    )
-                }
+            item {
+                CategoryRow(
+                    data = sections.library,
+                    itemCategoryProvider = {
+                        ItemCategory<Nothing>(
+                            id = "library",
+                            title = Res.string.artist_section_in_library.toDisplayString(),
+                            items = it.items,
+                            list = it.itemList,
+                        )
+                    },
+                    onNavigateClick = onNavigateClick,
+                    onNavigateToList = onNavigateToList,
+                    onPlayClick = onPlayChildClick,
+                    playlistActions = playlistActions,
+                    libraryActions = libraryActions,
+                    providerIconFetcher = providerIconFetcher,
+                )
             }
 
             if (sections.all is DataState.Data) {
