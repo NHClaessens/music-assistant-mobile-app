@@ -40,7 +40,6 @@ import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.SelectOption
 import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.ToastHost
-import io.music_assistant.client.ui.compose.common.items.ProvideClickActions
 import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
@@ -106,31 +105,30 @@ fun LibraryListScreen(
             )
         },
     ) {
-        ProvideClickActions(ClickContext.LIBRARY) {
-            ItemList(
-                data = state.dataState,
-                onNavigateClick = onNavigateClick,
-                onPlayClick = { item, option, radio, _ ->
-                    libraryListViewModel.onPlayClick(item, option, radio)
-                },
-                onCreatePlaylist = if (state.mediaType == MediaType.PLAYLIST) libraryListViewModel::createPlaylist else null,
-                playlistActions = actionsViewModel,
-                libraryActions = actionsViewModel,
-                progressActions = actionsViewModel,
-                contentPadding = contentPadding,
-                viewMode = state.viewMode,
-                hasMore = state.hasMore,
-                isLoadingMore = state.isLoadingMore,
-                onLoadMore = libraryListViewModel::loadMore,
-                onGlobalSearch = state.searchQuery.let {
-                    if (it.isNotBlank()) {
-                        { onGlobalSearch(it) }
-                    } else {
-                        null
-                    }
-                },
-            )
-        }
+        ItemList(
+            data = state.dataState,
+            onNavigateClick = onNavigateClick,
+            onPlayClick = { item, option, radio, _ ->
+                libraryListViewModel.onPlayClick(item, option, radio)
+            },
+            onCreatePlaylist = if (state.mediaType == MediaType.PLAYLIST) libraryListViewModel::createPlaylist else null,
+            playlistActions = actionsViewModel,
+            libraryActions = actionsViewModel,
+            progressActions = actionsViewModel,
+            contentPadding = contentPadding,
+            viewMode = state.viewMode,
+            hasMore = state.hasMore,
+            isLoadingMore = state.isLoadingMore,
+            onLoadMore = libraryListViewModel::loadMore,
+            onGlobalSearch = state.searchQuery.let {
+                if (it.isNotBlank()) {
+                    { onGlobalSearch(it) }
+                } else {
+                    null
+                }
+            },
+            clickContext = ClickContext.LIBRARY,
+        )
 
         ToastHost(
             toastState = toastState,

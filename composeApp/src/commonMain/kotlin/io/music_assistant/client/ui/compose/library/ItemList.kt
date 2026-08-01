@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Plus
+import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.DataState
@@ -36,6 +37,7 @@ import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.PlayHandler
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.ProgressActions
+import io.music_assistant.client.ui.compose.common.items.ProvideClickActions
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.cd_add_playlist
 import musicassistantclient.composeapp.generated.resources.library_empty
@@ -65,6 +67,7 @@ fun ItemList(
     isLoadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     onGlobalSearch: (() -> Unit)? = null,
+    clickContext: ClickContext,
 ) {
     var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
     if (onCreatePlaylist != null && showCreatePlaylistDialog) {
@@ -77,58 +80,60 @@ fun ItemList(
         )
     }
 
-    Box(modifier = modifier) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .clearFocusOnScroll(),
-        ) {
-            // Content area
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (data) {
-                    is DataState.Loading -> LoadingState()
-                    is DataState.Error -> ErrorState()
-                    is DataState.NoData -> EmptyState(onGlobalSearch)
-                    is DataState.Stale,
-                    is DataState.Data,
-                        -> {
-                        val items = data.dataOrNull.orEmpty()
-                        if (items.isEmpty()) {
-                            EmptyState(onGlobalSearch)
-                        } else {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                if (onCreatePlaylist != null) {
-                                    OutlinedButton(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                                        onClick = { showCreatePlaylistDialog = true },
-                                    ) {
-                                        Icon(
-                                            TablerIcons.Plus,
-                                            contentDescription = stringResource(Res.string.cd_add_playlist),
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(stringResource(Res.string.playlist_add_new))
+    ProvideClickActions(clickContext) {
+        Box(modifier = modifier) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clearFocusOnScroll(),
+            ) {
+                // Content area
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when (data) {
+                        is DataState.Loading -> LoadingState()
+                        is DataState.Error -> ErrorState()
+                        is DataState.NoData -> EmptyState(onGlobalSearch)
+                        is DataState.Stale,
+                        is DataState.Data,
+                            -> {
+                            val items = data.dataOrNull.orEmpty()
+                            if (items.isEmpty()) {
+                                EmptyState(onGlobalSearch)
+                            } else {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    if (onCreatePlaylist != null) {
+                                        OutlinedButton(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                            onClick = { showCreatePlaylistDialog = true },
+                                        ) {
+                                            Icon(
+                                                TablerIcons.Plus,
+                                                contentDescription = stringResource(Res.string.cd_add_playlist),
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(stringResource(Res.string.playlist_add_new))
+                                        }
                                     }
-                                }
 
-                                val gridState = rememberLazyGridState()
-                                AdaptiveMediaGrid(
-                                    modifier = Modifier.fillMaxSize(),
-                                    items = items,
-                                    isLoadingMore = isLoadingMore,
-                                    hasMore = hasMore,
-                                    viewMode = viewMode,
-                                    onNavigateClick = onNavigateClick,
-                                    onPlayClick = onPlayClick,
-                                    onLoadMore = onLoadMore,
-                                    gridState = gridState,
-                                    playlistActions = playlistActions,
-                                    libraryActions = libraryActions,
-                                    progressActions = progressActions,
-                                    contentPadding = contentPadding,
-                                )
+                                    val gridState = rememberLazyGridState()
+                                    AdaptiveMediaGrid(
+                                        modifier = Modifier.fillMaxSize(),
+                                        items = items,
+                                        isLoadingMore = isLoadingMore,
+                                        hasMore = hasMore,
+                                        viewMode = viewMode,
+                                        onNavigateClick = onNavigateClick,
+                                        onPlayClick = onPlayClick,
+                                        onLoadMore = onLoadMore,
+                                        gridState = gridState,
+                                        playlistActions = playlistActions,
+                                        libraryActions = libraryActions,
+                                        progressActions = progressActions,
+                                        contentPadding = contentPadding,
+                                    )
+                                }
                             }
                         }
                     }

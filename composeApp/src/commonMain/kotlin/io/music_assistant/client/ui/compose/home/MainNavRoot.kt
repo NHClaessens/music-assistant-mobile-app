@@ -44,6 +44,7 @@ import androidx.savedstate.serialization.SavedStateConfiguration
 import io.music_assistant.client.api.DeepLinkBus
 import io.music_assistant.client.api.DeepLinkDestination
 import io.music_assistant.client.api.ErrorMessageBus
+import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.Artist
@@ -513,6 +514,7 @@ private fun mainNavEntryProvider(
                 },
                 onBack = { multiBackStack.removeLastOrNull() },
                 contentPadding = contentPadding,
+                clickContext = it.clickContext,
             )
         }
 
@@ -534,8 +536,8 @@ private fun mainNavEntryProvider(
                         ),
                     )
                 },
-                onNavigateToList = { title, itemList ->
-                    multiBackStack.add(MainNav.ItemList(title, itemList))
+                onNavigateToList = { title, itemList, clickContext ->
+                    multiBackStack.add(MainNav.ItemList(title, itemList, clickContext))
                 },
                 contentPadding = contentPadding,
             )
@@ -625,7 +627,11 @@ private sealed interface MainNav : NavKey {
     data object Search : MainNav
 
     @Serializable
-    data class ItemList(val title: String, val itemList: io.music_assistant.client.ui.compose.item.ItemList) : MainNav
+    data class ItemList(
+        val title: String,
+        val itemList: io.music_assistant.client.ui.compose.item.ItemList,
+        val clickContext: ClickContext,
+    ) : MainNav
 }
 
 @Composable

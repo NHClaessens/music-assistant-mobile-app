@@ -10,6 +10,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
@@ -27,6 +28,7 @@ fun ItemListScreen(
     onNavigateClick: (AppMediaItem) -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
+    clickContext: ClickContext,
 ) {
     val state by itemListViewModel.state.collectAsStateWithLifecycle()
 
@@ -54,6 +56,7 @@ fun ItemListScreen(
             progressActions = actionsViewModel,
             contentPadding = contentPadding,
             viewMode = ViewMode.GRID,
+            clickContext = clickContext,
         )
     }
 }

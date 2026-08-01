@@ -47,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -130,7 +129,7 @@ fun ItemDetailsScreen(
     actionsViewModel: ActionsViewModel,
     onBack: () -> Unit,
     onNavigateToItem: (String, MediaType, String) -> Unit,
-    onNavigateToList: (String, ItemList) -> Unit,
+    onNavigateToList: (String, ItemList, ClickContext) -> Unit,
     contentPadding: PaddingValues,
 ) {
     val state by itemDetailsViewModel.state.collectAsStateWithLifecycle()
@@ -178,7 +177,7 @@ fun ItemDetails(
     viewModeProvider: @Composable (MediaType) -> ViewMode = { ViewMode.LIST },
     onToggleViewMode: (MediaType) -> Unit = {},
     onNavigateToItem: (String, MediaType, String) -> Unit = { _, _, _ -> },
-    onNavigateToList: (String, ItemList) -> Unit = { _, _ -> },
+    onNavigateToList: (String, ItemList, ClickContext) -> Unit = { _, _, _ -> },
     geEditablePlaylists: suspend () -> List<Playlist> = suspend { emptyList() },
     fetchColors: ExtractedColorsSource? = null,
     createPlaylist: suspend (String) -> Playlist? = { null },
@@ -307,7 +306,7 @@ private fun ItemContent(
     item: AppMediaItem,
     state: ItemDetailsViewModel.State,
     onNavigateClick: (AppMediaItem) -> Unit,
-    onNavigateToList: (String, ItemList) -> Unit,
+    onNavigateToList: (String, ItemList, ClickContext) -> Unit,
     onPlayItemClick: (QueueOption, Boolean) -> Unit,
     onPlayChildClick: PlayHandler<AppMediaItem>,
     onChapterClick: (Int) -> Unit,
@@ -389,20 +388,24 @@ private fun ItemContent(
 
             val gridState = rememberLazyGridState()
             if (item is Artist) {
-                ArtistContent(
-                    artist = item,
-                    sections = state.artistSections,
-                    onNavigateClick = onNavigateClick,
-                    onNavigateToList = onNavigateToList,
-                    onPlayChildClick = onPlayChildClick,
-                    playlistActions = playlistActions,
-                    libraryActions = libraryActions,
-                    providerIconFetcher = providerIconFetcher,
-                    contentPadding = contentPadding,
-                    heroSlot = heroSlot,
-                    onAlbumMappingChanged = onAlbumMappingChanged,
-                    onTrackMappingChanged = onTrackMappingChanged,
-                )
+                ProvideClickActions(ClickContext.ARTIST) {
+                    ArtistContent(
+                        artist = item,
+                        sections = state.artistSections,
+                        onNavigateClick = onNavigateClick,
+                        onNavigateToList = { title, itemList ->
+                            onNavigateToList(title, itemList, ClickContext.ARTIST)
+                        },
+                        onPlayChildClick = onPlayChildClick,
+                        playlistActions = playlistActions,
+                        libraryActions = libraryActions,
+                        providerIconFetcher = providerIconFetcher,
+                        contentPadding = contentPadding,
+                        heroSlot = heroSlot,
+                        onAlbumMappingChanged = onAlbumMappingChanged,
+                        onTrackMappingChanged = onTrackMappingChanged,
+                    )
+                }
             } else if (tabs.isEmpty()) {
                 heroSlot()
             } else {
