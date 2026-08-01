@@ -697,9 +697,9 @@ private fun DataState<out List<*>>.hasItems(): Boolean = when (this) {
 }
 
 data class ArtistSections(
-    val library: DataState<Section<Album>> = DataState.NoData(),
-    val all: DataState<Section<Album>> = DataState.NoData(),
-    val topTracks: DataState<Section<Track>> = DataState.NoData(),
+    val library: DataState<Section<Album>> = DataState.Loading(),
+    val all: DataState<Section<Album>> = DataState.Loading(),
+    val topTracks: DataState<Section<Track>> = DataState.Loading(),
 ) {
     fun isNotEmpty(): Boolean {
         return (library is DataState.Data && library.data.items.isNotEmpty()) ||
