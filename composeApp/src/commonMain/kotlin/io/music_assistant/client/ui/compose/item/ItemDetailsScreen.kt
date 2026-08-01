@@ -92,6 +92,7 @@ import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.CategoryRow
+import io.music_assistant.client.ui.compose.common.items.ItemCategory
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.PlayHandler
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
@@ -106,6 +107,7 @@ import io.music_assistant.client.ui.compose.common.providers.ProviderIcon
 import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
 import io.music_assistant.client.ui.compose.common.rememberDynamicColorsEnabled
 import io.music_assistant.client.ui.compose.common.rememberExtractedColorsSource
+import io.music_assistant.client.ui.compose.common.toDisplayString
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
 import io.music_assistant.client.ui.fullBleed
@@ -929,19 +931,15 @@ private fun ArtistContent(
         if (sections.isNotEmpty()) {
             if (sections.library is DataState.Data) {
                 item {
-                    val rowTitle = stringResource(Res.string.artist_section_in_library)
+                    val itemCategory = ItemCategory<Nothing>(
+                        id = "library",
+                        title = Res.string.artist_section_in_library.toDisplayString(),
+                        items = sections.library.data.items,
+                        list = sections.library.data.itemList,
+                    )
+
                     CategoryRow(
-                        title = rowTitle,
-                        actions = {
-                            if (sections.library.data.itemList != null) {
-                                ViewAllButton(
-                                    rowTitle = rowTitle,
-                                    onNavigateToList = onNavigateToList,
-                                    itemList = sections.library.data.itemList,
-                                )
-                            }
-                        },
-                        mediaItems = sections.library.data.items,
+                        itemCategory = itemCategory,
                         onNavigateClick = onNavigateClick,
                         onPlayClick = onPlayChildClick,
                         playlistActions = playlistActions,

@@ -1,6 +1,7 @@
 package io.music_assistant.client.ui.compose.common.items
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -9,13 +10,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,29 +40,64 @@ import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.ui.compose.common.DisplayString
+import io.music_assistant.client.ui.compose.item.ItemList
+import musicassistantclient.composeapp.generated.resources.Res
+import musicassistantclient.composeapp.generated.resources.cd_view_all
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
-data class ItemCategory(
+data class ItemCategory<T>(
     val id: String,
     val title: DisplayString,
     val items: List<AppMediaItem>,
+    val list: ItemList? = null,
+    val filter: Filter<T>? = null,
     val lazyListKey: String = id,
     val tag: String? = null,
-)
+) {
+    data class Filter<T>(
+        val selected: Int,
+        val options: List<T>,
+        val labelTransform: (T) -> DisplayString,
+        val contentDescription: StringResource,
+    )
+}
 
 @Composable
-fun CategoryRow(
-    itemCategory: ItemCategory,
-    actions: @Composable () -> Unit = {},
+fun <T> CategoryRow(
+    itemCategory: ItemCategory<T>,
     onNavigateClick: (AppMediaItem) -> Unit,
+    onNavigateToList: (String, ItemList) -> Unit = { _, _ -> },
+    onOptionSelected: (T) -> Unit = {},
     onPlayClick: PlayHandler<AppMediaItem>,
     playlistActions: PlaylistActions,
     libraryActions: LibraryActions,
     progressActions: ProgressActions? = null,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
 ) {
+    val title = itemCategory.title.string()
     CategoryRow(
-        title = itemCategory.title.string(),
-        actions = actions,
+        title = title,
+        actions = {
+            if (itemCategory.filter != null) {
+                FilterSelector(
+                    selected = itemCategory.filter.selected,
+                    subject = title,
+                    onOptionSelected = onOptionSelected,
+                    options = itemCategory.filter.options,
+                    optionLabels = { itemCategory.filter.labelTransform(it).string() },
+                    contentDescriptionResource = itemCategory.filter.contentDescription,
+                )
+            }
+
+            if (itemCategory.list != null) {
+                ViewAllButton(
+                    rowTitle = title,
+                    onNavigateToList = onNavigateToList,
+                    itemList = itemCategory.list,
+                )
+            }
+        },
         onNavigateClick = onNavigateClick,
         onPlayClick = onPlayClick,
         mediaItems = itemCategory.items,
@@ -213,6 +258,73 @@ fun CategoryRow(
 
                     else -> {}
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ViewAllButton(
+    rowTitle: String,
+    onNavigateToList: (String, ItemList) -> Unit,
+    itemList: ItemList,
+) {
+    val viewAllContentDescription = stringResource(Res.string.cd_view_all, rowTitle)
+    TextButton(
+        modifier = Modifier.semantics {
+            contentDescription = viewAllContentDescription
+        },
+        onClick = {
+            onNavigateToList(rowTitle, itemList)
+        },
+    ) {
+        Text("View all")
+    }
+}
+
+@Composable
+private fun <T> FilterSelector(
+    selected: Int,
+    subject: String,
+    onOptionSelected: (T) -> Unit,
+    options: List<T>,
+    optionLabels: @Composable (T) -> String,
+    contentDescriptionResource: StringResource,
+) {
+    Box {
+        var expanded by remember { mutableStateOf(false) }
+
+        val selectedLabel = optionLabels(options[selected])
+        val chipContentDescription = stringResource(
+            contentDescriptionResource,
+            subject,
+            selectedLabel,
+        )
+
+        FilterChip(
+            modifier = Modifier
+                .semantics {
+                    contentDescription = chipContentDescription
+                },
+            selected = true,
+            onClick = { expanded = true },
+            label = {
+                Text(selectedLabel)
+            },
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach {
+                DropdownMenuItem(
+                    text = { Text(optionLabels(it)) },
+                    onClick = {
+                        expanded = false
+                        onOptionSelected(it)
+                    },
+                )
             }
         }
     }
