@@ -57,7 +57,7 @@ data class ItemCategory<T>(
     val tag: String? = null,
 ) {
     data class Filter<T>(
-        val selected: Int,
+        val label: DisplayString,
         val options: List<T>,
         val labelTransform: (T) -> DisplayString,
         val contentDescription: StringResource,
@@ -110,8 +110,8 @@ fun <T> CategoryRow(
         actions = {
             if (itemCategory.filter != null) {
                 FilterSelector(
-                    selected = itemCategory.filter.selected,
-                    subject = title,
+                    label = itemCategory.filter.label.string(),
+                    rowTitle = title,
                     onOptionSelected = onOptionSelected,
                     options = itemCategory.filter.options,
                     optionLabels = { itemCategory.filter.labelTransform(it).string() },
@@ -313,8 +313,8 @@ private fun ViewAllButton(
 
 @Composable
 private fun <T> FilterSelector(
-    selected: Int,
-    subject: String,
+    label: String,
+    rowTitle: String,
     onOptionSelected: (T) -> Unit,
     options: List<T>,
     optionLabels: @Composable (T) -> String,
@@ -323,11 +323,10 @@ private fun <T> FilterSelector(
     Box {
         var expanded by remember { mutableStateOf(false) }
 
-        val selectedLabel = optionLabels(options[selected])
         val chipContentDescription = stringResource(
             contentDescriptionResource,
-            subject,
-            selectedLabel,
+            rowTitle,
+            label,
         )
 
         FilterChip(
@@ -338,7 +337,7 @@ private fun <T> FilterSelector(
             selected = true,
             onClick = { expanded = true },
             label = {
-                Text(selectedLabel)
+                Text(label)
             },
         )
 

@@ -26,10 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,13 +35,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,7 +48,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -86,6 +80,7 @@ import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.CenteredProgress
 import io.music_assistant.client.ui.compose.common.CenteredText
 import io.music_assistant.client.ui.compose.common.DataState
+import io.music_assistant.client.ui.compose.common.DisplayString
 import io.music_assistant.client.ui.compose.common.ExtractedColors
 import io.music_assistant.client.ui.compose.common.ExtractedColorsSource
 import io.music_assistant.client.ui.compose.common.SortChip
@@ -120,7 +115,6 @@ import musicassistantclient.composeapp.generated.resources.artist_section_in_lib
 import musicassistantclient.composeapp.generated.resources.artist_section_top
 import musicassistantclient.composeapp.generated.resources.cd_provider_filter
 import musicassistantclient.composeapp.generated.resources.cd_toggle_view_mode
-import musicassistantclient.composeapp.generated.resources.cd_view_all
 import musicassistantclient.composeapp.generated.resources.item_error
 import musicassistantclient.composeapp.generated.resources.item_no_data
 import musicassistantclient.composeapp.generated.resources.library_empty
@@ -930,93 +924,50 @@ private fun ArtistContent(
         item { heroSlot() }
         if (sections.isNotEmpty()) {
             item {
-                CategoryRow(
-                    data = sections.library,
-                    itemCategoryProvider = {
-                        ItemCategory<Nothing>(
-                            id = "library",
-                            title = Res.string.artist_section_in_library.toDisplayString(),
-                            items = it.items,
-                            list = it.itemList,
-                        )
-                    },
+                SectionRow(
+                    artist = artist,
+                    sectionData = sections.library,
+                    id = "library",
+                    title = Res.string.artist_section_in_library.toDisplayString(),
                     onNavigateClick = onNavigateClick,
                     onNavigateToList = onNavigateToList,
-                    onPlayClick = onPlayChildClick,
+                    onPlayChildClick = onPlayChildClick,
                     playlistActions = playlistActions,
                     libraryActions = libraryActions,
                     providerIconFetcher = providerIconFetcher,
                 )
             }
 
-            if (sections.all is DataState.Data) {
-                val all = sections.all.data
-
-                item {
-                    val rowTitle = stringResource(Res.string.artist_section_all)
-                    CategoryRow(
-                        title = rowTitle,
-                        actions = {
-                            if (artist.providerMappings != null && all.providerDomain != null) {
-                                ProviderSelector(
-                                    currentProvider = all.providerDomain,
-                                    subject = rowTitle,
-                                    onMappingSelected = onAlbumMappingChanged,
-                                    providerMappings = artist.providerMappings,
-                                )
-                            }
-
-                            if (sections.all.data.itemList != null) {
-                                ViewAllButton(
-                                    rowTitle = rowTitle,
-                                    onNavigateToList = onNavigateToList,
-                                    itemList = sections.all.data.itemList,
-                                )
-                            }
-                        },
-                        mediaItems = all.items,
-                        onNavigateClick = onNavigateClick,
-                        onPlayClick = onPlayChildClick,
-                        playlistActions = playlistActions,
-                        libraryActions = libraryActions,
-                        providerIconFetcher = providerIconFetcher,
-                    )
-                }
+            item {
+                SectionRow(
+                    artist = artist,
+                    sectionData = sections.all,
+                    id = "all",
+                    title = Res.string.artist_section_all.toDisplayString(),
+                    onNavigateClick = onNavigateClick,
+                    onNavigateToList = onNavigateToList,
+                    onFilterSelected = onAlbumMappingChanged,
+                    onPlayChildClick = onPlayChildClick,
+                    playlistActions = playlistActions,
+                    libraryActions = libraryActions,
+                    providerIconFetcher = providerIconFetcher,
+                )
             }
 
-            if (sections.topTracks is DataState.Data) {
-                val topTracks = sections.topTracks.data
-
-                item {
-                    val rowTitle = stringResource(Res.string.artist_section_top)
-                    CategoryRow(
-                        title = rowTitle,
-                        actions = {
-                            if (artist.providerMappings != null && topTracks.providerDomain != null) {
-                                ProviderSelector(
-                                    currentProvider = topTracks.providerDomain,
-                                    subject = rowTitle,
-                                    onMappingSelected = onTrackMappingChanged,
-                                    providerMappings = artist.providerMappings,
-                                )
-                            }
-
-                            if (topTracks.itemList != null) {
-                                ViewAllButton(
-                                    rowTitle = rowTitle,
-                                    onNavigateToList = onNavigateToList,
-                                    itemList = topTracks.itemList,
-                                )
-                            }
-                        },
-                        mediaItems = topTracks.items,
-                        onNavigateClick = onNavigateClick,
-                        onPlayClick = onPlayChildClick,
-                        playlistActions = playlistActions,
-                        libraryActions = libraryActions,
-                        providerIconFetcher = providerIconFetcher,
-                    )
-                }
+            item {
+                SectionRow(
+                    artist = artist,
+                    sectionData = sections.topTracks,
+                    id = "topTracks",
+                    title = stringResource(Res.string.artist_section_top).toDisplayString(),
+                    onNavigateClick = onNavigateClick,
+                    onNavigateToList = onNavigateToList,
+                    onFilterSelected = onTrackMappingChanged,
+                    onPlayChildClick = onPlayChildClick,
+                    playlistActions = playlistActions,
+                    libraryActions = libraryActions,
+                    providerIconFetcher = providerIconFetcher,
+                )
             }
         } else {
             item { CenteredText(stringResource(Res.string.library_empty)) }
@@ -1025,68 +976,47 @@ private fun ArtistContent(
 }
 
 @Composable
-private fun ViewAllButton(
-    rowTitle: String,
+private fun <T : AppMediaItem> SectionRow(
+    artist: Artist,
+    sectionData: DataState<Section<T>>,
+    id: String,
+    title: DisplayString,
+    onNavigateClick: (AppMediaItem) -> Unit,
     onNavigateToList: (String, ItemList) -> Unit,
-    itemList: ItemList,
+    onFilterSelected: (ProviderMapping) -> Unit = {},
+    onPlayChildClick: PlayHandler<AppMediaItem>,
+    playlistActions: PlaylistActions,
+    libraryActions: LibraryActions,
+    providerIconFetcher: @Composable ((Modifier, String) -> Unit),
 ) {
-    val viewAllContentDescription = stringResource(Res.string.cd_view_all, rowTitle)
-    TextButton(
-        modifier = Modifier.semantics {
-            contentDescription = viewAllContentDescription
-        },
-        onClick = {
-            onNavigateToList(rowTitle, itemList)
-        },
-    ) {
-        Text("View all")
-    }
-}
-
-@Composable
-private fun ProviderSelector(
-    currentProvider: String,
-    subject: String,
-    onMappingSelected: (ProviderMapping) -> Unit,
-    providerMappings: List<ProviderMapping>,
-) {
-    Box {
-        var expanded by remember { mutableStateOf(false) }
-
-        val provider = currentProvider
-        val chipContentDescription = stringResource(
-            Res.string.cd_provider_filter,
-            subject,
-            provider,
-        )
-
-        FilterChip(
-            modifier = Modifier
-                .semantics {
-                    contentDescription = chipContentDescription
+    CategoryRow(
+        data = sectionData,
+        itemCategoryProvider = { section ->
+            ItemCategory(
+                id = id,
+                title = title,
+                items = section.items,
+                list = section.itemList,
+                filter = if (section.providerDomain != null && artist.providerMappings != null) {
+                    ItemCategory.Filter(
+                        label = section.providerDomain.toDisplayString(),
+                        options = artist.providerMappings,
+                        labelTransform = { it.providerDomain.toDisplayString() },
+                        contentDescription = Res.string.cd_provider_filter,
+                    )
+                } else {
+                    null
                 },
-            selected = true,
-            onClick = { expanded = true },
-            label = {
-                Text(provider)
-            },
-        )
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            providerMappings.forEach {
-                DropdownMenuItem(
-                    text = { Text(it.providerDomain) },
-                    onClick = {
-                        expanded = false
-                        onMappingSelected(it)
-                    },
-                )
-            }
-        }
-    }
+            )
+        },
+        onNavigateClick = onNavigateClick,
+        onNavigateToList = onNavigateToList,
+        onOptionSelected = onFilterSelected,
+        onPlayClick = onPlayChildClick,
+        playlistActions = playlistActions,
+        libraryActions = libraryActions,
+        providerIconFetcher = providerIconFetcher,
+    )
 }
 
 @Composable
