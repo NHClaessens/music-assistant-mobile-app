@@ -50,7 +50,9 @@ fun ItemListScreen(
         ItemList(
             data = state.items,
             onNavigateClick = onNavigateClick,
-            onPlayClick = { _, _, _, _ -> },
+            onPlayClick = { item, option, radio, _ ->
+                actionsViewModel.onPlayClick(item, option, radio)
+            },
             playlistActions = actionsViewModel,
             libraryActions = actionsViewModel,
             progressActions = actionsViewModel,
