@@ -139,6 +139,10 @@ fun <T> CategoryRow(
     progressActions: ProgressActions? = null,
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
 ) {
+    if (itemCategory.items.isEmpty() && itemCategory.filter == null) {
+        return
+    }
+
     val title = itemCategory.title.string()
     CategoryRow(
         title = title,
@@ -354,7 +358,7 @@ data class ItemCategory<T>(
         val label: DisplayString,
         val options: List<T>,
         val labelTransform: (T) -> DisplayString,
-        val contentDescription: StringResource,
+        val contentDescription: StringResource? = null,
     )
 }
 
@@ -384,21 +388,27 @@ private fun <T> FilterSelector(
     onOptionSelected: (T) -> Unit,
     options: List<T>,
     optionLabels: @Composable (T) -> String,
-    contentDescriptionResource: StringResource,
+    contentDescriptionResource: StringResource? = null,
 ) {
     Box {
         var expanded by remember { mutableStateOf(false) }
 
-        val chipContentDescription = stringResource(
-            contentDescriptionResource,
-            rowTitle,
-            label,
-        )
+        val chipContentDescription = if (contentDescriptionResource != null) {
+            stringResource(
+                contentDescriptionResource,
+                rowTitle,
+                label,
+            )
+        } else {
+            null
+        }
 
         FilterChip(
             modifier = Modifier
                 .semantics {
-                    contentDescription = chipContentDescription
+                    if (chipContentDescription != null) {
+                        contentDescription = chipContentDescription
+                    }
                 },
             selected = true,
             onClick = { expanded = true },
