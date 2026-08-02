@@ -278,9 +278,74 @@ class ItemDetailsViewModel(
         }
 
         val mappings = artist.providerMappings ?: emptyList()
-        val firstMapping = mappings.first()
-        loadAlbumsForProvider(firstMapping)
-        loadTopTracksForProvider(firstMapping)
+        viewModelScope.launch {
+            val results = mappings.map {
+                val itemId = it.itemId
+                val providerInstance = it.providerInstance
+
+                val albums = fetchArtistItems(
+                    Request.Artist.getAlbums(
+                        itemId,
+                        providerInstance,
+                    ),
+                ).filterIsInstance<Album>()
+
+                it to albums
+            }.filter { it.second.isNotEmpty() }
+
+            if (results.isNotEmpty()) {
+                val (mapping, albums) = results.first()
+
+                _state.update {
+                    it.copy(
+                        artistSections = it.artistSections.copy(
+                            all = DataState.Data(
+                                Section(
+                                    albums.take(ARTIST_SECTION_LIMIT),
+                                    providerDomain = mapping.providerDomain,
+                                    itemList = ItemList.ArtistAlbums(mapping.providerInstance, itemId),
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            val results = mappings.map {
+                val itemId = it.itemId
+                val providerInstance = it.providerInstance
+
+                val tracks = fetchArtistItems(
+                    Request.Artist.getTopTracks(
+                        itemId,
+                        providerInstance,
+                    ),
+                ).filterIsInstance<Track>()
+
+                it to tracks
+            }.filter { it.second.isNotEmpty() }
+
+            if (results.isNotEmpty()) {
+                val (mapping, tracks) = results.first()
+
+                _state.update {
+                    it.copy(
+                        artistSections = it.artistSections.copy(
+                            topTracks = DataState.Data(
+                                Section(
+                                    tracks.take(ARTIST_SECTION_LIMIT),
+                                    providerDomain = mapping.providerDomain,
+                                    itemList =
+                                        ItemList.ArtistTopTracks(mapping.providerInstance, itemId),
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     fun loadAlbumsForProvider(mapping: ProviderMapping) {
