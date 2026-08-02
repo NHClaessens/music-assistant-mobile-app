@@ -186,10 +186,6 @@ fun CategoryRow(
     providerIconFetcher: (@Composable (Modifier, String) -> Unit),
     rowTag: String? = null,
 ) {
-    if (mediaItems.isEmpty()) {
-        return
-    }
-
     val modifier = if (rowTag != null) {
         Modifier.testTag(rowTag)
     } else {
