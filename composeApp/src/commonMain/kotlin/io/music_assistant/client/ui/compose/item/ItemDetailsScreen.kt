@@ -925,55 +925,51 @@ private fun ArtistContent(
         contentPadding = contentPadding,
     ) {
         item { heroSlot() }
-        if (sections.isNotEmpty()) {
-            item {
-                SectionRow(
-                    artist = artist,
-                    sectionData = sections.library,
-                    id = "library",
-                    title = Res.string.artist_section_in_library.toDisplayString(),
-                    onNavigateClick = onNavigateClick,
-                    onNavigateToList = onNavigateToList,
-                    onPlayChildClick = onPlayChildClick,
-                    playlistActions = playlistActions,
-                    libraryActions = libraryActions,
-                    providerIconFetcher = providerIconFetcher,
-                )
-            }
+        item {
+            SectionRow(
+                artist = artist,
+                sectionData = sections.library,
+                id = "library",
+                title = Res.string.artist_section_in_library.toDisplayString(),
+                onNavigateClick = onNavigateClick,
+                onNavigateToList = onNavigateToList,
+                onPlayChildClick = onPlayChildClick,
+                playlistActions = playlistActions,
+                libraryActions = libraryActions,
+                providerIconFetcher = providerIconFetcher,
+            )
+        }
 
-            item {
-                SectionRow(
-                    artist = artist,
-                    sectionData = sections.all,
-                    id = "all",
-                    title = Res.string.artist_section_all.toDisplayString(),
-                    onNavigateClick = onNavigateClick,
-                    onNavigateToList = onNavigateToList,
-                    onFilterSelected = onAlbumMappingChanged,
-                    onPlayChildClick = onPlayChildClick,
-                    playlistActions = playlistActions,
-                    libraryActions = libraryActions,
-                    providerIconFetcher = providerIconFetcher,
-                )
-            }
+        item {
+            SectionRow(
+                artist = artist,
+                sectionData = sections.all,
+                id = "all",
+                title = Res.string.artist_section_all.toDisplayString(),
+                onNavigateClick = onNavigateClick,
+                onNavigateToList = onNavigateToList,
+                onFilterSelected = onAlbumMappingChanged,
+                onPlayChildClick = onPlayChildClick,
+                playlistActions = playlistActions,
+                libraryActions = libraryActions,
+                providerIconFetcher = providerIconFetcher,
+            )
+        }
 
-            item {
-                SectionRow(
-                    artist = artist,
-                    sectionData = sections.topTracks,
-                    id = "topTracks",
-                    title = stringResource(Res.string.artist_section_top).toDisplayString(),
-                    onNavigateClick = onNavigateClick,
-                    onNavigateToList = onNavigateToList,
-                    onFilterSelected = onTrackMappingChanged,
-                    onPlayChildClick = onPlayChildClick,
-                    playlistActions = playlistActions,
-                    libraryActions = libraryActions,
-                    providerIconFetcher = providerIconFetcher,
-                )
-            }
-        } else {
-            item { CenteredText(stringResource(Res.string.library_empty)) }
+        item {
+            SectionRow(
+                artist = artist,
+                sectionData = sections.topTracks,
+                id = "topTracks",
+                title = stringResource(Res.string.artist_section_top).toDisplayString(),
+                onNavigateClick = onNavigateClick,
+                onNavigateToList = onNavigateToList,
+                onFilterSelected = onTrackMappingChanged,
+                onPlayChildClick = onPlayChildClick,
+                playlistActions = playlistActions,
+                libraryActions = libraryActions,
+                providerIconFetcher = providerIconFetcher,
+            )
         }
     }
 }

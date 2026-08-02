@@ -11,7 +11,6 @@ import io.music_assistant.client.support.get
 import io.music_assistant.client.support.launchLoggedInApp
 import io.music_assistant.client.support.pages.assertMediaDisplayed
 import io.music_assistant.client.support.pages.assertMediaNotDisplayed
-import io.music_assistant.client.support.pages.assertNoItems
 import io.music_assistant.client.support.rules.createTestRuleChain
 import io.music_assistant.client.ui.compose.home.HomeScreenSemantics
 import musicassistantclient.composeapp.generated.resources.Res
@@ -157,15 +156,5 @@ class ArtistTest {
             .switchProvider(Res.string.artist_section_top.get(), provider1.domain, provider2.domain)
             .assertMediaNotDisplayed(track1, provider = provider1.domain)
             .assertMediaDisplayed(track2, provider = provider2.domain)
-    }
-
-    @Test
-    fun `shows empty message when there are no items for the artist`() {
-        val artist = ServerMediaItemFixtures.artist()
-        serviceClient.addItems(artist)
-
-        launchLoggedInApp(composeTestRule, serviceClient)
-            .clickOnMedia(artist, withinTag = HomeScreenSemantics.rowTag("recently_added_artists"))
-            .assertNoItems()
     }
 }

@@ -701,12 +701,6 @@ data class ArtistSections(
     val all: DataState<Section<Album>> = DataState.Loading(),
     val topTracks: DataState<Section<Track>> = DataState.Loading(),
 ) {
-    fun isNotEmpty(): Boolean {
-        return (library is DataState.Data && library.data.items.isNotEmpty()) ||
-                (all is DataState.Data && all.data.items.isNotEmpty()) ||
-                (topTracks is DataState.Data && topTracks.data.items.isNotEmpty())
-    }
-
     companion object {
         fun loading() =
             ArtistSections(DataState.Loading(), DataState.Loading(), DataState.Loading())
