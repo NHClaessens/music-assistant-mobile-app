@@ -16,20 +16,17 @@ object ItemUseCases {
             return null
         }
 
-        val results = artist.providerMappings.map {
-            val itemId = it.itemId
-            val providerInstance = it.providerInstance
+        for (mapping in artist.providerMappings) {
+            val itemId = mapping.itemId
+            val providerInstance = mapping.providerInstance
             val result = mediaItemRepository.fetchMediaItems(request(itemId, providerInstance))
-
-            val albums = result.getOrNull()?.filterIsInstance<T>() ?: emptyList()
-            it to albums
-        }.firstOrNull { it.second.isNotEmpty() }
-
-        return if (results != null) {
-            ItemsWithMappings(results.second, results.first)
-        } else {
-            ItemsWithMappings(emptyList(), artist.providerMappings.first())
+            val items = result.getOrNull()?.filterIsInstance<T>() ?: emptyList()
+            if (items.isNotEmpty()) {
+                return ItemsWithMappings(items, mapping)
+            }
         }
+
+        return ItemsWithMappings(emptyList(), artist.providerMappings.first())
     }
 
     data class ItemsWithMappings<T : AppMediaItem>(
