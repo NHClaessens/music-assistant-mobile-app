@@ -277,33 +277,29 @@ class ItemDetailsViewModel(
             }
         }
 
-        val mappings = artist.providerMappings ?: emptyList()
         viewModelScope.launch {
-            val results = mappings.map {
-                val itemId = it.itemId
-                val providerInstance = it.providerInstance
+            val list = ItemUseCases.fetchArtistItemsAcrossProviders<Album>(
+                mediaItemRepository,
+                artist,
+            ) { itemId, providerInstance ->
+                Request.Artist.getAlbums(
+                    itemId,
+                    providerInstance,
+                )
+            }
 
-                val albums = fetchArtistItems(
-                    Request.Artist.getAlbums(
-                        itemId,
-                        providerInstance,
-                    ),
-                ).filterIsInstance<Album>()
-
-                it to albums
-            }.filter { it.second.isNotEmpty() }
-
-            if (results.isNotEmpty()) {
-                val (mapping, albums) = results.first()
-
+            if (list != null) {
                 _state.update {
                     it.copy(
                         artistSections = it.artistSections.copy(
                             all = DataState.Data(
                                 Section(
-                                    albums.take(ARTIST_SECTION_LIMIT),
-                                    providerDomain = mapping.providerDomain,
-                                    itemList = ItemList.ArtistAlbums(mapping.providerInstance, itemId),
+                                    list.items.take(ARTIST_SECTION_LIMIT),
+                                    providerDomain = list.mapping.providerDomain,
+                                    itemList = ItemList.ArtistAlbums(
+                                        list.mapping.providerInstance,
+                                        itemId,
+                                    ),
                                 ),
                             ),
                         ),
@@ -313,32 +309,29 @@ class ItemDetailsViewModel(
         }
 
         viewModelScope.launch {
-            val results = mappings.map {
-                val itemId = it.itemId
-                val providerInstance = it.providerInstance
+            val list = ItemUseCases.fetchArtistItemsAcrossProviders<Track>(
+                mediaItemRepository,
+                artist,
+            ) { itemId, providerInstance ->
+                Request.Artist.getTopTracks(
+                    itemId,
+                    providerInstance,
+                )
+            }
 
-                val tracks = fetchArtistItems(
-                    Request.Artist.getTopTracks(
-                        itemId,
-                        providerInstance,
-                    ),
-                ).filterIsInstance<Track>()
-
-                it to tracks
-            }.filter { it.second.isNotEmpty() }
-
-            if (results.isNotEmpty()) {
-                val (mapping, tracks) = results.first()
-
+            if (list != null) {
                 _state.update {
                     it.copy(
                         artistSections = it.artistSections.copy(
                             topTracks = DataState.Data(
                                 Section(
-                                    tracks.take(ARTIST_SECTION_LIMIT),
-                                    providerDomain = mapping.providerDomain,
+                                    list.items.take(ARTIST_SECTION_LIMIT),
+                                    providerDomain = list.mapping.providerDomain,
                                     itemList =
-                                        ItemList.ArtistTopTracks(mapping.providerInstance, itemId),
+                                        ItemList.ArtistTopTracks(
+                                            list.mapping.providerInstance,
+                                            itemId,
+                                        ),
                                 ),
                             ),
                         ),
