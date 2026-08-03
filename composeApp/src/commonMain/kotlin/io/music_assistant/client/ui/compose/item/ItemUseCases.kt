@@ -12,7 +12,11 @@ object ItemUseCases {
         artist: Artist,
         request: (itemId: String, providerInstance: String) -> Request,
     ): ItemsWithMappings<T>? {
-        val results = artist.providerMappings!!.map {
+        if (artist.providerMappings.isNullOrEmpty()) {
+            return null
+        }
+
+        val results = artist.providerMappings.map {
             val itemId = it.itemId
             val providerInstance = it.providerInstance
             val result = mediaItemRepository.fetchMediaItems(request(itemId, providerInstance))
@@ -24,7 +28,7 @@ object ItemUseCases {
         return if (results != null) {
             ItemsWithMappings(results.second, results.first)
         } else {
-            null
+            ItemsWithMappings(emptyList(), artist.providerMappings.first())
         }
     }
 

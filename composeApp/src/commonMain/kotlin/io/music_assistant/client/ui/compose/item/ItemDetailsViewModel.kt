@@ -273,7 +273,13 @@ class ItemDetailsViewModel(
                 }
             } catch (e: Exception) {
                 Logger.e("Failed to load artist album sections", e)
-                _state.update { it.copy(artistSections = ArtistSections.error()) }
+                _state.update {
+                    it.copy(
+                        artistSections = it.artistSections.copy(
+                            library = DataState.Error(),
+                        ),
+                    )
+                }
             }
         }
 
@@ -298,10 +304,18 @@ class ItemDetailsViewModel(
                                     providerDomain = list.mapping.providerDomain,
                                     itemList = ItemList.ArtistAlbums(
                                         list.mapping.providerInstance,
-                                        itemId,
+                                        list.mapping.itemId,
                                     ),
                                 ),
                             ),
+                        ),
+                    )
+                }
+            } else {
+                _state.update {
+                    it.copy(
+                        artistSections = it.artistSections.copy(
+                            all = DataState.Error(),
                         ),
                     )
                 }
@@ -327,13 +341,20 @@ class ItemDetailsViewModel(
                                 Section(
                                     list.items.take(ARTIST_SECTION_LIMIT),
                                     providerDomain = list.mapping.providerDomain,
-                                    itemList =
-                                        ItemList.ArtistTopTracks(
-                                            list.mapping.providerInstance,
-                                            itemId,
-                                        ),
+                                    itemList = ItemList.ArtistTopTracks(
+                                        list.mapping.providerInstance,
+                                        list.mapping.itemId,
+                                    ),
                                 ),
                             ),
+                        ),
+                    )
+                }
+            } else {
+                _state.update {
+                    it.copy(
+                        artistSections = it.artistSections.copy(
+                            topTracks = DataState.Error(),
                         ),
                     )
                 }
