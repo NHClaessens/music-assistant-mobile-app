@@ -12,7 +12,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.AppMediaItem
-import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.library.ItemList
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
@@ -67,7 +66,7 @@ fun ItemListScreen(
             libraryActions = actionsViewModel,
             progressActions = actionsViewModel,
             contentPadding = contentPadding,
-            viewMode = ViewMode.GRID,
+            viewMode = viewMode,
             clickContext = clickContext,
         )
     }
