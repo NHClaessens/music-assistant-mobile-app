@@ -65,6 +65,7 @@ import io.music_assistant.client.ui.compose.item.ItemDetailsScreen
 import io.music_assistant.client.ui.compose.item.ItemDetailsViewModel
 import io.music_assistant.client.ui.compose.item.ItemListScreen
 import io.music_assistant.client.ui.compose.item.ItemListViewModel
+import io.music_assistant.client.ui.compose.item.ViewModeViewModel
 import io.music_assistant.client.ui.compose.library.BrowseScreen
 import io.music_assistant.client.ui.compose.library.BrowseViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
@@ -404,8 +405,11 @@ private fun mainNavEntryProvider(
                 parametersOf(it.mediaType)
             }
 
+            val viewModelViewModel = koinViewModel<ViewModeViewModel>()
+
             LibraryListScreen(
                 libraryListViewModel = libraryListViewModel,
+                viewModeViewModel = viewModelViewModel,
                 contentPadding = contentPadding,
                 actionsViewModel = actionsViewModel,
                 onBack = { multiBackStack.removeLastOrNull() },
@@ -523,8 +527,11 @@ private fun mainNavEntryProvider(
                 parametersOf(it.itemId, it.mediaType, it.providerId)
             }
 
+            val viewModeViewModel = koinViewModel<ViewModeViewModel>()
+
             ItemDetailsScreen(
                 itemDetailsViewModel = itemDetailsViewModel,
+                viewModeViewModel = viewModeViewModel,
                 actionsViewModel = actionsViewModel,
                 onBack = { multiBackStack.removeLastOrNull() },
                 onNavigateToItem = { itemId, mediaType, providerId ->
