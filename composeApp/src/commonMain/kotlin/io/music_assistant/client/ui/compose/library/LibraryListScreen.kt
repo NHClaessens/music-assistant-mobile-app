@@ -2,17 +2,12 @@
 
 package io.music_assistant.client.ui.compose.library
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,11 +37,12 @@ import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.ToastHost
 import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
+import io.music_assistant.client.ui.compose.item.ViewModeToggle
+import io.music_assistant.client.ui.compose.item.ViewModeViewModel
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
 import io.music_assistant.client.ui.compose.nav.TwoRowTopAppBar
 import io.music_assistant.client.ui.compose.search.SearchInput
 import musicassistantclient.composeapp.generated.resources.Res
-import musicassistantclient.composeapp.generated.resources.cd_toggle_view_mode
 import musicassistantclient.composeapp.generated.resources.common_back
 import musicassistantclient.composeapp.generated.resources.library_quick_search
 import musicassistantclient.composeapp.generated.resources.media_type_albums
@@ -62,6 +58,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun LibraryListScreen(
     libraryListViewModel: LibraryListViewModel,
+    viewModeViewModel: ViewModeViewModel,
     contentPadding: PaddingValues,
     actionsViewModel: ActionsViewModel,
     onNavigateClick: (AppMediaItem) -> Unit,
@@ -84,13 +81,14 @@ fun LibraryListScreen(
     val state by libraryListViewModel.state.collectAsStateWithLifecycle()
     val providerOptions by libraryListViewModel.providerOptions.collectAsStateWithLifecycle()
     val genreOptions by libraryListViewModel.genreOptions.collectAsStateWithLifecycle()
+    val viewMode by viewModeViewModel.viewModeFor(state.mediaType).collectAsStateWithLifecycle()
 
     TopBarLayout(
         topBar = {
             LibraryListTopBar(
                 onBack = onBack,
-                onToggleViewMode = libraryListViewModel::toggleViewMode,
-                viewMode = state.viewMode,
+                onToggleViewMode = { viewModeViewModel.toggleFor(state.mediaType) },
+                viewMode = viewMode,
                 searchQuery = state.searchQuery,
                 onSearchQueryChanged = libraryListViewModel::onSearchQueryChanged,
                 onSearch = libraryListViewModel::onSearch,
@@ -116,7 +114,7 @@ fun LibraryListScreen(
             libraryActions = actionsViewModel,
             progressActions = actionsViewModel,
             contentPadding = contentPadding,
-            viewMode = state.viewMode,
+            viewMode = viewMode,
             hasMore = state.hasMore,
             isLoadingMore = state.isLoadingMore,
             onLoadMore = libraryListViewModel::loadMore,
@@ -242,26 +240,16 @@ private fun LibraryListTopBar(
                 }
             },
             secondRow = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    SortChip(
-                        currentSort = sortOption,
-                        availableFields = SortConfig.fieldsFor(mediaType),
-                        onSortChanged = { onSortChanged(it) },
-                    )
+                SortChip(
+                    currentSort = sortOption,
+                    availableFields = SortConfig.fieldsFor(mediaType),
+                    onSortChanged = { onSortChanged(it) },
+                )
 
-                    IconButton(onClick = onToggleViewMode) {
-                        Icon(
-                            imageVector = when (viewMode) {
-                                ViewMode.LIST -> Icons.Default.GridView
-                                ViewMode.GRID -> Icons.AutoMirrored.Filled.ViewList
-                            },
-                            contentDescription = stringResource(Res.string.cd_toggle_view_mode),
-                        )
-                    }
-                }
+                ViewModeToggle(
+                    viewMode = viewMode,
+                    onToggleViewMode = onToggleViewMode,
+                )
             },
         )
     }

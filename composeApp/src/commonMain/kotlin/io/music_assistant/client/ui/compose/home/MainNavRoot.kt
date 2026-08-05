@@ -65,6 +65,7 @@ import io.music_assistant.client.ui.compose.item.ItemDetailsScreen
 import io.music_assistant.client.ui.compose.item.ItemDetailsViewModel
 import io.music_assistant.client.ui.compose.item.ItemListScreen
 import io.music_assistant.client.ui.compose.item.ItemListViewModel
+import io.music_assistant.client.ui.compose.item.ViewModeViewModel
 import io.music_assistant.client.ui.compose.library.BrowseScreen
 import io.music_assistant.client.ui.compose.library.BrowseViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
@@ -108,6 +109,7 @@ import kotlin.uuid.Uuid
 fun MainNavigationRoot(
     homeScreenViewModel: HomeScreenViewModel = koinViewModel(),
     actionsViewModel: ActionsViewModel = koinViewModel(),
+    viewModeViewModel: ViewModeViewModel = koinViewModel(),
     dspSettingsViewModel: DspSettingsViewModel = koinViewModel(),
     goToSettings: () -> Unit,
 ) {
@@ -311,6 +313,7 @@ fun MainNavigationRoot(
                                 multiBackStack,
                                 homeScreenViewModel,
                                 actionsViewModel,
+                                viewModeViewModel,
                                 homeScreenState,
                                 libraryScreenState,
                                 searchScreenState,
@@ -334,6 +337,7 @@ private fun mainNavEntryProvider(
     multiBackStack: MultiBackStack<NavKey>,
     homeScreenViewModel: HomeScreenViewModel,
     actionsViewModel: ActionsViewModel,
+    viewModeViewModel: ViewModeViewModel,
     homeScreenState: MutableState<HomeScreenState?>,
     libraryScreenState: MutableState<LibraryScreenState?>,
     searchScreenState: MutableState<SearchScreenState?>,
@@ -406,6 +410,7 @@ private fun mainNavEntryProvider(
 
             LibraryListScreen(
                 libraryListViewModel = libraryListViewModel,
+                viewModeViewModel = viewModeViewModel,
                 contentPadding = contentPadding,
                 actionsViewModel = actionsViewModel,
                 onBack = { multiBackStack.removeLastOrNull() },
@@ -489,7 +494,9 @@ private fun mainNavEntryProvider(
 
             ItemListScreen(
                 title = it.title,
+                mediaType = it.itemList.mediaType,
                 itemListViewModel = itemListViewModel,
+                viewModeViewModel = viewModeViewModel,
                 actionsViewModel = actionsViewModel,
                 onNavigateClick = { item ->
                     when (item) {
@@ -525,6 +532,7 @@ private fun mainNavEntryProvider(
 
             ItemDetailsScreen(
                 itemDetailsViewModel = itemDetailsViewModel,
+                viewModeViewModel = viewModeViewModel,
                 actionsViewModel = actionsViewModel,
                 onBack = { multiBackStack.removeLastOrNull() },
                 onNavigateToItem = { itemId, mediaType, providerId ->

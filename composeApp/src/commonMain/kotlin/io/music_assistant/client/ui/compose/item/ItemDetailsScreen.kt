@@ -22,13 +22,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
@@ -113,7 +108,6 @@ import musicassistantclient.composeapp.generated.resources.artist_section_all
 import musicassistantclient.composeapp.generated.resources.artist_section_in_library
 import musicassistantclient.composeapp.generated.resources.artist_section_top
 import musicassistantclient.composeapp.generated.resources.cd_provider_filter
-import musicassistantclient.composeapp.generated.resources.cd_toggle_view_mode
 import musicassistantclient.composeapp.generated.resources.item_error
 import musicassistantclient.composeapp.generated.resources.item_no_data
 import musicassistantclient.composeapp.generated.resources.library_empty
@@ -126,6 +120,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun ItemDetailsScreen(
     itemDetailsViewModel: ItemDetailsViewModel,
+    viewModeViewModel: ViewModeViewModel,
     actionsViewModel: ActionsViewModel,
     onBack: () -> Unit,
     onNavigateToItem: (String, MediaType, String) -> Unit,
@@ -139,9 +134,9 @@ fun ItemDetailsScreen(
         state = state,
         onBack = onBack,
         viewModeProvider = { type ->
-            itemDetailsViewModel.viewMode(type).collectAsStateWithLifecycle().value
+            viewModeViewModel.viewModeFor(type).collectAsStateWithLifecycle().value
         },
-        onToggleViewMode = itemDetailsViewModel::toggleViewMode,
+        onToggleViewMode = viewModeViewModel::toggleFor,
         onNavigateToItem = onNavigateToItem,
         onNavigateToList = onNavigateToList,
         geEditablePlaylists = actionsViewModel::getEditablePlaylists,
@@ -553,15 +548,10 @@ private fun TabsBar(
         }
 
         currentTab.viewMediaType?.let { viewMediaType ->
-            IconButton(onClick = { onToggleViewMode(viewMediaType) }) {
-                Icon(
-                    imageVector = when (viewModeProvider(viewMediaType)) {
-                        ViewMode.LIST -> Icons.Default.GridView
-                        ViewMode.GRID -> Icons.AutoMirrored.Filled.ViewList
-                    },
-                    contentDescription = stringResource(Res.string.cd_toggle_view_mode),
-                )
-            }
+            ViewModeToggle(
+                viewMode = viewModeProvider(viewMediaType),
+                onToggleViewMode = { onToggleViewMode(viewMediaType) },
+            )
         }
     }
 }

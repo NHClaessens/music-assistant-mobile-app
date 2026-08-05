@@ -82,13 +82,6 @@ class ItemDetailsViewModel(
     private var rawAlbums: List<Album> = emptyList()
     private var rawPlayableItems: List<PlayableItem> = emptyList()
 
-    fun viewMode(mediaType: MediaType) = settingsRepository.viewMode(mediaType)
-
-    fun toggleViewMode(mediaType: MediaType) {
-        val current = settingsRepository.viewMode(mediaType).value
-        settingsRepository.setViewMode(mediaType, current.toggled())
-    }
-
     fun onTabSelected(tab: ItemDetailsTab) {
         _state.update { it.copy(userSelectedTab = tab) }
     }
