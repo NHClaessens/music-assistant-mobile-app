@@ -21,6 +21,7 @@ import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.Timings
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.SelectOption
+import io.music_assistant.client.ui.compose.item.ViewModeMediator
 import io.music_assistant.client.utils.resultAs
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -65,6 +66,8 @@ class LibraryListViewModel(
     val genreOptions = _genreOptions.asStateFlow()
     private var optionsRequested = false
 
+    private val viewModeMediator = ViewModeMediator(settingsRepository)
+
     init {
         viewModelScope.launch {
             searchTrigger
@@ -75,7 +78,7 @@ class LibraryListViewModel(
         }
 
         viewModelScope.launch {
-            settingsRepository.viewMode(mediaType).collect { mode ->
+            viewModeMediator.viewModeFor(mediaType).collect { mode ->
                 _state.update { it.copy(viewMode = mode) }
             }
         }
@@ -144,8 +147,7 @@ class LibraryListViewModel(
             hasAnyMappingFrom(other)
 
     fun toggleViewMode() {
-        val current = settingsRepository.viewMode(mediaType).value
-        settingsRepository.setViewMode(mediaType, current.toggled())
+        viewModeMediator.toggleFor(mediaType)
     }
 
     // Persistence is the source of truth (like view mode); the settings flow
