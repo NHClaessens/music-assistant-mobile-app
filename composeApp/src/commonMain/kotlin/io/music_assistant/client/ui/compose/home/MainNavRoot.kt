@@ -109,6 +109,7 @@ import kotlin.uuid.Uuid
 fun MainNavigationRoot(
     homeScreenViewModel: HomeScreenViewModel = koinViewModel(),
     actionsViewModel: ActionsViewModel = koinViewModel(),
+    viewModeViewModel: ViewModeViewModel = koinViewModel(),
     dspSettingsViewModel: DspSettingsViewModel = koinViewModel(),
     goToSettings: () -> Unit,
 ) {
@@ -312,6 +313,7 @@ fun MainNavigationRoot(
                                 multiBackStack,
                                 homeScreenViewModel,
                                 actionsViewModel,
+                                viewModeViewModel,
                                 homeScreenState,
                                 libraryScreenState,
                                 searchScreenState,
@@ -335,6 +337,7 @@ private fun mainNavEntryProvider(
     multiBackStack: MultiBackStack<NavKey>,
     homeScreenViewModel: HomeScreenViewModel,
     actionsViewModel: ActionsViewModel,
+    viewModeViewModel: ViewModeViewModel,
     homeScreenState: MutableState<HomeScreenState?>,
     libraryScreenState: MutableState<LibraryScreenState?>,
     searchScreenState: MutableState<SearchScreenState?>,
@@ -405,11 +408,9 @@ private fun mainNavEntryProvider(
                 parametersOf(it.mediaType)
             }
 
-            val viewModelViewModel = koinViewModel<ViewModeViewModel>()
-
             LibraryListScreen(
                 libraryListViewModel = libraryListViewModel,
-                viewModeViewModel = viewModelViewModel,
+                viewModeViewModel = viewModeViewModel,
                 contentPadding = contentPadding,
                 actionsViewModel = actionsViewModel,
                 onBack = { multiBackStack.removeLastOrNull() },
@@ -493,7 +494,9 @@ private fun mainNavEntryProvider(
 
             ItemListScreen(
                 title = it.title,
+                mediaType = it.itemList.mediaType,
                 itemListViewModel = itemListViewModel,
+                viewModeViewModel = viewModeViewModel,
                 actionsViewModel = actionsViewModel,
                 onNavigateClick = { item ->
                     when (item) {
@@ -526,8 +529,6 @@ private fun mainNavEntryProvider(
             val itemDetailsViewModel = koinViewModel<ItemDetailsViewModel> {
                 parametersOf(it.itemId, it.mediaType, it.providerId)
             }
-
-            val viewModeViewModel = koinViewModel<ViewModeViewModel>()
 
             ItemDetailsScreen(
                 itemDetailsViewModel = itemDetailsViewModel,

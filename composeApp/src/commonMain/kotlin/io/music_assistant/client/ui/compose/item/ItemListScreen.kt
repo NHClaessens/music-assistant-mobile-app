@@ -6,16 +6,17 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.music_assistant.client.data.model.client.ClickContext
+import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.library.ItemList
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
+import io.music_assistant.client.ui.compose.nav.TwoRowTopAppBar
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.common_back
 import org.jetbrains.compose.resources.stringResource
@@ -23,7 +24,9 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun ItemListScreen(
     title: String,
+    mediaType: MediaType,
     itemListViewModel: ItemListViewModel,
+    viewModeViewModel: ViewModeViewModel,
     actionsViewModel: ActionsViewModel,
     onNavigateClick: (AppMediaItem) -> Unit,
     onBack: () -> Unit,
@@ -31,10 +34,11 @@ fun ItemListScreen(
     clickContext: ClickContext,
 ) {
     val state by itemListViewModel.state.collectAsStateWithLifecycle()
+    val viewMode by viewModeViewModel.viewModeFor(mediaType).collectAsStateWithLifecycle()
 
     TopBarLayout(
         topBar = {
-            TopAppBar(
+            TwoRowTopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -43,6 +47,12 @@ fun ItemListScreen(
                             stringResource(Res.string.common_back),
                         )
                     }
+                },
+                secondRow = {
+                    ViewModeToggle(
+                        viewMode = viewMode,
+                        onToggleViewMode = { viewModeViewModel.toggleFor(mediaType) },
+                    )
                 },
             )
         },

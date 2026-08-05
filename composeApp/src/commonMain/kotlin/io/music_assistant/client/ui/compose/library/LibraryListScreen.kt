@@ -2,12 +2,9 @@
 
 package io.music_assistant.client.ui.compose.library
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -243,21 +240,16 @@ private fun LibraryListTopBar(
                 }
             },
             secondRow = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    SortChip(
-                        currentSort = sortOption,
-                        availableFields = SortConfig.fieldsFor(mediaType),
-                        onSortChanged = { onSortChanged(it) },
-                    )
+                SortChip(
+                    currentSort = sortOption,
+                    availableFields = SortConfig.fieldsFor(mediaType),
+                    onSortChanged = { onSortChanged(it) },
+                )
 
-                    ViewModeToggle(
-                        viewMode = viewMode,
-                        onToggleViewMode = onToggleViewMode,
-                    )
-                }
+                ViewModeToggle(
+                    viewMode = viewMode,
+                    onToggleViewMode = onToggleViewMode,
+                )
             },
         )
     }

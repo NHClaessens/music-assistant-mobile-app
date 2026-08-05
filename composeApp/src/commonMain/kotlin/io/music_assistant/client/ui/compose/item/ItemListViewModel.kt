@@ -3,6 +3,7 @@ package io.music_assistant.client.ui.compose.item
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.music_assistant.client.api.Request
+import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.server.ServerMediaItem
 import io.music_assistant.client.data.repository.MediaItemRepository
@@ -54,12 +55,20 @@ class ItemListViewModel(
 
 @Serializable
 sealed interface ItemList {
-    @Serializable
-    data class ArtistAlbums(val providerInstance: String, val artistId: String) : ItemList
+    val mediaType: MediaType
 
     @Serializable
-    data class ArtistTopTracks(val providerInstance: String, val artistId: String) : ItemList
+    data class ArtistAlbums(val providerInstance: String, val artistId: String) : ItemList {
+        override val mediaType: MediaType = MediaType.ALBUM
+    }
 
     @Serializable
-    data class ArtistLibrary(val artistId: String) : ItemList
+    data class ArtistTopTracks(val providerInstance: String, val artistId: String) : ItemList {
+        override val mediaType: MediaType = MediaType.TRACK
+    }
+
+    @Serializable
+    data class ArtistLibrary(val artistId: String) : ItemList {
+        override val mediaType: MediaType = MediaType.ALBUM
+    }
 }
