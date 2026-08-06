@@ -19,7 +19,7 @@ class HomeRowsConfigTest {
         config: List<HomeRowPref>,
         onTop: String? = null,
     ): List<Pair<String, Boolean>> {
-        return reconcileHomeRows(serverIds.map { itemCategory(it) }, config, onTop)
+        return reconcileHomeRows(serverIds.map { itemCategory(it) }, config, onTop) { it.id }
             .map { it.first.id to it.second }
     }
 
