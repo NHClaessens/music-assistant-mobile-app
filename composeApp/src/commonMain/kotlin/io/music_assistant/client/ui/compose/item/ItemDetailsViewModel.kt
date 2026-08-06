@@ -27,7 +27,7 @@ import io.music_assistant.client.data.model.server.ProviderMapping
 import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.DataState
-import io.music_assistant.client.ui.compose.common.mapData
+import io.music_assistant.client.ui.compose.common.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -685,10 +685,10 @@ class ItemDetailsViewModel(
                     _state.update { s ->
                         s.copy(
                             artistSections = sections.copy(
-                                library = sections.library.mapData {
+                                library = sections.library.map {
                                     it.copy(items = it.items.replacing(changed))
                                 },
-                                all = sections.all.mapData {
+                                all = sections.all.map {
                                     it.copy(items = it.items.replacing(changed))
                                 },
                             ),
@@ -708,7 +708,7 @@ class ItemDetailsViewModel(
                         _state.update { s ->
                             s.copy(
                                 artistSections = sections.copy(
-                                    topTracks = sections.topTracks.mapData {
+                                    topTracks = sections.topTracks.map {
                                         it.copy(items = it.items.replacing(changed))
                                     },
                                 ),

@@ -27,14 +27,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.LibraryFilters
 import io.music_assistant.client.data.model.client.MediaType
-import io.music_assistant.client.data.model.client.SortConfig
 import io.music_assistant.client.data.model.client.SortOption
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.settings.ViewMode
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.SelectOption
-import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.ToastHost
+import io.music_assistant.client.ui.compose.common.items.ItemSortChip
 import io.music_assistant.client.ui.compose.common.rememberToastState
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.item.ViewModeToggle
@@ -240,9 +239,9 @@ private fun LibraryListTopBar(
                 }
             },
             secondRow = {
-                SortChip(
-                    currentSort = sortOption,
-                    availableFields = SortConfig.fieldsFor(mediaType),
+                ItemSortChip(
+                    sortOption = sortOption,
+                    mediaType = mediaType,
                     onSortChanged = { onSortChanged(it) },
                 )
 

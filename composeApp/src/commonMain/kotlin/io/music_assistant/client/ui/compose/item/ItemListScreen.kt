@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.AppMediaItem
+import io.music_assistant.client.ui.compose.common.items.ItemSortChip
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.library.ItemList
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
@@ -48,6 +49,12 @@ fun ItemListScreen(
                     }
                 },
                 secondRow = {
+                    ItemSortChip(
+                        sortOption = state.sortOption,
+                        mediaType = mediaType,
+                        onSortChanged = itemListViewModel::sort,
+                    )
+
                     ViewModeToggle(
                         viewMode = viewMode,
                         onToggleViewMode = { viewModeViewModel.toggleFor(mediaType) },
