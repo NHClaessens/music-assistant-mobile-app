@@ -730,7 +730,8 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
         fun recommendations() = Request(command = APICommands.MUSIC_RECOMMENDATIONS)
 
         /**
-         * Items of a single recommendation row. Only exists on servers (2.10+)
+         * Items of a single recommendation row. Only exists on servers that
+         * return [recommendations] rows without embedded items.
          */
         fun recommendationItems(provider: String, itemId: String) = Request(
             command = APICommands.MUSIC_RECOMMENDATIONS_ITEMS,

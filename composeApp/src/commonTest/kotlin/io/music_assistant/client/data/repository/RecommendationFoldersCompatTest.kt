@@ -10,21 +10,19 @@ import io.music_assistant.client.data.model.server.events.Event
 import io.music_assistant.client.utils.myJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
  * [MediaItemRepository.fetchRecommendationFolders] must bridge both shapes of
- * the `music/recommendations` response: rows with their items embedded (servers
- * before 2.10), and item-less rows (2.10+) whose contents come from a per-row
+ * the `music/recommendations` response: rows with their items embedded, and
+ * item-less rows whose contents come from a per-row
  * `music/recommendations/items` call.
  */
 class RecommendationFoldersCompatTest {
@@ -188,64 +186,6 @@ class RecommendationFoldersCompatTest {
         assertTrue(client.itemsRequests.isEmpty())
     }
 
-    // --- streaming (recommendationRows) behavior ---
-
-    @Test
-    fun embeddedRowsStreamASingleResolvedSnapshot() = runTest {
-        val client = FakeClient(
-            rowsJson = "[${folderJson("row1", "library", "[${trackJson("t1")}]")}]",
-            itemsJsonFor = { _, _ -> fail("embedded-items response must not trigger items calls") },
-        )
-
-        val snapshots = repository(client).recommendationRows().toList()
-
-        assertEquals(1, snapshots.size)
-        assertTrue(snapshots.single().none { it.itemsLoading })
-        assertEquals(listOf("t1"), snapshots.single()[0].folder.items?.map { it.itemId })
-    }
-
-    @Test
-    fun itemLessRowsStreamLoadingThenPerRowResolution() = runTest {
-        val client = FakeClient(
-            rowsJson = """
-                [${folderJson("row1", "library", "[]")},
-                 ${folderJson("row2", "spotify", "[]")}]
-            """.trimIndent(),
-            itemsJsonFor = { _, itemId -> Result.success("[${trackJson("item-of-$itemId")}]") },
-        )
-
-        val snapshots = repository(client).recommendationRows().toList()
-
-        // initial (all loading) + probe row resolved + remaining row resolved
-        assertEquals(3, snapshots.size)
-        // Asserted after collection completed: also pins that emitted snapshots are
-        // immutable copies, not views of the mutable list later resolutions write to.
-        assertTrue(snapshots.first().all { it.itemsLoading })
-        val final = snapshots.last()
-        assertTrue(final.none { it.itemsLoading })
-        assertEquals(listOf("item-of-row1"), final[0].folder.items?.map { it.itemId })
-        assertEquals(listOf("item-of-row2"), final[1].folder.items?.map { it.itemId })
-    }
-
-    @Test
-    fun failedProbeStreamResolvesAllRowsAsReceived() = runTest {
-        val client = FakeClient(
-            rowsJson = """
-                [${folderJson("row1", "library", "[]")},
-                 ${folderJson("row2", "spotify", "[]")}]
-            """.trimIndent(),
-            itemsJsonFor = { _, _ -> Result.failure(IllegalStateException("Unknown command")) },
-        )
-
-        val snapshots = repository(client).recommendationRows().toList()
-
-        assertEquals(2, snapshots.size)
-        assertTrue(snapshots.first().all { it.itemsLoading })
-        assertTrue(snapshots.last().none { it.itemsLoading })
-        assertTrue(snapshots.last().all { it.folder.items.isNullOrEmpty() })
-        assertEquals(listOf("library" to "row1"), client.itemsRequests)
-    }
-
     @Test
     fun rowsCallFailureSurfacesAsErrorWithoutItemCalls() = runTest {
         val client = FakeClient(
@@ -255,8 +195,8 @@ class RecommendationFoldersCompatTest {
         )
         val repo = repository(client)
 
-        assertFailsWith<IllegalStateException> { repo.recommendationRows().toList() }
         assertTrue(repo.fetchRecommendationFolders().isFailure)
+        assertTrue(repo.fetchRecommendationRows().isFailure)
         assertTrue(client.itemsRequests.isEmpty())
     }
 }

@@ -128,34 +128,41 @@ class FakeServiceClient : ServiceClient {
             }
 
             APICommands.MUSIC_RECOMMENDATIONS -> {
+                // Legacy servers embed each row's items; current servers return
+                // item-less rows resolved via MUSIC_RECOMMENDATIONS_ITEMS.
+                val embedItems = legacyVersion != null
                 Result.success(
                     answer(
                         request = request,
-                        result = listOf(
+                        result = recommendationRowIds.map { (itemId, name) ->
                             ServerMediaItem(
-                                itemId = "recently_added_albums",
+                                itemId = itemId,
                                 provider = "library",
-                                name = "Recently added albums",
+                                name = name,
                                 mediaType = MediaType.FOLDER.serverValue,
-                                items = mediaItemStore.query(mediaType = MediaType.ALBUM),
-                            ),
-                            ServerMediaItem(
-                                itemId = "recently_added_tracks",
-                                provider = "library",
-                                name = "Recently added tracks",
-                                mediaType = MediaType.FOLDER.serverValue,
-                                items = mediaItemStore.query(mediaType = MediaType.TRACK),
-                            ),
-                            ServerMediaItem(
-                                itemId = "recently_added_artists",
-                                provider = "library",
-                                name = "Recently added artists",
-                                mediaType = MediaType.FOLDER.serverValue,
-                                items = mediaItemStore.query(mediaType = MediaType.ARTIST),
-                            ),
-                        ),
+                                items = if (embedItems) {
+                                    recommendationRowItems(itemId)
+                                } else {
+                                    emptyList()
+                                },
+                            )
+                        },
                     ),
                 )
+            }
+
+            APICommands.MUSIC_RECOMMENDATIONS_ITEMS -> {
+                if (legacyVersion != null) {
+                    // Command doesn't exist on legacy servers.
+                    Result.failure(UnsupportedOperationException())
+                } else {
+                    Result.success(
+                        answer(
+                            request = request,
+                            result = recommendationRowItems(request.getArg("item_id")),
+                        ),
+                    )
+                }
             }
 
             APICommands.MUSIC_SEARCH -> {
@@ -724,6 +731,20 @@ class FakeServiceClient : ServiceClient {
             null
         }
     }
+
+    private val recommendationRowIds = listOf(
+        "recently_added_albums" to "Recently added albums",
+        "recently_added_tracks" to "Recently added tracks",
+        "recently_added_artists" to "Recently added artists",
+    )
+
+    private fun recommendationRowItems(itemId: String): List<ServerMediaItem> =
+        when (itemId) {
+            "recently_added_albums" -> mediaItemStore.query(mediaType = MediaType.ALBUM)
+            "recently_added_tracks" -> mediaItemStore.query(mediaType = MediaType.TRACK)
+            "recently_added_artists" -> mediaItemStore.query(mediaType = MediaType.ARTIST)
+            else -> emptyList()
+        }
 
     private fun findItem(request: Request): ServerMediaItem {
         val itemId = request.getArg("item_id")

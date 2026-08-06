@@ -15,20 +15,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.shareIn
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Single seam between RPC + DTO land and the UI's typed `AppMediaItem` world.
@@ -72,68 +68,41 @@ class MediaItemRepository(
     }
 
     /**
-     * Stream the home-page recommendation rows as snapshots, bridging the two
-     * response shapes `music/recommendations` can have:
-     * - rows with their items embedded (servers before 2.10): a single snapshot,
-     *   no row is ever [RecommendationRow.itemsLoading];
-     * - rows without items (2.10+), whose contents come from a per-row
-     *   `music/recommendations/items` call: an immediate snapshot with every row
-     *   loading, then one snapshot per row as its items resolve.
+     * The home-page recommendation rows as the server returned them, with or
+     * without embedded items (see [needPerRowItemFetch]).
      */
-    fun recommendationRows(): Flow<List<RecommendationRow>> = channelFlow {
-        val folders = fetchMediaItems(Request.Library.recommendations())
-            .getOrThrow()
-            .filterIsInstance<RecommendationFolder>()
-        val itemLess = folders.isNotEmpty() && folders.all { it.items.isNullOrEmpty() }
-        if (!itemLess) {
-            send(folders.map { RecommendationRow(it, itemsLoading = false) })
-            return@channelFlow
-        }
-
-        val rows = MutableList(folders.size) { RecommendationRow(folders[it], itemsLoading = true) }
-        val lock = Mutex()
-        suspend fun resolve(index: Int, items: List<AppMediaItem>?) = lock.withLock {
-            val folder = rows[index].folder
-            rows[index] = RecommendationRow(
-                folder = if (items == null) folder else folder.copy(items = items),
-                itemsLoading = false,
-            )
-            send(rows.toList())
-        }
-
-        send(rows.toList())
-        val probeItems = fetchRecommendationRowItems(folders.first())
-        if (probeItems == null) {
-            lock.withLock {
-                for (index in rows.indices) {
-                    rows[index] = rows[index].copy(itemsLoading = false)
-                }
-                send(rows.toList())
-            }
-            return@channelFlow
-        }
-        resolve(0, probeItems)
-        coroutineScope {
-            for (index in 1 until folders.size) {
-                launch { resolve(index, fetchRecommendationRowItems(folders[index])) }
-            }
-        }
-    }
+    suspend fun fetchRecommendationRows(): Result<List<RecommendationFolder>> =
+        fetchMediaItems(Request.Library.recommendations())
+            .map { items -> items.filterIsInstance<RecommendationFolder>() }
 
     /**
-     * One-shot, fully-resolved variant of [recommendationRows] for consumers
-     * without progressive UI (e.g. CarPlay lists).
+     * One-shot, fully-resolved recommendation rows for consumers without a
+     * progressive UI (e.g. CarPlay lists). The first row is probed alone —
+     * see [needPerRowItemFetch].
      */
-    suspend fun fetchRecommendationFolders(): Result<List<RecommendationFolder>> = try {
-        Result.success(recommendationRows().last().map { it.folder })
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Result.failure(e)
+    suspend fun fetchRecommendationFolders(): Result<List<RecommendationFolder>> {
+        val folders = fetchRecommendationRows().getOrElse { error ->
+            if (error is CancellationException) throw error
+            return Result.failure(error)
+        }
+        if (!folders.needPerRowItemFetch()) return Result.success(folders)
+
+        val firstRowItems = fetchRecommendationRowItems(folders.first())
+            ?: return Result.success(folders)
+        val remaining = coroutineScope {
+            folders.drop(1).map { folder ->
+                async {
+                    folder.copy(items = fetchRecommendationRowItems(folder).orEmpty())
+                }
+            }.awaitAll()
+        }
+        return Result.success(
+            listOf(folders.first().copy(items = firstRowItems)) + remaining,
+        )
     }
 
     /** Items of one recommendation row, or null when the fetch failed (logged). */
-    private suspend fun fetchRecommendationRowItems(
+    suspend fun fetchRecommendationRowItems(
         folder: RecommendationFolder,
     ): List<AppMediaItem>? =
         fetchMediaItems(
@@ -221,11 +190,13 @@ private fun <T : AppMediaItem> List<T>.replacing(changed: T): List<T> =
     map { if (it.itemId == changed.itemId) changed else it }
 
 /**
- * One home-page recommendation row snapshot: the folder (with whatever items are
- * known so far) plus whether its items are still being fetched. Rows from a
- * server that embeds items are never [itemsLoading].
+ * True when a `music/recommendations` response is the item-less shape (2.10+):
+ * every row arrived without items, so each row's contents must be fetched via
+ * [MediaItemRepository.fetchRecommendationRowItems]. A server that embeds items
+ * always populates at least the rows worth showing. Callers should probe the
+ * first row alone before fanning out: a pre-2.10 server that legitimately
+ * returned only empty rows lacks the items command, and every failing call
+ * there surfaces a user-visible error toast.
  */
-data class RecommendationRow(
-    val folder: RecommendationFolder,
-    val itemsLoading: Boolean,
-)
+fun List<RecommendationFolder>.needPerRowItemFetch(): Boolean =
+    isNotEmpty() && all { it.items.isNullOrEmpty() }

@@ -13,10 +13,11 @@ import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.Shortcut
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Genre
+import io.music_assistant.client.data.model.client.items.RecommendationFolder
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.server.ServerUser
 import io.music_assistant.client.data.repository.MediaItemRepository
-import io.music_assistant.client.data.repository.RecommendationRow
+import io.music_assistant.client.data.repository.needPerRowItemFetch
 import io.music_assistant.client.player.sendspin.SendspinState
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.DataState
@@ -29,11 +30,11 @@ import io.music_assistant.client.utils.resultAs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.sample
@@ -210,15 +211,65 @@ class HomeScreenViewModel(
 
         loadDataJob = viewModelScope.launch {
             launch { loadShortcuts() }
-            mediaItemRepository.recommendationRows()
-                .catch { error ->
-                    if (error is CancellationException) throw error
-                    Logger.e("Error fetching recommendations: $error")
-                    _state.update { it.copy(recommendations = DataState.Error()) }
+            loadRecommendations()
+        }
+    }
+
+    private suspend fun loadRecommendations() {
+        val folders = mediaItemRepository.fetchRecommendationRows().getOrElse { error ->
+            if (error is CancellationException) throw error
+            Logger.e("Error fetching recommendations: $error")
+            _state.update { it.copy(recommendations = DataState.Error()) }
+            return
+        }
+
+        if (!folders.needPerRowItemFetch()) {
+            setRecommendationRows(
+                folders.map { RecommendationRowState(it, DataState.Data(it.items.orEmpty())) },
+            )
+            return
+        }
+
+        // Show every row as a loading placeholder, then fetch each row's items
+        // as its own job. The first row doubles as a probe — if it fails, skip
+        // the rest (see [needPerRowItemFetch]).
+        setRecommendationRows(folders.map { RecommendationRowState(it, DataState.Loading()) })
+        val probeItems = mediaItemRepository.fetchRecommendationRowItems(folders.first())
+        if (probeItems == null) {
+            setRecommendationRows(
+                folders.map { RecommendationRowState(it, DataState.Data(emptyList())) },
+            )
+            return
+        }
+        setRowItems(folders.first(), probeItems)
+        coroutineScope {
+            folders.drop(1).forEach { folder ->
+                launch {
+                    setRowItems(
+                        folder,
+                        mediaItemRepository.fetchRecommendationRowItems(folder).orEmpty(),
+                    )
                 }
-                .collect { rows ->
-                    _state.update { it.copy(recommendations = DataState.Data(rows)) }
+            }
+        }
+    }
+
+    private fun setRecommendationRows(rows: List<RecommendationRowState>) {
+        _state.update { it.copy(recommendations = DataState.Data(rows)) }
+    }
+
+    private fun setRowItems(folder: RecommendationFolder, items: List<AppMediaItem>) {
+        _state.update { state ->
+            val rows = (state.recommendations as? DataState.Data)?.data
+                ?: return@update state
+            val updated = rows.map { row ->
+                if (row.folder.itemId == folder.itemId && row.folder.provider == folder.provider) {
+                    row.copy(items = DataState.Data(items))
+                } else {
+                    row
                 }
+            }
+            state.copy(recommendations = DataState.Data(updated))
         }
     }
 
@@ -272,11 +323,11 @@ class HomeScreenViewModel(
             val rows = (state.recommendations as? DataState.Data)?.data
                 ?: return@update state
             val updated = rows.map { row ->
-                val items = row.folder.items ?: return@map row
+                val items = (row.items as? DataState.Data)?.data ?: return@map row
                 val updatedItems = items.map { item ->
                     if (item is Track && item.hasAnyMappingFrom(changed)) changed else item
                 }
-                row.copy(folder = row.folder.copy(items = updatedItems))
+                row.copy(items = DataState.Data(updatedItems))
             }
             state.copy(recommendations = DataState.Data(updated))
         }
@@ -379,7 +430,7 @@ class HomeScreenViewModel(
 
     data class State(
         val shortcuts: DataState<List<Shortcut>>,
-        val recommendations: DataState<List<RecommendationRow>>,
+        val recommendations: DataState<List<RecommendationRowState>>,
         val homeRowsConfig: List<SettingsRepository.HomeRowPref> = emptyList(),
     )
 
@@ -400,4 +451,17 @@ class HomeScreenViewModel(
     private companion object {
         private const val BUFFER_REAL_INTERVAL = 500L
     }
+}
+
+/**
+ * One home-page recommendation row: the folder identity plus its items as an
+ * independently loading [DataState], so each row can render a placeholder
+ * while its contents are fetched.
+ */
+data class RecommendationRowState(
+    val folder: RecommendationFolder,
+    val items: DataState<List<AppMediaItem>>,
+) {
+    /** The row's items when resolved, or null while still loading (or on error). */
+    val resolvedItems: List<AppMediaItem>? get() = (items as? DataState.Data)?.data
 }

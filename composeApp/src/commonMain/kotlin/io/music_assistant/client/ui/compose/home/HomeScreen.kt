@@ -56,7 +56,6 @@ import io.music_assistant.client.data.model.client.items.Podcast
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.RadioStation
 import io.music_assistant.client.data.model.client.items.Track
-import io.music_assistant.client.data.repository.RecommendationRow
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.CenteredProgress
 import io.music_assistant.client.ui.compose.common.CenteredText
@@ -260,7 +259,7 @@ internal data class HomeRow(
 // Internal so HomeScreenCategoriesTest can pin the row visibility rules: loading
 // rows stay, resolved-empty rows are hidden.
 internal fun getCategories(
-    recommendationsState: DataState<List<RecommendationRow>>,
+    recommendationsState: DataState<List<RecommendationRowState>>,
     shortcutsState: DataState<List<Shortcut>>,
     homeRowsConfig: List<SettingsRepository.HomeRowPref>,
 ): List<Pair<HomeRow, Boolean>> {
@@ -269,7 +268,7 @@ internal fun getCategories(
             // A still-loading row stays visible as a placeholder; a resolved row
             // must contain something the home page can render.
             .filter { row ->
-                row.itemsLoading || row.folder.items?.any { item ->
+                row.items is DataState.Loading || row.resolvedItems?.any { item ->
                     item is Track ||
                             item is Artist ||
                             item is Album ||
@@ -287,11 +286,11 @@ internal fun getCategories(
                     category = ItemCategory(
                         id = row.folder.itemId,
                         title = row.folder.displayName.toDisplayString(),
-                        items = row.folder.items.orEmpty(),
+                        items = row.resolvedItems.orEmpty(),
                         lazyListKey = row.folder.lazyListKey(),
                         tag = HomeScreenSemantics.rowTag(row.folder.itemId),
                     ),
-                    loading = row.itemsLoading,
+                    loading = row.items is DataState.Loading,
                 )
             }
 

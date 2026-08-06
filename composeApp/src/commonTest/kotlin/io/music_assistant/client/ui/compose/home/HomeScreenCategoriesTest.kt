@@ -4,7 +4,6 @@ import io.music_assistant.client.data.model.client.Shortcut
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.RecommendationFolder
 import io.music_assistant.client.data.model.client.testTrack
-import io.music_assistant.client.data.repository.RecommendationRow
 import io.music_assistant.client.ui.compose.common.DataState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,24 +20,32 @@ class HomeScreenCategoriesTest {
     private fun folder(
         itemId: String,
         provider: String = "library",
-        items: List<AppMediaItem>? = null,
     ) = RecommendationFolder(
         itemId = itemId,
         provider = provider,
         name = itemId,
         uri = null,
         images = emptyMap(),
-        items = items,
+        items = null,
     )
 
+    private fun loadingRow(itemId: String, provider: String = "library") =
+        RecommendationRowState(folder(itemId, provider), DataState.Loading())
+
+    private fun resolvedRow(
+        itemId: String,
+        items: List<AppMediaItem>,
+        provider: String = "library",
+    ) = RecommendationRowState(folder(itemId, provider), DataState.Data(items))
+
     private fun categories(
-        rows: List<RecommendationRow>,
+        rows: List<RecommendationRowState>,
         shortcuts: DataState<List<Shortcut>> = DataState.NoData(),
     ) = getCategories(DataState.Data(rows), shortcuts, homeRowsConfig = emptyList())
 
     @Test
     fun loadingRowsStayVisibleAsPlaceholders() {
-        val result = categories(listOf(RecommendationRow(folder("a"), itemsLoading = true)))
+        val result = categories(listOf(loadingRow("a")))
 
         assertEquals(listOf("a"), result.map { it.first.category.id })
         assertTrue(result.single().first.loading)
@@ -46,26 +53,14 @@ class HomeScreenCategoriesTest {
 
     @Test
     fun rowsResolvedWithoutRenderableItemsAreHidden() {
-        val result = categories(
-            listOf(
-                RecommendationRow(folder("empty", items = emptyList()), itemsLoading = false),
-                RecommendationRow(folder("itemless", items = null), itemsLoading = false),
-            ),
-        )
+        val result = categories(listOf(resolvedRow("empty", items = emptyList())))
 
         assertTrue(result.isEmpty())
     }
 
     @Test
     fun rowsResolvedWithPlayableItemsAreShown() {
-        val result = categories(
-            listOf(
-                RecommendationRow(
-                    folder("a", items = listOf(testTrack())),
-                    itemsLoading = false,
-                ),
-            ),
-        )
+        val result = categories(listOf(resolvedRow("a", items = listOf(testTrack()))))
 
         val row = result.single().first
         assertFalse(row.loading)
@@ -74,10 +69,7 @@ class HomeScreenCategoriesTest {
 
     @Test
     fun rowsWithTheSameIdentityCollapseToOne() {
-        val duplicated = RecommendationRow(
-            folder("a", items = listOf(testTrack())),
-            itemsLoading = false,
-        )
+        val duplicated = resolvedRow("a", items = listOf(testTrack()))
 
         val result = categories(listOf(duplicated, duplicated))
 
@@ -88,8 +80,8 @@ class HomeScreenCategoriesTest {
     fun sameItemIdFromDifferentProvidersStaysDistinct() {
         val result = categories(
             listOf(
-                RecommendationRow(folder("a", provider = "library"), itemsLoading = true),
-                RecommendationRow(folder("a", provider = "spotify"), itemsLoading = true),
+                loadingRow("a", provider = "library"),
+                loadingRow("a", provider = "spotify"),
             ),
         )
 
@@ -99,12 +91,7 @@ class HomeScreenCategoriesTest {
     @Test
     fun shortcutsRowIsAppendedOnTopWhenUnconfigured() {
         val result = categories(
-            rows = listOf(
-                RecommendationRow(
-                    folder("a", items = listOf(testTrack())),
-                    itemsLoading = false,
-                ),
-            ),
+            rows = listOf(resolvedRow("a", items = listOf(testTrack()))),
             shortcuts = DataState.Data(listOf(Shortcut(testTrack()))),
         )
 
