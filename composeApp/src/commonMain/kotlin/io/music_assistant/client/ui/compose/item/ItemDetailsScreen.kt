@@ -53,7 +53,6 @@ import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.ImageType
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.QueueOption
-import io.music_assistant.client.data.model.client.SortConfig
 import io.music_assistant.client.data.model.client.SortField
 import io.music_assistant.client.data.model.client.SortOption
 import io.music_assistant.client.data.model.client.SubItemContext
@@ -77,11 +76,11 @@ import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.DisplayString
 import io.music_assistant.client.ui.compose.common.ExtractedColors
 import io.music_assistant.client.ui.compose.common.ExtractedColorsSource
-import io.music_assistant.client.ui.compose.common.SortChip
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.CategoryRow
 import io.music_assistant.client.ui.compose.common.items.ItemCategory
+import io.music_assistant.client.ui.compose.common.items.ItemSortChip
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.PlayHandler
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
@@ -534,17 +533,13 @@ private fun TabsBar(
             }
         }
         if (sortCtx != null && currentSort != null) {
-            val availableFields = SortConfig.fieldsFor(sortCtx)
-
-            if (availableFields.size > 1) {
-                SortChip(
-                    currentSort = currentSort,
-                    availableFields = availableFields,
-                    onSortChanged = { opt ->
-                        onPlayableItemsSortChanged(sortCtx, opt)
-                    },
-                )
-            }
+            ItemSortChip(
+                sortOption = currentSort,
+                sortContext = sortCtx,
+                onSortChanged = { opt ->
+                    onPlayableItemsSortChanged(sortCtx, opt)
+                },
+            )
         }
 
         currentTab.viewMediaType?.let { viewMediaType ->
