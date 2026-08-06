@@ -2,7 +2,6 @@
 
 package io.music_assistant.client.ui.compose.item
 
-import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +30,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,6 +74,7 @@ import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.DisplayString
 import io.music_assistant.client.ui.compose.common.ExtractedColors
 import io.music_assistant.client.ui.compose.common.ExtractedColorsSource
+import io.music_assistant.client.ui.compose.common.NoOverscroll
 import io.music_assistant.client.ui.compose.common.items.AlbumWithMenu
 import io.music_assistant.client.ui.compose.common.items.ArtistWithMenu
 import io.music_assistant.client.ui.compose.common.items.CategoryRow
@@ -662,9 +661,7 @@ private fun DetailGrid(
     body: LazyGridScope.() -> Unit,
 ) {
     val gridPadding = contentPadding + PaddingValues(4.dp)
-    // Drop the grid's overscroll: the iOS Cupertino rubber-band drags the full-bleed header
-    // gradient with it, making the background misbehave. Same fix as CollapsibleQueue.
-    CompositionLocalProvider(LocalOverscrollFactory provides null) {
+    NoOverscroll {
         LazyVerticalGrid(
             state = gridState,
             modifier = Modifier.fillMaxSize().testTag(ItemDetailsScreenSemantics.LIST_TAG),
@@ -905,56 +902,58 @@ private fun ArtistContent(
     onAlbumMappingChanged: (ProviderMapping) -> Unit,
     onTrackMappingChanged: (ProviderMapping) -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.testTag(ItemDetailsScreenSemantics.LIST_TAG),
-        contentPadding = contentPadding,
-    ) {
-        item { heroSlot() }
-        item {
-            SectionRow(
-                artist = artist,
-                sectionData = sections.library,
-                id = "library",
-                title = Res.string.artist_section_in_library.toDisplayString(),
-                onNavigateClick = onNavigateClick,
-                onNavigateToList = onNavigateToList,
-                onPlayChildClick = onPlayChildClick,
-                playlistActions = playlistActions,
-                libraryActions = libraryActions,
-                providerIconFetcher = providerIconFetcher,
-            )
-        }
+    NoOverscroll {
+        LazyColumn(
+            modifier = Modifier.testTag(ItemDetailsScreenSemantics.LIST_TAG),
+            contentPadding = contentPadding,
+        ) {
+            item { heroSlot() }
+            item {
+                SectionRow(
+                    artist = artist,
+                    sectionData = sections.library,
+                    id = "library",
+                    title = Res.string.artist_section_in_library.toDisplayString(),
+                    onNavigateClick = onNavigateClick,
+                    onNavigateToList = onNavigateToList,
+                    onPlayChildClick = onPlayChildClick,
+                    playlistActions = playlistActions,
+                    libraryActions = libraryActions,
+                    providerIconFetcher = providerIconFetcher,
+                )
+            }
 
-        item {
-            SectionRow(
-                artist = artist,
-                sectionData = sections.all,
-                id = "all",
-                title = Res.string.artist_section_all.toDisplayString(),
-                onNavigateClick = onNavigateClick,
-                onNavigateToList = onNavigateToList,
-                onFilterSelected = onAlbumMappingChanged,
-                onPlayChildClick = onPlayChildClick,
-                playlistActions = playlistActions,
-                libraryActions = libraryActions,
-                providerIconFetcher = providerIconFetcher,
-            )
-        }
+            item {
+                SectionRow(
+                    artist = artist,
+                    sectionData = sections.all,
+                    id = "all",
+                    title = Res.string.artist_section_all.toDisplayString(),
+                    onNavigateClick = onNavigateClick,
+                    onNavigateToList = onNavigateToList,
+                    onFilterSelected = onAlbumMappingChanged,
+                    onPlayChildClick = onPlayChildClick,
+                    playlistActions = playlistActions,
+                    libraryActions = libraryActions,
+                    providerIconFetcher = providerIconFetcher,
+                )
+            }
 
-        item {
-            SectionRow(
-                artist = artist,
-                sectionData = sections.topTracks,
-                id = "topTracks",
-                title = stringResource(Res.string.artist_section_top).toDisplayString(),
-                onNavigateClick = onNavigateClick,
-                onNavigateToList = onNavigateToList,
-                onFilterSelected = onTrackMappingChanged,
-                onPlayChildClick = onPlayChildClick,
-                playlistActions = playlistActions,
-                libraryActions = libraryActions,
-                providerIconFetcher = providerIconFetcher,
-            )
+            item {
+                SectionRow(
+                    artist = artist,
+                    sectionData = sections.topTracks,
+                    id = "topTracks",
+                    title = stringResource(Res.string.artist_section_top).toDisplayString(),
+                    onNavigateClick = onNavigateClick,
+                    onNavigateToList = onNavigateToList,
+                    onFilterSelected = onTrackMappingChanged,
+                    onPlayChildClick = onPlayChildClick,
+                    playlistActions = playlistActions,
+                    libraryActions = libraryActions,
+                    providerIconFetcher = providerIconFetcher,
+                )
+            }
         }
     }
 }
