@@ -31,5 +31,16 @@ enum class StaleReason {
     PERSISTENT_ERROR,      // Max attempts exhausted (manual action needed)
 }
 
-inline fun <T> DataState<T>.mapData(transform: (T) -> T): DataState<T> =
-    if (this is DataState.Data) DataState.Data(transform(data)) else this
+fun <T, U> DataState<T>.map(transform: (T) -> U): DataState<U> {
+    return when (this) {
+        is DataState.Data<T> -> DataState.Data(transform(data))
+        is DataState.Error<T> -> DataState.Error()
+        is DataState.Loading<T> -> DataState.Loading()
+        is DataState.NoData<T> -> DataState.NoData()
+        is DataState.Stale<T> -> DataState.Stale(
+            data = transform(data),
+            disconnectedAt = disconnectedAt,
+            reason = reason,
+        )
+    }
+}

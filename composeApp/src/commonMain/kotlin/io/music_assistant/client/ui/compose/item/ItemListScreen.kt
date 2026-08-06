@@ -12,6 +12,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.music_assistant.client.data.model.client.ClickContext
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.items.AppMediaItem
+import io.music_assistant.client.ui.compose.common.DataState
+import io.music_assistant.client.ui.compose.common.items.ItemSortChip
+import io.music_assistant.client.ui.compose.common.map
 import io.music_assistant.client.ui.compose.common.viewmodel.ActionsViewModel
 import io.music_assistant.client.ui.compose.library.ItemList
 import io.music_assistant.client.ui.compose.nav.TopBarLayout
@@ -48,6 +51,15 @@ fun ItemListScreen(
                     }
                 },
                 secondRow = {
+                    val items = state.items
+                    if (items is DataState.Data) {
+                        ItemSortChip(
+                            sortOption = items.data.sortOption,
+                            mediaType = mediaType,
+                            onSortChanged = itemListViewModel::sort,
+                        )
+                    }
+
                     ViewModeToggle(
                         viewMode = viewMode,
                         onToggleViewMode = { viewModeViewModel.toggleFor(mediaType) },
@@ -57,7 +69,7 @@ fun ItemListScreen(
         },
     ) {
         ItemList(
-            data = state.items,
+            data = state.items.map { it.items },
             onNavigateClick = onNavigateClick,
             onPlayClick = { item, option, radio, _ ->
                 actionsViewModel.onPlayClick(item, option, radio)
