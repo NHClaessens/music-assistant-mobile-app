@@ -132,11 +132,3 @@ fun <T> List<T>.clientSorted(option: SortOption, context: SubItemContext? = null
     }
     return if (option.descending) sortedWith(comparator.reversed()) else sortedWith(comparator)
 }
-
-class SortedItems(val unsortedItems: List<AppMediaItem>, val sortOption: SortOption) {
-    val items: List<AppMediaItem> = unsortedItems.clientSorted(sortOption)
-
-    fun withSort(sortOption: SortOption): SortedItems {
-        return SortedItems(unsortedItems, sortOption)
-    }
-}
