@@ -253,7 +253,9 @@ fun HomeScreen(
 internal data class HomeRow(
     val category: ItemCategory<Nothing>,
     val loading: Boolean,
-)
+) : IdProvider {
+    override val id: String get() = category.id
+}
 
 // Internal so HomeScreenCategoriesTest can pin the row visibility rules: loading
 // rows stay, resolved-empty rows are hidden.
@@ -314,9 +316,7 @@ internal fun getCategories(
         emptyList()
     }
 
-    return reconcileHomeRows(baseList, homeRowsConfig, onTop = SHORTCUTS_CATEGORY_ID) {
-        it.category.id
-    }
+    return reconcileHomeRows(baseList, homeRowsConfig, onTop = SHORTCUTS_CATEGORY_ID)
 }
 
 private const val SHORTCUTS_CATEGORY_ID = "shortcuts"
