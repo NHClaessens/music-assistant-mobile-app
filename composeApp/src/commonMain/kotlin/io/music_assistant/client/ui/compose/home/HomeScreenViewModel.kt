@@ -17,7 +17,6 @@ import io.music_assistant.client.data.model.client.items.RecommendationFolder
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.server.ServerUser
 import io.music_assistant.client.data.repository.MediaItemRepository
-import io.music_assistant.client.data.repository.needPerRowItemFetch
 import io.music_assistant.client.player.sendspin.SendspinState
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.DataState
@@ -223,7 +222,7 @@ class HomeScreenViewModel(
             return
         }
 
-        if (!folders.needPerRowItemFetch()) {
+        if (!mediaItemRepository.supportsRecommendationRowItems()) {
             setRecommendationRows(
                 folders.map { RecommendationRowState(it, DataState.Data(it.items.orEmpty())) },
             )
@@ -231,19 +230,10 @@ class HomeScreenViewModel(
         }
 
         // Show every row as a loading placeholder, then fetch each row's items
-        // as its own job. The first row doubles as a probe — if it fails, skip
-        // the rest (see [needPerRowItemFetch]).
+        // as its own job.
         setRecommendationRows(folders.map { RecommendationRowState(it, DataState.Loading()) })
-        val probeItems = mediaItemRepository.fetchRecommendationRowItems(folders.first())
-        if (probeItems == null) {
-            setRecommendationRows(
-                folders.map { RecommendationRowState(it, DataState.Data(emptyList())) },
-            )
-            return
-        }
-        setRowItems(folders.first(), probeItems)
         coroutineScope {
-            folders.drop(1).forEach { folder ->
+            folders.forEach { folder ->
                 launch {
                     setRowItems(
                         folder,

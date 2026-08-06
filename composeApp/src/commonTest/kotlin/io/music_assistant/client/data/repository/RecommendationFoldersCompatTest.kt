@@ -2,13 +2,19 @@ package io.music_assistant.client.data.repository
 
 import io.music_assistant.client.api.APICommands
 import io.music_assistant.client.api.Answer
+import io.music_assistant.client.api.ConnectionInfo
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.data.factory.MediaItemFactory
 import io.music_assistant.client.data.model.client.items.Track
+import io.music_assistant.client.data.model.server.ServerInfo
 import io.music_assistant.client.data.model.server.StubServiceClient
 import io.music_assistant.client.data.model.server.events.Event
+import io.music_assistant.client.utils.ConnectionData
+import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.myJson
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
@@ -21,11 +27,17 @@ import kotlin.test.fail
 
 /**
  * [MediaItemRepository.fetchRecommendationFolders] must bridge both shapes of
- * the `music/recommendations` response: rows with their items embedded, and
- * item-less rows whose contents come from a per-row
- * `music/recommendations/items` call.
+ * the `music/recommendations` response, selected by the server's schema
+ * version: rows with their items embedded, and item-less rows whose contents
+ * come from a per-row `music/recommendations/items` call.
  */
 class RecommendationFoldersCompatTest {
+    private companion object {
+        // Last schema with embedded row items, and the first without.
+        const val EMBEDDED_ROWS_SCHEMA = 38
+        const val ITEM_LESS_ROWS_SCHEMA = 39
+    }
+
     private fun folderJson(itemId: String, provider: String, itemsJson: String?) = """
         {"item_id":"$itemId","provider":"$provider","name":"Row $itemId",
          "media_type":"folder","uri":null${itemsJson?.let { ""","items":$it""" } ?: ""}}
@@ -40,10 +52,20 @@ class RecommendationFoldersCompatTest {
         private val rowsJson: String,
         private val itemsJsonFor: (provider: String, itemId: String) -> Result<String>,
         private val rowsError: Exception? = null,
+        schemaVersion: Int = ITEM_LESS_ROWS_SCHEMA,
     ) : StubServiceClient() {
         val itemsRequests = mutableListOf<Pair<String, String>>()
 
         override val events: Flow<Event<out Any>> = emptyFlow()
+
+        override val sessionState: StateFlow<SessionState> = MutableStateFlow(
+            SessionState.Connected.Direct(
+                connectionInfo = ConnectionInfo(host = "test", port = 8095, isTls = false),
+                connectionData = ConnectionData(
+                    serverInfo = ServerInfo(serverId = "test", schemaVersion = schemaVersion),
+                ),
+            ),
+        )
 
         override suspend fun sendRequest(request: Request): Result<Answer> =
             when (request.command) {
@@ -81,7 +103,8 @@ class RecommendationFoldersCompatTest {
                 [${folderJson("row1", "library", "[${trackJson("t1")}]")},
                  ${folderJson("row2", "spotify", "[]")}]
             """.trimIndent(),
-            itemsJsonFor = { _, _ -> fail("embedded-items response must not trigger items calls") },
+            itemsJsonFor = { _, _ -> fail("embedded-items schema must not trigger items calls") },
+            schemaVersion = EMBEDDED_ROWS_SCHEMA,
         )
 
         val folders = repository(client).fetchRecommendationFolders().getOrThrow()
@@ -134,43 +157,25 @@ class RecommendationFoldersCompatTest {
         assertEquals(emptyList(), folders[1].items)
     }
 
-    // A server that embeds items has no items command; a failing RPC there raises
-    // a user-visible error toast per call. The first row is probed alone so that
-    // worst case is a single failing call, not one per row.
+    // A server on the embedded-items schema has no items command; rows that are
+    // legitimately empty there must not trigger calls to it (each failing call
+    // would raise a user-visible error toast).
     @Test
-    fun failedProbeReturnsRowsAsIsWithoutFurtherCalls() = runTest {
+    fun emptyRowsOnEmbeddedSchemaIssueNoItemCalls() = runTest {
         val client = FakeClient(
             rowsJson = """
                 [${folderJson("row1", "library", "[]")},
                  ${folderJson("row2", "spotify", "[]")}]
             """.trimIndent(),
-            itemsJsonFor = { _, _ -> Result.failure(IllegalStateException("Unknown command")) },
-        )
-
-        val folders = repository(client).fetchRecommendationFolders().getOrThrow()
-
-        assertEquals(listOf("library" to "row1"), client.itemsRequests)
-        assertEquals(listOf("row1", "row2"), folders.map { it.itemId })
-        assertTrue(folders.all { it.items.isNullOrEmpty() })
-    }
-
-    // A single populated row marks the whole response as the embedded shape;
-    // its empty siblings stay empty instead of triggering per-row fetches.
-    @Test
-    fun mixedRowsAreTreatedAsEmbedded() = runTest {
-        val client = FakeClient(
-            rowsJson = """
-                [${folderJson("row1", "library", "[]")},
-                 ${folderJson("row2", "spotify", "[${trackJson("t1")}]")}]
-            """.trimIndent(),
-            itemsJsonFor = { _, _ -> fail("mixed rows must not trigger items calls") },
+            itemsJsonFor = { _, _ -> fail("embedded-items schema must not trigger items calls") },
+            schemaVersion = EMBEDDED_ROWS_SCHEMA,
         )
 
         val folders = repository(client).fetchRecommendationFolders().getOrThrow()
 
         assertTrue(client.itemsRequests.isEmpty())
-        assertEquals(emptyList(), folders[0].items)
-        assertEquals(listOf("t1"), folders[1].items?.map { it.itemId })
+        assertEquals(listOf("row1", "row2"), folders.map { it.itemId })
+        assertTrue(folders.all { it.items.isNullOrEmpty() })
     }
 
     @Test

@@ -649,7 +649,10 @@ class FakeServiceClient : ServiceClient {
                     serverInfo = ServerInfo(
                         serverId = serverId,
                         serverVersion = "fake",
-                        schemaVersion = -1,
+                        // Schema 39+ moved recommendation row items behind
+                        // MUSIC_RECOMMENDATIONS_ITEMS; this fake serves that
+                        // shape unless a legacy version is set.
+                        schemaVersion = if (legacyVersion != null) -1 else 39,
                         baseUrl = "http://homeassistant.example",
                     ),
                 )
