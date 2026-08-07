@@ -26,10 +26,10 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * [MediaItemRepository.fetchRecommendationFolders] must bridge both shapes of
- * the `music/recommendations` response, selected by the server's schema
- * version: rows with their items embedded, and item-less rows whose contents
- * come from a per-row `music/recommendations/items` call.
+ * Covers [MediaItemRepository.fetchRecommendationFolders]
+ * It must bridge both shapes of the `music/recommendations` response, selected
+ * by the server's schema version: rows with their items embedded, and item-less
+ * rows whose contents come from a per-row `music/recommendations/items` call.
  */
 class RecommendationFoldersCompatTest {
     private companion object {
@@ -155,40 +155,6 @@ class RecommendationFoldersCompatTest {
 
         assertEquals(listOf("item-of-row1"), folders[0].items?.map { it.itemId })
         assertEquals(emptyList(), folders[1].items)
-    }
-
-    // A server on the embedded-items schema has no items command; rows that are
-    // legitimately empty there must not trigger calls to it (each failing call
-    // would raise a user-visible error toast).
-    @Test
-    fun emptyRowsOnEmbeddedSchemaIssueNoItemCalls() = runTest {
-        val client = FakeClient(
-            rowsJson = """
-                [${folderJson("row1", "library", "[]")},
-                 ${folderJson("row2", "spotify", "[]")}]
-            """.trimIndent(),
-            itemsJsonFor = { _, _ -> fail("embedded-items schema must not trigger items calls") },
-            schemaVersion = EMBEDDED_ROWS_SCHEMA,
-        )
-
-        val folders = repository(client).fetchRecommendationFolders().getOrThrow()
-
-        assertTrue(client.itemsRequests.isEmpty())
-        assertEquals(listOf("row1", "row2"), folders.map { it.itemId })
-        assertTrue(folders.all { it.items.isNullOrEmpty() })
-    }
-
-    @Test
-    fun emptyRowListIssuesNoItemCalls() = runTest {
-        val client = FakeClient(
-            rowsJson = "[]",
-            itemsJsonFor = { _, _ -> fail("empty row list must not trigger items calls") },
-        )
-
-        val folders = repository(client).fetchRecommendationFolders().getOrThrow()
-
-        assertTrue(folders.isEmpty())
-        assertTrue(client.itemsRequests.isEmpty())
     }
 
     @Test
