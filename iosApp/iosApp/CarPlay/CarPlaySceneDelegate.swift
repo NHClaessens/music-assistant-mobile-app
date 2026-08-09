@@ -5,7 +5,7 @@ import os.log
 
 /// CarPlay lifecycle markers. Logged at `.default` so they survive a
 /// post-drive sysdiagnose (`.info`/`.debug` are in-memory only).
-private let cpLog = OSLog(subsystem: "io.music-assistant.client", category: "CarPlay")
+private let cpLog = OSLog(subsystem: "io.music-assistant.mobile-client", category: "CarPlay")
 
 class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
