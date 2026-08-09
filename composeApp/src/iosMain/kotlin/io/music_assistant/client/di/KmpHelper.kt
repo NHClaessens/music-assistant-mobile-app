@@ -119,6 +119,9 @@ object KmpHelper : KoinComponent {
         mainScope.launch { completion(CarPlayStrings.load()) }
     }
 
+    /** Whether the local player is enabled; CarPlay gates attachment on this. */
+    fun isLocalPlayerEnabled(): Boolean = settingsRepository.sendspinEnabled.value
+
     fun onExternalConsumerActive() = serviceClient.onExternalConsumerActive()
     fun onExternalConsumerInactive() = serviceClient.onExternalConsumerInactive()
 
