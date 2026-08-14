@@ -46,10 +46,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
+import java.util.concurrent.atomic.AtomicBoolean
 
 class FakeServiceClient : ServiceClient {
     private var legacyVersion: LegacyVersion? = null
-    private val requestErrors = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val requestErrors = AtomicBoolean(false)
     private var connectionError: Exception? = null
 
     private val uniqueIdGenerator = UniqueIdGenerator()
