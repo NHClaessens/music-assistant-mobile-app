@@ -77,10 +77,12 @@ class ServerMediaItemSerializationTest {
 
     @Test
     fun factoryPreservesDynamicRadioFlag() {
-        val item = myJson.decodeFromString<ServerMediaItem>("""
-            {"item_id":"radio-1","provider":"provider","name":"Dynamic Radio",
-             "media_type":"radio","is_dynamic":true,"is_playable":true}
-        """.trimIndent())
+        val item = myJson.decodeFromString<ServerMediaItem>(
+            """
+                {"item_id":"radio-1","provider":"provider","name":"Dynamic Radio",
+                 "media_type":"radio","is_dynamic":true,"is_playable":true}
+            """.trimIndent(),
+        )
 
         assertEquals(true, item.isDynamic)
         assertEquals(true, (factory.create(item) as RadioStation).isDynamic)
