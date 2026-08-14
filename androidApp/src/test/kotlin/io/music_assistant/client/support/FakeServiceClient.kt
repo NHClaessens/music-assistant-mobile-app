@@ -49,7 +49,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 
 class FakeServiceClient : ServiceClient {
     private var legacyVersion: LegacyVersion? = null
-    private var requestErrors: Boolean = false
+    private val requestErrors = java.util.concurrent.atomic.AtomicBoolean(false)
     private var connectionError: Exception? = null
 
     private val uniqueIdGenerator = UniqueIdGenerator()
@@ -75,7 +75,7 @@ class FakeServiceClient : ServiceClient {
     override val externalConsumerActive: StateFlow<Boolean> = MutableStateFlow(false)
 
     override suspend fun sendRequest(request: Request): Result<Answer> {
-        if (requestErrors) {
+        if (requestErrors.get()) {
             return Result.failure(Exception())
         }
 
@@ -782,7 +782,7 @@ class FakeServiceClient : ServiceClient {
     }
 
     fun setRequestErrors(requestError: Boolean) {
-        this.requestErrors = requestError
+        requestErrors.set(requestError)
     }
 
     fun setLegacyVersion(version: LegacyVersion) {
