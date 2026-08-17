@@ -8,7 +8,6 @@ import io.ktor.client.plugins.websocket.sendSerialized
 import io.ktor.client.plugins.websocket.ws
 import io.ktor.client.plugins.websocket.wss
 import io.ktor.http.HttpMethod
-import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -155,7 +154,7 @@ class DirectTransport(
         val countBefore = messageCounter
         scope.launch {
             val sendOk = try {
-                s.send(Frame.Ping(byteArrayOf()))
+                s.sendSerialized(Request.Auth.providers())
                 true
             } catch (e: Exception) {
                 logger.i {
