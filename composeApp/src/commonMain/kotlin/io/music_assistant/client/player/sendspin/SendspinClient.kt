@@ -3,15 +3,20 @@ package io.music_assistant.client.player.sendspin
 import co.touchlab.kermit.Logger
 import io.music_assistant.client.player.MediaPlayerController
 import io.music_assistant.client.player.sendspin.audio.AudioPipeline
+import io.music_assistant.client.player.sendspin.identity.SendspinTrustStore
 import io.music_assistant.client.player.sendspin.model.ClientAuthMessage
 import io.music_assistant.client.player.sendspin.model.ClientHelloMessage
 import io.music_assistant.client.player.sendspin.model.CommandValue
+import io.music_assistant.client.player.sendspin.model.EncryptedDeviceInfo
 import io.music_assistant.client.player.sendspin.model.GoodbyeReason
 import io.music_assistant.client.player.sendspin.model.PlayerStateValue
 import io.music_assistant.client.player.sendspin.model.ServerCommandMessage
 import io.music_assistant.client.player.sendspin.model.StreamMetadataPayload
+import io.music_assistant.client.player.sendspin.noise.crypto.NoiseCrypto
 import io.music_assistant.client.player.sendspin.protocol.MessageDispatcher
 import io.music_assistant.client.player.sendspin.protocol.StreamLifecycleEvent
+import io.music_assistant.client.player.sendspin.session.EncryptedSession
+import io.music_assistant.client.player.sendspin.session.EncryptedSessionConfig
 import io.music_assistant.client.player.sendspin.session.LegacySession
 import io.music_assistant.client.player.sendspin.session.LegacySessionConfig
 import io.music_assistant.client.player.sendspin.session.SendspinProtocolSession
@@ -42,6 +47,9 @@ class SendspinClient(
     private val audioPipeline: AudioPipeline,
     private val clockSynchronizer: ClockSynchronizer,
     private val networkAvailable: StateFlow<Boolean>? = null,
+    // Encrypted connections only.
+    private val trustStore: SendspinTrustStore? = null,
+    private val noiseCrypto: NoiseCrypto? = null,
 ) : CoroutineScope {
     private val logger = Logger.withTag("SendspinClient")
     private val supervisorJob = SupervisorJob()
@@ -190,6 +198,34 @@ class SendspinClient(
         val capabilities = SendspinCapabilities.buildClientHello(config, config.codecPreference)
         val authJson = config.authToken?.let { token ->
             myJson.encodeToString(ClientAuthMessage(token = token, clientId = config.clientId))
+        }
+
+        val store = trustStore
+        val crypto = noiseCrypto
+        if (config.encryptionMode == SendspinEncryptionMode.ENCRYPTED &&
+            store != null && crypto != null
+        ) {
+            readyOnActivate = true
+            val legacyDeviceInfo = capabilities.deviceInfo
+            return EncryptedSession(
+                transport = transport,
+                config = EncryptedSessionConfig(
+                    requiresAuth = config.requiresAuth,
+                    authJson = authJson,
+                    deviceName = config.deviceName,
+                    supportedRoles = capabilities.supportedRoles,
+                    playerSupport = capabilities.playerV1Support,
+                    deviceInfo = legacyDeviceInfo?.let {
+                        EncryptedDeviceInfo(
+                            productName = it.model,
+                            manufacturer = it.manufacturer,
+                            softwareVersion = it.softwareVersion,
+                        )
+                    },
+                ),
+                crypto = crypto,
+                trustStore = store,
+            )
         }
 
         readyOnActivate = false

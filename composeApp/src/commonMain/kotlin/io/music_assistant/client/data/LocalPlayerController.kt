@@ -16,6 +16,7 @@ import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.image
 import io.music_assistant.client.player.MediaPlayerController
+import io.music_assistant.client.player.sendspin.EncryptionRequiredUnavailable
 import io.music_assistant.client.player.sendspin.SendspinClient
 import io.music_assistant.client.player.sendspin.SendspinClientFactory
 import io.music_assistant.client.player.sendspin.SendspinError
@@ -55,6 +56,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.media_playback_stopped_connection_lost
+import musicassistantclient.composeapp.generated.resources.sendspin_encryption_required_unavailable
 import org.jetbrains.compose.resources.getString
 import kotlin.coroutines.CoroutineContext
 
@@ -399,7 +401,7 @@ class LocalPlayerController(
             _localPlayerData.update {
                 PlayerData(
                     player = Player(
-                        id = settings.sendspinClientId.value,
+                        id = settings.sendspinEffectivePlayerId.value,
                         name = settings.sendspinDeviceName.value,
                         provider = "builtin",
                         type = PlayerType.PLAYER,
@@ -495,6 +497,20 @@ class LocalPlayerController(
         )
 
         createResult.onFailure { error ->
+            if (error is EncryptionRequiredUnavailable) {
+                // The user requires encrypted Sendspin but the server is too
+                // old: surface the player as unavailable with an explanation
+                // instead of silently falling back to cleartext. Degraded is
+                // deliberately non-retrying — only a settings or server
+                // change resolves it.
+                val message = getString(Res.string.sendspin_encryption_required_unavailable)
+                log.w { "Sendspin unavailable: encryption required but unsupported by server" }
+                _sendspinState.value = SendspinState.Error(
+                    SendspinError.Degraded(reason = message, impact = message),
+                )
+                errorBus.emit(message)
+                return@withLock
+            }
             if (error is WebRTCSendspinChannelExhausted) {
                 // Budget the forced reconnects: a persistently failing attach on
                 // otherwise healthy channels must not renegotiate WebRTC forever.

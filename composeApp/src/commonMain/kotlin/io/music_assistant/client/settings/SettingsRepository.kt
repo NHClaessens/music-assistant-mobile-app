@@ -335,6 +335,19 @@ class SettingsRepository(
         _sendspinEnabled.update { enabled }
     }
 
+    // Require the Noise-encrypted Sendspin protocol: when the connected
+    // server is too old to support it, the local player stays unavailable
+    // instead of falling back to the legacy cleartext protocol.
+    private val _sendspinRequireEncryption = MutableStateFlow(
+        settings.getBoolean("sendspin_require_encryption", false),
+    )
+    val sendspinRequireEncryption = _sendspinRequireEncryption.asStateFlow()
+
+    fun setSendspinRequireEncryption(enabled: Boolean) {
+        settings.putBoolean("sendspin_require_encryption", enabled)
+        _sendspinRequireEncryption.update { enabled }
+    }
+
     // Persisted dismissal of the "background usage disabled" warning (Android). Set only by an
     // explicit dialog dismissal; never auto-reset.
     private val _bgWarningDismissed = MutableStateFlow(
@@ -347,6 +360,10 @@ class SettingsRepository(
         _bgWarningDismissed.update { dismissed }
     }
 
+    // Legacy-protocol player identity only. On encrypted Sendspin connections
+    // the client_id is the device's X25519 public key (see
+    // player/sendspin/identity/SendspinIdentity), so this UUID is vestigial
+    // there; it remains in use for legacy connections to older servers.
     @OptIn(ExperimentalUuidApi::class)
     private val _sendspinClientId = MutableStateFlow(
         settings.getStringOrNull("sendspin_client_id") ?: Uuid.random().toString().also {
@@ -354,6 +371,20 @@ class SettingsRepository(
         },
     )
     val sendspinClientId = _sendspinClientId.asStateFlow()
+
+    // The player id the app addresses the local player by — runtime state,
+    // not persisted. On legacy connections it is the UUID above; on
+    // encrypted connections the server registers the player under the
+    // device's X25519 public key, so the Sendspin client factory switches
+    // this to that identity when it resolves the connection mode. Command
+    // targeting, event routing, and the synthetic player must all use this
+    // id, or they address a player the server does not have.
+    private val _sendspinEffectivePlayerId = MutableStateFlow(_sendspinClientId.value)
+    val sendspinEffectivePlayerId = _sendspinEffectivePlayerId.asStateFlow()
+
+    fun setSendspinEffectivePlayerId(id: String) {
+        _sendspinEffectivePlayerId.update { id }
+    }
 
     private val _sendspinDeviceName = MutableStateFlow(
         settings.getStringOrNull("sendspin_device_name") ?: "My Phone",

@@ -287,6 +287,8 @@
   <string name="settings_connection_method">Connection Method</string>
   <string name="settings_connection_webrtc">WebRTC</string>
   <string name="settings_custom_sendspin">Custom Sendspin connection</string>
+  <string name="settings_sendspin_require_encryption">Require encrypted connection</string>
+  <string name="sendspin_encryption_required_unavailable">Encrypted connection required, but this server does not support it. Update Music Assistant or disable the requirement.</string>
   <string name="settings_disable_local_player">Disable local player</string>
   <string name="settings_disconnect">Disconnect</string>
   <string name="settings_enable_local_player">Enable local player</string>

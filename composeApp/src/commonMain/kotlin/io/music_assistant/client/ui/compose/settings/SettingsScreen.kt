@@ -135,6 +135,7 @@ import musicassistantclient.composeapp.generated.resources.settings_remote_id_hi
 import musicassistantclient.composeapp.generated.resources.settings_remote_id_invalid
 import musicassistantclient.composeapp.generated.resources.settings_saved_connections
 import musicassistantclient.composeapp.generated.resources.settings_scan_qr
+import musicassistantclient.composeapp.generated.resources.settings_sendspin_require_encryption
 import musicassistantclient.composeapp.generated.resources.settings_server
 import musicassistantclient.composeapp.generated.resources.settings_server_host
 import musicassistantclient.composeapp.generated.resources.settings_share_crash_logs
@@ -1109,6 +1110,31 @@ private fun SendspinSection(
             )
             Text(
                 text = stringResource(Res.string.settings_custom_sendspin),
+                color = if (sendspinEnabled) {
+                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                } else {
+                    MaterialTheme.colorScheme.onBackground
+                },
+            )
+        }
+
+        // Require-encryption toggle: refuse the legacy cleartext protocol
+        // when the server is too old for encrypted Sendspin.
+        val sendspinRequireEncryption by viewModel.sendspinRequireEncryption
+            .collectAsStateWithLifecycle()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = sendspinRequireEncryption,
+                onCheckedChange = { viewModel.setSendspinRequireEncryption(it) },
+                enabled = !sendspinEnabled,
+            )
+            Text(
+                text = stringResource(Res.string.settings_sendspin_require_encryption),
                 color = if (sendspinEnabled) {
                     MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 } else {
