@@ -496,10 +496,20 @@ class LocalPlayerController(
 
         createResult.onFailure { error ->
             if (error is WebRTCSendspinChannelExhausted) {
-                log.i { "WebRTC sendspin channel exhausted — forcing reconnect for fresh channels" }
-                apiClient.forceWebRTCReconnect()
-                // After reconnection, start() will be called again
-                // from the session state handler with a fresh channel.
+                // Budget the forced reconnects: a persistently failing attach on
+                // otherwise healthy channels must not renegotiate WebRTC forever.
+                if (sendspinRetryCount < MAX_SENDSPIN_RETRIES) {
+                    sendspinRetryCount++
+                    log.i {
+                        "WebRTC sendspin channel exhausted — forcing reconnect " +
+                            "($sendspinRetryCount/$MAX_SENDSPIN_RETRIES)"
+                    }
+                    apiClient.forceWebRTCReconnect()
+                    // After reconnection, start() will be called again
+                    // from the session state handler with a fresh channel.
+                } else {
+                    log.w { "WebRTC sendspin retry budget exhausted — giving up" }
+                }
                 return@withLock
             }
             log.w { "Cannot create Sendspin client: ${error.message}" }
@@ -582,6 +592,29 @@ class LocalPlayerController(
                     }
 
                     is SendspinState.Error -> {
+                        // A dead WebRTC channel must be replaced, not retried in
+                        // place: this check runs before the generic permanent-error
+                        // branch, which would otherwise stop and retry the same
+                        // dead wrapper (the factory would keep returning it
+                        // exhausted). One forced reconnect negotiates a fresh
+                        // channel; the reconnect handler then restarts the client.
+                        val error = state.error
+                        if (error is SendspinError.Permanent &&
+                            error.cause is WebRTCSendspinChannelExhausted
+                        ) {
+                            if (sendspinRetryCount < MAX_SENDSPIN_RETRIES) {
+                                sendspinRetryCount++
+                                log.i {
+                                    "WebRTC sendspin channel exhausted mid-session — forcing " +
+                                        "WebRTC reconnect ($sendspinRetryCount/$MAX_SENDSPIN_RETRIES)"
+                                }
+                                apiClient.forceWebRTCReconnect()
+                            } else {
+                                log.w { "WebRTC sendspin retry budget exhausted — giving up" }
+                            }
+                            return@collect
+                        }
+
                         // Retry if error is not being auto-retried and main API is connected
                         val shouldRetry = when (state.error) {
                             is SendspinError.Permanent -> true
