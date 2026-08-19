@@ -15,6 +15,7 @@ import io.music_assistant.client.api.DEFAULT_MAX_RECONNECT_ATTEMPTS
 import io.music_assistant.client.api.runReconnectionLoop
 import io.music_assistant.client.player.sendspin.transport.InboundTransportEvent
 import io.music_assistant.client.utils.createPlatformHttpClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -98,6 +99,8 @@ class SendspinWsHandler(
             // Epoch begins strictly before any of its frames.
             emitEvent(InboundTransportEvent.Connected(epoch, isReconnect = false))
             startListening(wsSession, epoch)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "Failed to connect to server" }
             emitEvent(InboundTransportEvent.Error(epoch, e, permanent = false))
@@ -245,6 +248,8 @@ class SendspinWsHandler(
                         emitEvent(InboundTransportEvent.Connected(epoch, isReconnect = true))
                         startListening(wsSession, epoch)
                         true
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         logger.w(e) { "Reconnect attempt $attempt failed" }
                         false

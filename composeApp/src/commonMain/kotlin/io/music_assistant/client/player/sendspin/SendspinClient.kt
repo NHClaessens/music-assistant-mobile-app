@@ -21,8 +21,10 @@ import io.music_assistant.client.player.sendspin.transport.SendspinTransport
 import io.music_assistant.client.player.sendspin.transport.WebRTCDataChannelTransport
 import io.music_assistant.client.player.sendspin.transport.WebSocketSendspinTransport
 import io.music_assistant.client.utils.myJson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,6 +58,7 @@ class SendspinClient(
     }
 
     private var session: SendspinProtocolSession? = null
+    private val stateMachineJobs = mutableListOf<Job>()
     private var messageDispatcher: MessageDispatcher? = null
     private var stateReporter: StateReporter? = null
 
@@ -115,6 +118,8 @@ class SendspinClient(
                     networkAvailable,
                 )
             connectWithTransport(sendspinTransport)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "Failed to start Sendspin client" }
             _state.update {
@@ -166,6 +171,8 @@ class SendspinClient(
             runStateMachine(protocolSession, dispatcher)
             dispatcher.start()
             protocolSession.start()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.e(e) { "Failed to connect to server" }
             _state.update {
@@ -201,7 +208,7 @@ class SendspinClient(
         dispatcher: MessageDispatcher,
     ) {
         // --- Session lifecycle ---
-        launch {
+        stateMachineJobs += launch {
             protocolSession.events.collect { event ->
                 handleSessionEvent(event, dispatcher)
             }
@@ -210,14 +217,14 @@ class SendspinClient(
         // --- Stream lifecycle (coalesced) ---
         // collectLatest: a rapid skip burst cancels intermediate stream setups, so only the
         // final track materializes; start/end/clear ordering holds because they share one flow.
-        launch {
+        stateMachineJobs += launch {
             dispatcher.streamLifecycleEvent.collectLatest { event ->
                 handleStreamLifecycle(event)
             }
         }
 
         // --- Demuxed audio frames ---
-        launch {
+        stateMachineJobs += launch {
             protocolSession.audioFrames.collect { data ->
                 audioPipeline.processBinaryMessage(data)
 
@@ -234,14 +241,14 @@ class SendspinClient(
         }
 
         // --- Server commands ---
-        launch {
+        stateMachineJobs += launch {
             dispatcher.serverCommandEvent.collect { command ->
                 handleServerCommand(command)
             }
         }
 
         // --- Audio pipeline errors ---
-        launch {
+        stateMachineJobs += launch {
             audioPipeline.streamError.collect { error ->
                 val current = _state.value
                 val nextState = readyStateOrIdle()
@@ -394,6 +401,7 @@ class SendspinClient(
         val wasStreaming = pendingResumeWasStreaming
         val attempt = pendingResumeAttempt
         pendingResumeWasStreaming = false
+        pendingResumeAttempt = 0
         if (!wasStreaming) return
         if (attempt < RECONNECT_AUTO_RESUME_MAX_ATTEMPTS) {
             try {
@@ -500,6 +508,10 @@ class SendspinClient(
     }
 
     private suspend fun disconnectFromServer() {
+        // Cancel the previous connection's collectors; the shared-flow ones
+        // (commands, pipeline errors) never complete on their own.
+        stateMachineJobs.forEach { it.cancel() }
+        stateMachineJobs.clear()
         stateReporter?.close()
         stateReporter = null
         messageDispatcher?.stop()
@@ -515,6 +527,10 @@ class SendspinClient(
 
     fun close() {
         logger.i { "Closing Sendspin client" }
+        // Defensive: callers pair stop()+close(), but close() alone must not
+        // leak a live session driver and transport.
+        session?.close()
+        session = null
         supervisorJob.cancel()
     }
 }

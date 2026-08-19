@@ -44,7 +44,8 @@ sealed interface InboundTransportEvent {
  *
  * Inbound delivery contract:
  * - [events] is a **single-collector** stream: exactly one consumer (the
- *   protocol session) may collect it.
+ *   protocol session) may collect it. This is required by convention, not
+ *   enforced — a second collector would silently split the stream.
  * - Delivery is lossless and source-ordered — text and binary frames share
  *   the one stream, and no event is ever dropped under backpressure. A
  *   dropped control frame would strand the Noise handshake or activation

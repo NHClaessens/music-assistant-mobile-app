@@ -50,12 +50,13 @@ internal class LegacySession(
     ): InboundTransportEvent? {
         val epoch = connected.epoch
         var awaitingAuthOk = false
+        val authJson = config.authJson.takeIf { config.requiresAuth }
 
-        emitEvent(SessionEvent.Negotiating(authenticating = config.requiresAuth))
+        emitEvent(SessionEvent.Negotiating(authenticating = authJson != null))
         try {
-            if (config.requiresAuth && config.authJson != null) {
+            if (authJson != null) {
                 awaitingAuthOk = true
-                transport.sendText(config.authJson)
+                transport.sendText(authJson)
             } else {
                 transport.sendText(config.helloJson)
             }

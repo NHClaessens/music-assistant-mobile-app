@@ -124,7 +124,9 @@ internal abstract class AbstractSendspinSession(
 
     private val initialOutcome = CompletableDeferred<SessionOutcome>()
 
+    private var started = false
     private var driverJob: Job? = null
+    private var inboundQueue: ReceiveChannel<InboundTransportEvent>? = null
 
     protected fun emitEvent(event: SessionEvent) {
         when (event) {
@@ -140,10 +142,21 @@ internal abstract class AbstractSendspinSession(
     protected suspend fun forwardAudio(bytes: ByteArray) = audioChannel.send(bytes)
 
     final override suspend fun start() {
-        check(driverJob == null) { "session already started" }
+        check(!started) { "session already started" }
+        started = true
         val queue = transport.events.produceIn(this)
+        inboundQueue = queue
         driverJob = launch { drive(queue) }
-        transport.connect()
+        try {
+            transport.connect()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A synchronously failing connect would otherwise leave the initial
+            // outcome pending until its timeout.
+            emitEvent(SessionEvent.Failed(e, permanent = false))
+            throw e
+        }
     }
 
     final override suspend fun awaitInitialOutcome(): SessionOutcome =
@@ -241,7 +254,9 @@ internal abstract class AbstractSendspinSession(
 
     override suspend fun stop() {
         driverJob?.cancel()
-        driverJob = null
+        // Cancel the producer too, or it would keep collecting the transport
+        // with no receiver. A stopped session cannot be restarted.
+        inboundQueue?.cancel()
         try {
             transport.disconnect()
         } catch (_: Exception) {
@@ -259,7 +274,7 @@ internal abstract class AbstractSendspinSession(
     }
 
     protected companion object {
-        /** Caps the whole initial attach; sized to the spec's per-message handshake timeout. */
+        /** Caps the whole initial attach, including the transport's own connect wait. */
         const val INITIAL_OUTCOME_TIMEOUT_MILLIS: Long = 30_000
     }
 }

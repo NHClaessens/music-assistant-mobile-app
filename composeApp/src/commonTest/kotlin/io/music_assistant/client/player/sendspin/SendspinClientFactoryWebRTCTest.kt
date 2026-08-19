@@ -46,17 +46,18 @@ class SendspinClientFactoryWebRTCTest {
     }
 
     @Test
-    fun observingANewWrapperThenTheOldOneKeepsOldExhausted() {
+    fun gateTracksOnlyTheLatestWrapperIdentity() {
         val gate = WebRTCChannelGate()
         val old = Any()
         gate.markUsed(old)
         val new = Any()
         assertTrue(gate.isFresh(new))
-        // Coming back to the old instance after observing a new one: the gate
-        // tracks only the latest identity, and an unknown (non-latest)
-        // instance resets — but the controller never resurrects old wrappers;
-        // the service client exposes only the current one.
         gate.markUsed(new)
         assertFalse(gate.isFresh(new))
+        // Single-slot by design: re-observing a forgotten instance resets it to
+        // fresh. Safe only because the service client exposes exactly one
+        // current wrapper and the factory reserves it (markUsed) before
+        // attaching — never rely on the gate to remember older instances.
+        assertTrue(gate.isFresh(old))
     }
 }

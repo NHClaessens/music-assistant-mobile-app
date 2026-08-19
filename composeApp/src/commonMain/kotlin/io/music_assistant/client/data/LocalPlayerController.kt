@@ -496,10 +496,20 @@ class LocalPlayerController(
 
         createResult.onFailure { error ->
             if (error is WebRTCSendspinChannelExhausted) {
-                log.i { "WebRTC sendspin channel exhausted — forcing reconnect for fresh channels" }
-                apiClient.forceWebRTCReconnect()
-                // After reconnection, start() will be called again
-                // from the session state handler with a fresh channel.
+                // Budget the forced reconnects: a persistently failing attach on
+                // otherwise healthy channels must not renegotiate WebRTC forever.
+                if (sendspinRetryCount < MAX_SENDSPIN_RETRIES) {
+                    sendspinRetryCount++
+                    log.i {
+                        "WebRTC sendspin channel exhausted — forcing reconnect " +
+                            "($sendspinRetryCount/$MAX_SENDSPIN_RETRIES)"
+                    }
+                    apiClient.forceWebRTCReconnect()
+                    // After reconnection, start() will be called again
+                    // from the session state handler with a fresh channel.
+                } else {
+                    log.w { "WebRTC sendspin retry budget exhausted — giving up" }
+                }
                 return@withLock
             }
             log.w { "Cannot create Sendspin client: ${error.message}" }
@@ -592,8 +602,16 @@ class LocalPlayerController(
                         if (error is SendspinError.Permanent &&
                             error.cause is WebRTCSendspinChannelExhausted
                         ) {
-                            log.i { "WebRTC sendspin channel exhausted mid-session — forcing WebRTC reconnect" }
-                            apiClient.forceWebRTCReconnect()
+                            if (sendspinRetryCount < MAX_SENDSPIN_RETRIES) {
+                                sendspinRetryCount++
+                                log.i {
+                                    "WebRTC sendspin channel exhausted mid-session — forcing " +
+                                        "WebRTC reconnect ($sendspinRetryCount/$MAX_SENDSPIN_RETRIES)"
+                                }
+                                apiClient.forceWebRTCReconnect()
+                            } else {
+                                log.w { "WebRTC sendspin retry budget exhausted — giving up" }
+                            }
                             return@collect
                         }
 

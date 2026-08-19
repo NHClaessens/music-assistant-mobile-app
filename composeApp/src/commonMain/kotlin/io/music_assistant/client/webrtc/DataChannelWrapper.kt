@@ -8,6 +8,7 @@ import io.ktor.utils.io.ExperimentalKtorApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * WebRTC data channel wrapper backed by `io.ktor:ktor-client-webrtc`. Text and
@@ -81,9 +83,11 @@ class DataChannelWrapper internal constructor(
 
     private val outgoing = Channel<Outgoing>(capacity = Channel.UNLIMITED)
 
+    private val drainJob: Job
+
     init {
         // Drain outgoing messages — exits naturally when `outgoing` is closed by close().
-        scope.launch {
+        drainJob = scope.launch {
             for (msg in outgoing) {
                 runCatchingNonCancellation("send failed on channel $label") {
                     when (msg) {
@@ -166,16 +170,19 @@ class DataChannelWrapper internal constructor(
         if (closed) return
         closed = true
         logger.i { "Closing data channel $label" }
-        // Close the outgoing Channel first so the drain coroutine exits naturally after
-        // flushing any queued sends. Then cancel scope (cancels receive + state collector)
-        // and close the underlying Ktor channel. The state event collector won't deliver
-        // the resulting Closed event since scope is gone, so push it manually.
+        // Close the outgoing Channel, then give the drain a bounded chance to
+        // flush queued sends before the scope is cancelled out from under it.
+        // The state event collector won't deliver the resulting Closed event
+        // since the scope is gone, so push it manually.
         outgoing.close()
+        withTimeoutOrNull(CLOSE_FLUSH_TIMEOUT_MILLIS) { drainJob.join() }
         scope.cancel()
         dataChannel?.close()
         _state.update { DataChannelState.Closed }
     }
 }
+
+private const val CLOSE_FLUSH_TIMEOUT_MILLIS = 500L
 
 /** Production receive source: pulls from the Ktor WebRTC channel. */
 @OptIn(ExperimentalKtorApi::class)

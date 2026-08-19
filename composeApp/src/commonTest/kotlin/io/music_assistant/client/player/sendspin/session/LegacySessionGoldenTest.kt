@@ -1,7 +1,13 @@
 package io.music_assistant.client.player.sendspin.session
 
 import app.cash.turbine.test
+import io.music_assistant.client.player.sendspin.SendspinCapabilities
+import io.music_assistant.client.player.sendspin.SendspinConfig
+import io.music_assistant.client.player.sendspin.audio.Codec
+import io.music_assistant.client.player.sendspin.model.ClientAuthMessage
+import io.music_assistant.client.player.sendspin.model.ClientHelloMessage
 import io.music_assistant.client.player.sendspin.transport.InboundTransportEvent
+import io.music_assistant.client.utils.myJson
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.random.Random
@@ -153,6 +159,69 @@ class LegacySessionGoldenTest {
 
         val ready = session.events.first { it is SessionEvent.ProtocolReady }
         assertIs<SessionEvent.ProtocolReady>(ready)
+        session.close()
+    }
+
+    @Test
+    fun productionEncodedAuthAndHelloFlowThroughTheSessionUnchanged() = runTest {
+        // Config strings built exactly the way SendspinClient builds them, so this
+        // exercises the production encoders (whose bytes LegacyWireGoldenTest pins
+        // against literals) end to end through the session.
+        val config = SendspinConfig(
+            clientId = "client-golden",
+            deviceName = "Golden Device",
+            codecPreference = Codec.OPUS,
+            bufferCapacityBytes = 15_000_000,
+            serverHost = "example.local",
+            serverPort = 8095,
+            mainConnectionPort = 8095,
+            authToken = "token-golden",
+        )
+        val productionAuth = myJson.encodeToString(
+            ClientAuthMessage(token = "token-golden", clientId = config.clientId),
+        )
+        val productionHello = myJson.encodeToString(
+            ClientHelloMessage(
+                payload = SendspinCapabilities.buildClientHello(config, config.codecPreference),
+            ),
+        )
+        val transport = FakeSendspinTransport()
+        val session = LegacySession(
+            transport = transport,
+            config = LegacySessionConfig(
+                requiresAuth = true,
+                authJson = productionAuth,
+                helloJson = productionHello,
+            ),
+        )
+        session.start()
+        val sentAuth = transport.textOut.receive()
+        assertEquals(productionAuth, sentAuth)
+        assertTrue(sentAuth.startsWith("{\n    \"type\": \"auth\","))
+        transport.emit(InboundTransportEvent.Text(1, """{"type":"auth_ok"}"""))
+        assertEquals(productionHello, transport.textOut.receive())
+        session.close()
+    }
+
+    @Test
+    fun proxyModeWithoutTokenSendsHelloImmediatelyAndSkipsAuthenticating() = runTest {
+        val transport = FakeSendspinTransport()
+        val session = LegacySession(
+            transport = transport,
+            config = LegacySessionConfig(
+                requiresAuth = true,
+                authJson = null,
+                helloJson = helloJson,
+            ),
+        )
+        session.events.test {
+            session.start()
+            val negotiating = awaitItem()
+            assertIs<SessionEvent.Negotiating>(negotiating)
+            assertEquals(false, negotiating.authenticating)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(helloJson, transport.textOut.receive())
         session.close()
     }
 

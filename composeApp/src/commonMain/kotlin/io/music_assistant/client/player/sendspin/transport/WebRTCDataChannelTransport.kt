@@ -54,23 +54,25 @@ class WebRTCDataChannelTransport(
         }
 
         logger.i { "Channel open — starting inbound pump" }
-        if (pumping) return
+        check(!pumping) { "WebRTC transport is single-use" }
         pumping = true
 
         // Epoch begins before any frame of the epoch.
         eventsChannel.trySend(InboundTransportEvent.Connected(EPOCH, isReconnect = false))
         scope.launch {
-            dataChannelWrapper.inbound.collect { msg ->
-                val event = when (msg) {
-                    is DataChannelInbound.Text -> InboundTransportEvent.Text(EPOCH, msg.text)
-                    is DataChannelInbound.Binary -> InboundTransportEvent.Binary(EPOCH, msg.bytes)
+            try {
+                dataChannelWrapper.inbound.collect { msg ->
+                    val event = when (msg) {
+                        is DataChannelInbound.Text -> InboundTransportEvent.Text(EPOCH, msg.text)
+                        is DataChannelInbound.Binary -> InboundTransportEvent.Binary(EPOCH, msg.bytes)
+                    }
+                    eventsChannel.send(event)
                 }
-                eventsChannel.send(event)
+            } finally {
+                // Single producer: the closed signal follows every buffered frame
+                // instead of racing past them on a separate coroutine.
+                eventsChannel.trySend(InboundTransportEvent.Disconnected(EPOCH))
             }
-        }
-        scope.launch {
-            dataChannelWrapper.state.first { it == DataChannelState.Closed }
-            eventsChannel.trySend(InboundTransportEvent.Disconnected(EPOCH))
         }
     }
 

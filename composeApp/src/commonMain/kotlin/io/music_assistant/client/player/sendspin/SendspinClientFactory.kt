@@ -166,6 +166,11 @@ class SendspinClientFactory(
 
         log.i { "Creating Sendspin client over WebRTC data channel" }
 
+        // Reserve the channel before attaching: from the first outbound frame it
+        // is no longer safe to reuse, and a cancellation mid-attach must not
+        // leave it reported fresh.
+        channelGate.markUsed(webrtcChannel)
+
         // WebRTC SCTP can deliver out-of-order — reorder buffer covers it.
         // 8 frames (~160 ms) is plenty for LAN-class SCTP; the previous 32 added ~640 ms-
         // of group-sync lag. Raise if audible glitches appear on noisier links.
@@ -191,15 +196,11 @@ class SendspinClientFactory(
         // usably carried a handshake; only the initial outcome does.
         return when (val outcome = client.awaitInitialOutcome()) {
             is SessionOutcome.Ready -> {
-                channelGate.markUsed(webrtcChannel)
                 log.i { "Sendspin client ready via WebRTC (auth inherited, shared pipeline)" }
                 Result.success(client)
             }
 
             is SessionOutcome.Failed -> {
-                // A failed attach may still have put frames on the channel, so it
-                // can't be trusted as virgin either.
-                channelGate.markUsed(webrtcChannel)
                 log.w(outcome.cause) { "Sendspin WebRTC attach failed — channel exhausted" }
                 // Full teardown so a late-completing handshake can't leave a zombie
                 // session buffering inbound frames.
