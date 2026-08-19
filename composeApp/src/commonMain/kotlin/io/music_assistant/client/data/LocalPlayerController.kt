@@ -582,6 +582,21 @@ class LocalPlayerController(
                     }
 
                     is SendspinState.Error -> {
+                        // A dead WebRTC channel must be replaced, not retried in
+                        // place: this check runs before the generic permanent-error
+                        // branch, which would otherwise stop and retry the same
+                        // dead wrapper (the factory would keep returning it
+                        // exhausted). One forced reconnect negotiates a fresh
+                        // channel; the reconnect handler then restarts the client.
+                        val error = state.error
+                        if (error is SendspinError.Permanent &&
+                            error.cause is WebRTCSendspinChannelExhausted
+                        ) {
+                            log.i { "WebRTC sendspin channel exhausted mid-session — forcing WebRTC reconnect" }
+                            apiClient.forceWebRTCReconnect()
+                            return@collect
+                        }
+
                         // Retry if error is not being auto-retried and main API is connected
                         val shouldRetry = when (state.error) {
                             is SendspinError.Permanent -> true

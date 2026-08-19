@@ -9,6 +9,8 @@ import io.music_assistant.client.api.ConnectionInfo
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.player.MediaPlayerController
 import io.music_assistant.client.player.sendspin.audio.AudioStreamManager
+import io.music_assistant.client.player.sendspin.model.GoodbyeReason
+import io.music_assistant.client.player.sendspin.session.SessionOutcome
 import io.music_assistant.client.player.sendspin.transport.WebRTCDataChannelTransport
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.utils.NetworkMonitor
@@ -52,13 +54,9 @@ class SendspinClientFactory(
     private var sharedPipeline: AudioStreamManager? = null
     private var delayCollectorJob: Job? = null
 
-    // The WebRTC sendspin channel is single-use: after we send client/goodbye,
-    // the server tears down its handler for that channel even though it remains
-    // Open at the WebRTC layer. The DataChannelWrapper instance is the canonical
-    // "channel freshness" identity — a brand-new instance is created only when
-    // WebRTCConnectionManager negotiates a new peer connection.
-    private var lastObservedChannel: DataChannelWrapper? = null
-    private var webrtcSendspinUsed = false
+    // The WebRTC sendspin channel is single-use: once a session has run on it, the
+    // server side is gone even though the channel stays Open at the WebRTC layer.
+    private val channelGate = WebRTCChannelGate()
 
     /**
      * Returns the shared pipeline (and its clock synchronizer), creating them if needed.
@@ -94,17 +92,9 @@ class SendspinClientFactory(
         sharedPipeline?.close()
         sharedPipeline = null
         sharedClockSynchronizer = null
-        // Channel-freshness state (`lastObservedChannel`, `webrtcSendspinUsed`)
-        // is intentionally NOT reset here. Tearing down the audio pipeline does
-        // not un-send the `client/goodbye` we shipped on the existing sendspin
-        // channel — the server-side handler is gone. If the same wrapper comes
-        // back on the next attempt (e.g. user disables-then-re-enables sendspin
-        // without a WebRTC reconnect), we need the identity check to still
-        // report `webrtcSendspinUsed=true` so the caller forces a real WebRTC
-        // reconnect. Resetting alongside the pipeline would let a zombie
-        // channel be reused and silently corrupt audio. The flags are
-        // implicitly reset when a new peer connection produces a new wrapper
-        // instance — that's the only correct trigger.
+        // The channel gate is deliberately NOT reset: tearing down the pipeline
+        // doesn't revive the used sendspin channel. Only a new peer connection
+        // (a new wrapper instance) makes a channel fresh again.
     }
 
     /**
@@ -150,21 +140,26 @@ class SendspinClientFactory(
         }
     }
 
+    private fun newClient(
+        config: SendspinConfig,
+        pipeline: AudioStreamManager,
+        clockSync: ClockSynchronizer,
+    ): SendspinClient = SendspinClient(
+        config = config,
+        mediaPlayerController = mediaPlayerController,
+        audioPipeline = pipeline,
+        clockSynchronizer = clockSync,
+        networkAvailable = networkMonitor.isAvailable,
+    )
+
     private suspend fun createWebRTCClient(
         webrtcChannel: DataChannelWrapper,
         pipeline: AudioStreamManager,
         clockSync: ClockSynchronizer,
     ): Result<SendspinClient> {
-        // Identity-based freshness check: a different DataChannelWrapper instance means
-        // WebRTCConnectionManager negotiated a new peer connection, so this channel has
-        // never sent goodbye and is safe to use. Reusing the same instance after goodbye
-        // hits a zombie channel (Open client-side, dead server-side) — refuse and let the
-        // caller force a real WebRTC reconnect.
-        if (lastObservedChannel !== webrtcChannel) {
-            webrtcSendspinUsed = false
-            lastObservedChannel = webrtcChannel
-        }
-        if (webrtcSendspinUsed) {
+        // A new wrapper instance means a new peer connection; reusing an exhausted
+        // one hits a zombie channel (Open client-side, dead server-side).
+        if (!channelGate.isFresh(webrtcChannel)) {
             log.i { "Sendspin channel exhausted — need WebRTC reconnect" }
             return Result.failure(WebRTCSendspinChannelExhausted())
         }
@@ -188,23 +183,31 @@ class SendspinClientFactory(
             authToken = null,
         )
 
-        val client = SendspinClient(
-            config = config,
-            mediaPlayerController = mediaPlayerController,
-            audioPipeline = pipeline,
-            clockSynchronizer = clockSync,
-            networkAvailable = networkMonitor.isAvailable,
-        )
+        val client = newClient(config, pipeline, clockSync)
         val transport = WebRTCDataChannelTransport(webrtcChannel)
         client.connectWithTransport(transport)
-        // Mark used only AFTER `connectWithTransport` succeeds: a thrown attach
-        // hasn't sent `client/goodbye`, so the channel is still virgin and the
-        // caller can retry without forcing a (slow) WebRTC peer reconnect. The
-        // exhaustion guard applies to attach-success-then-goodbye, which is the
-        // actual zombie-channel condition.
-        webrtcSendspinUsed = true
-        log.i { "Sendspin client connected via WebRTC (auth inherited, direct hello, shared pipeline)" }
-        return Result.success(client)
+
+        // `connectWithTransport` returning proves nothing about whether the channel
+        // usably carried a handshake; only the initial outcome does.
+        return when (val outcome = client.awaitInitialOutcome()) {
+            is SessionOutcome.Ready -> {
+                channelGate.markUsed(webrtcChannel)
+                log.i { "Sendspin client ready via WebRTC (auth inherited, shared pipeline)" }
+                Result.success(client)
+            }
+
+            is SessionOutcome.Failed -> {
+                // A failed attach may still have put frames on the channel, so it
+                // can't be trusted as virgin either.
+                channelGate.markUsed(webrtcChannel)
+                log.w(outcome.cause) { "Sendspin WebRTC attach failed — channel exhausted" }
+                // Full teardown so a late-completing handshake can't leave a zombie
+                // session buffering inbound frames.
+                client.stop(GoodbyeReason.Shutdown)
+                client.close()
+                Result.failure(WebRTCSendspinChannelExhausted())
+            }
+        }
     }
 
     private suspend fun createWebSocketClient(
@@ -245,13 +248,7 @@ class SendspinClientFactory(
         log.i {
             "Creating Sendspin client over WebSocket (${if (config.requiresAuth) "proxy" else "custom"} mode, shared pipeline)"
         }
-        val client = SendspinClient(
-            config = config,
-            mediaPlayerController = mediaPlayerController,
-            audioPipeline = pipeline,
-            clockSynchronizer = clockSync,
-            networkAvailable = networkMonitor.isAvailable,
-        )
+        val client = newClient(config, pipeline, clockSync)
         client.start()
         log.i { "Sendspin client started via WebSocket" }
         return Result.success(client)

@@ -481,8 +481,12 @@ class WebRTCConnectionManager(
         // Collect incoming messages from the flow
         messageListenerJob = scope.launch {
             try {
-                channel.messages.collect { msg ->
-                    _incomingMessages.emit(msg)
+                // Sole collector of the ma-api channel's ordered inbound
+                // stream; this channel carries text RPC frames only.
+                channel.inbound.collect { msg ->
+                    if (msg is DataChannelInbound.Text) {
+                        _incomingMessages.emit(msg.text)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
