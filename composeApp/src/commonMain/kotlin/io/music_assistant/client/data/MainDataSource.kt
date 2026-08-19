@@ -374,32 +374,22 @@ class MainDataSource(
             }
                 .debounce(Timings.EVENT_DEBOUNCE) // Small debounce to batch rapid updates, but don't delay initial load
                 .collect { input ->
-                    _playersData.update { oldValues ->
-                        when (input.players) {
-                            is DataState.Error -> DataState.Error()
-                            is DataState.Loading -> DataState.Loading()
-                            is DataState.NoData -> DataState.NoData()
-                            is DataState.Data -> DataState.Data(
-                                buildPlayerDataList(
-                                    input.players.data,
-                                    input.queues,
-                                    input.localData,
-                                    input.favoriteOverrides,
-                                    oldValues,
-                                ),
-                            )
-
-                            is DataState.Stale -> DataState.Stale(
-                                data = buildPlayerDataList(
-                                    input.players.data,
-                                    input.queues,
-                                    input.localData,
-                                    input.favoriteOverrides,
-                                    oldValues,
-                                ),
-                                disconnectedAt = input.players.disconnectedAt,
-                                reason = input.players.reason,
-                            )
+                    if (input.players !is DataState.Stale) {
+                        _playersData.update { oldValues ->
+                            when (input.players) {
+                                is DataState.Error -> DataState.Error()
+                                is DataState.Loading -> DataState.Loading()
+                                is DataState.NoData -> DataState.NoData()
+                                is DataState.Data -> DataState.Data(
+                                    buildPlayerDataList(
+                                        input.players.data,
+                                        input.queues,
+                                        input.localData,
+                                        input.favoriteOverrides,
+                                        oldValues,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
