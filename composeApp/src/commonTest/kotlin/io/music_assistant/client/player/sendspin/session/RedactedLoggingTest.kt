@@ -13,11 +13,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Proves no secret ever reaches the logs: the whole encrypted flow — pairing
- * with a fresh long-term PSK, management requests carrying raw PSKs — runs
+ * Proves no exercised secret reaches the logs: pairing with a fresh long-term
+ * PSK, management add-record and set-pairing-config carrying raw PSKs, all run
  * with a capturing log writer, and the capture is then searched for every
- * secret's encoded form. Protocol handlers log message types and lengths
- * only, never payload JSON, because encrypted-path payloads carry secrets.
+ * secret's encoded form (including the identity private key and pairing token,
+ * which the exercised handlers had in reach throughout). Protocol handlers log
+ * message types and lengths only, never payload JSON.
  */
 internal class RedactedLoggingTest : EncryptedSessionTestHarness() {
     private class CapturingWriter : LogWriter() {
@@ -66,6 +67,22 @@ internal class RedactedLoggingTest : EncryptedSessionTestHarness() {
             }
         }
 
+        // set-pairing-config carries a raw replacement Pairing PSK.
+        val configPsk = ByteArray(32) { 0x77 }
+        server.sendJson(
+            """{"type":"management/set-pairing-config","payload":""" +
+                """{"pairing_psk":{"psk":"${SendspinBase64.encode(configPsk)}","enabled":true}}}""",
+        )
+        kotlinx.coroutines.withTimeout(10_000) {
+            var sawOk = false
+            while (!sawOk) {
+                val message = Json.parseToJsonElement(server.receiveJson()).jsonObject
+                sawOk = message.getValue("type").jsonPrimitive.content == "management/result" &&
+                    message.getValue("payload").jsonObject
+                        .getValue("result").jsonPrimitive.content == "ok"
+            }
+        }
+
         val allLogs = writer.lines.joinToString("\n")
         assertTrue(writer.lines.isNotEmpty(), "the flow must have produced logs")
 
@@ -75,6 +92,7 @@ internal class RedactedLoggingTest : EncryptedSessionTestHarness() {
             "identity private key" to SendspinBase64.encode(f.trustStore.identity.keyPair.privateKey),
             "pairing token" to f.trustStore.pairingToken(),
             "management-supplied PSK" to SendspinBase64.encode(mgmtPsk),
+            "config-supplied pairing PSK" to SendspinBase64.encode(configPsk),
         )
         for ((name, secret) in secrets) {
             assertFalse(allLogs.contains(secret), "logs must not contain the $name")

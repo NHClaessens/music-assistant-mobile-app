@@ -489,6 +489,9 @@ class LocalPlayerController(
             existing.stop(GoodbyeReason.Restart)
             existing.close()
         }
+        // The old client's monitor collectors would otherwise keep pushing its
+        // teardown states over whatever this attempt reports (e.g. Degraded).
+        cancelSendspinMonitorJobs()
 
         // Create client using factory
         val createResult = sendspinClientFactory.createIfEnabled(

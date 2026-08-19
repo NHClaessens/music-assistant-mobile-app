@@ -25,7 +25,7 @@ MA servers (2 major versions of compat required). Encryption is implemented as
 a new **protocol session** layer (legacy and encrypted implementations behind a
 common interface), a hand-rolled vector-tested Noise KKpsk2 core over
 `cryptography-kotlin` primitives, a persisted X25519 identity + PSK trust store
-(Keystore/Keychain), silent Pairing-PSK pairing driven through the
+(app settings storage; see the post-landing amendment), silent Pairing-PSK pairing driven through the
 authenticated MA API (`sendspin/pair_web_player`), and a minimal management
 role. Mode selection is a pure version gate on the authenticated MA session.
 
@@ -124,7 +124,7 @@ role. Mode selection is a pure version gate on the authenticated MA session.
   `server/activate {activities:['pairing'], pairing:{method:'pairing_psk'}}`
   verify the session's matched PSK **is** the Pairing PSK (else `pair/abort
   method_not_supported`); generate a fresh 32-byte long-term PSK; send
-  `client/pair-finalize {long_term_psk}` (raw); await `server/pair-finalize {}`
+  `client/pair-finalize {long_term_psk}` (base64url); await `server/pair-finalize {}`
   then persist the record; expect a server-initiated re-handshake to the new
   PSK. Attempt timeout ~2 min ⇒ `pair/abort attempt_timeout`. A cancelling
   `server/activate` discards the attempt silently (persist nothing).

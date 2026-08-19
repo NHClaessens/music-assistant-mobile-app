@@ -40,6 +40,41 @@ internal class ManagementSessionRoutingTest : EncryptedSessionTestHarness() {
     }
 
     @Test
+    fun backToBackRequestsProduceOneResultEachInOrder() = runRealTime {
+        val f = fixture(this)
+        val longTermPsk = ByteArray(32) { 0x44 }
+        f.trustStore.recordLongTermPsk(longTermPsk, f.serverId)
+        val server = FakeServer(f, longTermPsk)
+        f.session.start()
+        server.establish()
+        server.completeHelloExchange()
+        server.activate(activities = """["management"]""", activeRoles = "[]")
+        assertIs<SessionEvent.ProtocolReady>(f.nextEventSkippingNegotiation())
+        assertIs<SessionEvent.Activated>(f.nextEvent())
+
+        // Both requests enqueued before either reply is consumed: the session's
+        // sequential inbound processing yields exactly one result per request,
+        // in request order.
+        server.sendJson("""{"type":"management/list-records","payload":{}}""")
+        server.sendJson("""{"type":"management/get-pairing-config","payload":{}}""")
+
+        val first = Json.parseToJsonElement(server.receiveJson()).jsonObject
+        assertEquals("management/result", first.getValue("type").jsonPrimitive.content)
+        assertTrue(
+            first.getValue("payload").jsonObject.getValue("data").jsonObject
+                .containsKey("records"),
+            "first reply answers list-records",
+        )
+        val second = Json.parseToJsonElement(server.receiveJson()).jsonObject
+        assertEquals("management/result", second.getValue("type").jsonPrimitive.content)
+        assertTrue(
+            second.getValue("payload").jsonObject.getValue("data").jsonObject
+                .containsKey("pairing_psk"),
+            "second reply answers get-pairing-config",
+        )
+    }
+
+    @Test
     fun managementOnLongTermSessionSucceedsAndOwnRecordRemovalCloses() = runRealTime {
         val f = fixture(this)
         val longTermPsk = ByteArray(32) { 0x33 }

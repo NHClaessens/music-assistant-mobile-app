@@ -372,17 +372,21 @@ class SettingsRepository(
     )
     val sendspinClientId = _sendspinClientId.asStateFlow()
 
-    // The player id the app addresses the local player by — runtime state,
-    // not persisted. On legacy connections it is the UUID above; on
-    // encrypted connections the server registers the player under the
-    // device's X25519 public key, so the Sendspin client factory switches
-    // this to that identity when it resolves the connection mode. Command
-    // targeting, event routing, and the synthetic player must all use this
-    // id, or they address a player the server does not have.
-    private val _sendspinEffectivePlayerId = MutableStateFlow(_sendspinClientId.value)
+    // The player id the app addresses the local player by. On legacy
+    // connections it is the UUID above; on encrypted connections the server
+    // registers the player under the device's X25519 public key, so the
+    // Sendspin client factory switches this to that identity when it resolves
+    // the connection mode. Persisted so consumers address the right player
+    // from process start, before the factory has re-resolved the mode —
+    // otherwise the synthetic local player is briefly injected under an id
+    // the server doesn't have.
+    private val _sendspinEffectivePlayerId = MutableStateFlow(
+        settings.getStringOrNull("sendspin_effective_player_id") ?: _sendspinClientId.value,
+    )
     val sendspinEffectivePlayerId = _sendspinEffectivePlayerId.asStateFlow()
 
     fun setSendspinEffectivePlayerId(id: String) {
+        settings.putString("sendspin_effective_player_id", id)
         _sendspinEffectivePlayerId.update { id }
     }
 

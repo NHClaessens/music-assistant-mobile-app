@@ -290,6 +290,79 @@ internal class EncryptedSessionTest : EncryptedSessionTestHarness() {
     }
 
     @Test
+    fun sourceRoleAtNoneTrustClosesWithUnauthorized() = runRealTime {
+        val f = fixture(this)
+        val server = FakeServer(f, SendspinPsk.SENTINEL_PSK)
+        f.session.start()
+        server.establish()
+        server.completeHelloExchange()
+        assertIs<SessionEvent.ProtocolReady>(f.nextEventSkippingNegotiation())
+
+        // Unpaired access admits playback on the sentinel PSK, but the source
+        // role is never grantable at trust level none.
+        server.activate(activities = """["playback"]""", activeRoles = """["source@v1"]""")
+        val goodbye = server.receiveJson()
+        assertEquals(
+            "unauthorized",
+            json.parseToJsonElement(goodbye).jsonObject.getValue("payload")
+                .jsonObject.getValue("reason").jsonPrimitive.content,
+        )
+        assertIs<SessionEvent.Failed>(f.nextEvent())
+    }
+
+    @Test
+    fun roleViolationIsUnauthorizedNotPairingRequired() = runRealTime {
+        val f = fixture(this, unpairedAccess = false)
+        val server = FakeServer(f, SendspinPsk.SENTINEL_PSK)
+        f.session.start()
+        server.establish()
+        server.completeHelloExchange()
+        assertIs<SessionEvent.ProtocolReady>(f.nextEventSkippingNegotiation())
+
+        // Rejection rules are ordered: pairing_required applies only when
+        // enabling unpaired access would have made the activation admissible.
+        // A role violation would remain inadmissible, so the answer is the
+        // second rule's unauthorized, not pairing_required.
+        server.activate(activities = """["playback"]""", activeRoles = """["source@v1"]""")
+        val goodbye = server.receiveJson()
+        assertEquals(
+            "unauthorized",
+            json.parseToJsonElement(goodbye).jsonObject.getValue("payload")
+                .jsonObject.getValue("reason").jsonPrimitive.content,
+        )
+        assertIs<SessionEvent.Failed>(f.nextEvent())
+    }
+
+    @Test
+    fun rejectedPairingActivationEndsThePriorAttemptSoALateFinalizePersistsNothing() = runRealTime {
+        val f = fixture(this)
+        val server = pairingPreamble(f)
+        server.receiveJson() // the first attempt's client/pair-finalize
+
+        // A second pairing activation with an unsupported method is answered
+        // with pair/abort (connection open) — and, like every received
+        // server/activate, it ends the prior attempt.
+        server.activate(
+            activities = """["pairing"]""",
+            activeRoles = "[]",
+            pairing = """{"method":"static_pin"}""",
+        )
+        val abort = json.parseToJsonElement(server.receiveJson()).jsonObject
+        assertEquals("pair/abort", abort.getValue("type").jsonPrimitive.content)
+        assertEquals(0, f.transport.disconnectCount, "connection stays open")
+
+        // A finalize aimed at the superseded attempt persists nothing.
+        server.sendJson("""{"type":"server/pair-finalize","payload":{}}""")
+        server.sendJson("""{"type":"server/state","payload":{}}""")
+        val app = f.session.applicationMessages.produceIn(this)
+        assertEquals(
+            """{"type":"server/state","payload":{}}""",
+            withTimeout(5_000) { app.receive() },
+        )
+        assertTrue(f.trustStore.records().none { it.serverId == f.serverId })
+    }
+
+    @Test
     fun pairingPskFlowPersistsRecordOnlyAfterServerFinalizeThenRehandshakesToIt() = runRealTime {
         val f = fixture(this)
         val server = pairingPreamble(f)

@@ -82,7 +82,7 @@ class SilentPairingCoordinatorTest {
     }
 
     @Test
-    fun inFlightCallIsCancelledOnDisconnect() = runTest {
+    fun inFlightCallSurvivesSessionFailureWithoutDuplication() = runTest {
         val rpc = RpcRecorder()
         rpc.gate = CompletableDeferred()
         val coordinator = SilentPairingCoordinator(rpc::send, { "SP:0TOKEN" }, this)
@@ -90,9 +90,43 @@ class SilentPairingCoordinatorTest {
         coordinator.onSessionEvent(ready())
         runCurrent()
         assertEquals(1, rpc.requests.size)
+
+        // A sentinel session may be rejected (pairing_required) before the RPC
+        // lands; the RPC rides the independent MA API connection and must keep
+        // going — it is what resolves the rejection.
+        coordinator.onSessionEvent(
+            SessionEvent.Failed(IllegalStateException("pairing_required"), permanent = false),
+        )
         coordinator.onSessionEvent(SessionEvent.Disconnected)
+        coordinator.onSessionEvent(ready(reconnect = true))
+        runCurrent()
+        assertEquals(1, rpc.requests.size, "in-flight RPC is not duplicated on the next epoch")
+        assertTrue(!rpc.cancelled, "session failure must not cancel the RPC")
+
+        rpc.gate?.complete(Unit)
         advanceUntilIdle()
-        assertTrue(rpc.cancelled, "in-flight RPC must be cancelled on disconnect")
+        coordinator.onSessionEvent(ready(reconnect = true))
+        advanceUntilIdle()
+        assertEquals(2, rpc.requests.size, "a resolved RPC allows the next unpaired epoch to retry")
+    }
+
+    @Test
+    fun unansweredCallTimesOutAndAllowsRetry() = runTest {
+        val rpc = RpcRecorder()
+        rpc.gate = CompletableDeferred()
+        val coordinator = SilentPairingCoordinator(rpc::send, { "SP:0TOKEN" }, this)
+
+        coordinator.onSessionEvent(ready())
+        runCurrent()
+        assertEquals(1, rpc.requests.size)
+
+        // The RPC is bounded by the pairing window; after it expires a later
+        // unpaired epoch may start a fresh one.
+        testScheduler.advanceTimeBy(121_000)
+        runCurrent()
+        coordinator.onSessionEvent(ready(reconnect = true))
+        advanceUntilIdle()
+        assertEquals(2, rpc.requests.size)
     }
 
     @Test

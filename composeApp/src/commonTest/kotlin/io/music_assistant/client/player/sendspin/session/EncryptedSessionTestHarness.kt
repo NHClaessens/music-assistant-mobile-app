@@ -36,6 +36,10 @@ import kotlin.test.assertEquals
  * [FakeSendspinTransport]: an in-test Noise-initiator server, session
  * fixtures, and real-time test scaffolding (the session runs on real
  * dispatchers, so tests avoid the virtual clock).
+ *
+ * The in-test server reuses the production Noise core and framing, so these
+ * tests pin session behavior, not Noise interoperability — the reference
+ * vectors are the independent oracle for the core itself.
  */
 internal abstract class EncryptedSessionTestHarness {
     protected val json = Json {

@@ -21,9 +21,12 @@ import io.music_assistant.client.utils.HasConnectionData
 import io.music_assistant.client.utils.NetworkMonitor
 import io.music_assistant.client.webrtc.DataChannelWrapper
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /**
@@ -51,14 +54,7 @@ class SendspinClientFactory(
 ) {
     private val log = Logger.withTag("SendspinClientFactory")
 
-    // Loaded once; the identity must be stable across reconnects.
     private val noiseCrypto = CryptographyKotlinNoiseCrypto()
-    private var trustStore: SendspinTrustStore? = null
-
-    private suspend fun getOrLoadTrustStore(): SendspinTrustStore =
-        trustStore ?: SendspinTrustStore.load(keyStore, noiseCrypto).also {
-            trustStore = it
-        }
 
     private fun resolveEncryptionMode(): SendspinEncryptionMode {
         val schemaVersion = (serviceClient.sessionState.value as? HasConnectionData)
@@ -72,6 +68,12 @@ class SendspinClientFactory(
     // Long-lived scope for hot-tunable settings observers. Cancelled only when the
     // shared pipeline is destroyed (user logout / permanent error).
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // One load, shared by every client: the identity must be stable across reconnects.
+    private val trustStoreDeferred: Deferred<SendspinTrustStore> =
+        scope.async(start = CoroutineStart.LAZY) {
+            SendspinTrustStore.load(keyStore, noiseCrypto)
+        }
 
     // Shared audio pipeline — persists across SendspinClient reconnections
     private var sharedClockSynchronizer: ClockSynchronizer? = null
@@ -146,6 +148,15 @@ class SendspinClientFactory(
             )
         }
 
+        // Resolving the protocol gate from a transient session state could
+        // silently downgrade an encrypted player to cleartext; fail retryably
+        // instead of guessing.
+        if (serviceClient.sessionState.value !is HasConnectionData) {
+            return Result.failure(
+                IllegalStateException("MA session not established — deferring Sendspin start"),
+            )
+        }
+
         // Refuse before constructing any transport.
         val encryptionMode = resolveEncryptionMode()
         if (encryptionMode == SendspinEncryptionMode.ENCRYPTED_REQUIRED) {
@@ -177,7 +188,7 @@ class SendspinClientFactory(
         clockSync: ClockSynchronizer,
     ): SendspinClient {
         val encrypted = config.encryptionMode == SendspinEncryptionMode.ENCRYPTED
-        val store = if (encrypted) getOrLoadTrustStore() else null
+        val store = if (encrypted) trustStoreDeferred.await() else null
         // The server registers the player under the encrypted client_id (device
         // public key) on encrypted connections, and under the legacy UUID otherwise.
         settings.setSendspinEffectivePlayerId(store?.clientId ?: config.clientId)

@@ -66,10 +66,10 @@ class PairingHandlerTest {
     @Test
     fun abortSendsReasonAndPersistsNothing() = runTest {
         val (handler, trustStore) = newFixture()
-        handler.startAttempt("srv-1") { }
+        val attempt = handler.startAttempt("srv-1") { }
 
         val sent = mutableListOf<String>()
-        handler.abortAttempt("attempt_timeout") { sent.add(it) }
+        handler.abortAttempt(attempt, "attempt_timeout") { sent.add(it) }
         val parsed = Json.parseToJsonElement(sent.single()).jsonObject
         assertEquals("pair/abort", parsed.getValue("type").jsonPrimitive.content)
         assertEquals(
@@ -81,11 +81,18 @@ class PairingHandlerTest {
     }
 
     @Test
-    fun abortWithoutPendingAttemptSendsNothing() = runTest {
+    fun abortOfASupersededAttemptSendsNothingAndKeepsTheNewAttempt() = runTest {
         val (handler, _) = newFixture()
+        val stale = handler.startAttempt("srv-1") { }
+        handler.discardAttempt()
+        val fresh = handler.startAttempt("srv-2") { }
+
+        // A stale timeout firing after a newer attempt started must not
+        // abort or clear the newer attempt.
         val sent = mutableListOf<String>()
-        handler.abortAttempt("attempt_timeout") { sent.add(it) }
+        handler.abortAttempt(stale, "attempt_timeout") { sent.add(it) }
         assertTrue(sent.isEmpty())
+        assertEquals(fresh, handler.pending)
     }
 
     @Test

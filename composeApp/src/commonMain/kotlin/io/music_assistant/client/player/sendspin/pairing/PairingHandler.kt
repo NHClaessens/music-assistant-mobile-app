@@ -9,6 +9,8 @@ import io.music_assistant.client.player.sendspin.model.PairAbortPayload
 import io.music_assistant.client.player.sendspin.noise.SendspinBase64
 import io.music_assistant.client.player.sendspin.noise.crypto.NoiseCrypto
 import io.music_assistant.client.utils.myJson
+import kotlinx.atomicfu.locks.SynchronizedObject
+import kotlinx.atomicfu.locks.synchronized
 
 /**
  * Client half of the Pairing PSK flow: mints a fresh long-term PSK, sends it in
@@ -26,6 +28,10 @@ class PairingHandler(
         internal val serverId: String,
     )
 
+    // Transitions are locked: the attempt timeout fires on a different coroutine
+    // than the session driver, and completion must never race an abort.
+    private val lock = SynchronizedObject()
+
     var pending: PendingAttempt? = null
         private set
 
@@ -33,7 +39,7 @@ class PairingHandler(
     suspend fun startAttempt(serverId: String, sendJson: suspend (String) -> Unit): PendingAttempt {
         val psk = crypto.randomBytes(PSK_SIZE)
         val attempt = PendingAttempt(psk, serverId)
-        pending = attempt
+        synchronized(lock) { pending = attempt }
         logger.i { "Starting pairing-PSK attempt" }
         sendJson(
             myJson.encodeToString(
@@ -47,25 +53,27 @@ class PairingHandler(
 
     /** Persists the pending record; false (ignored) when nothing was pending. */
     fun completeAttempt(): Boolean {
-        val attempt = pending ?: return false
+        val attempt = synchronized(lock) { pending.also { pending = null } } ?: return false
         trustStore.recordLongTermPsk(attempt.longTermPsk, attempt.serverId)
-        pending = null
         logger.i { "Pairing record persisted" }
         return true
     }
 
     /** Silently abandons any pending attempt; persists nothing. */
     fun discardAttempt(): Boolean {
-        val had = pending != null
-        pending = null
+        val had = synchronized(lock) { (pending != null).also { pending = null } }
         if (had) logger.i { "Pairing attempt discarded" }
         return had
     }
 
-    /** Aborts a pending attempt with [reason], sending `pair/abort`. */
-    suspend fun abortAttempt(reason: String, sendJson: suspend (String) -> Unit) {
-        if (pending == null) return
-        pending = null
+    /** Aborts [attempt] with [reason]; a superseded or resolved attempt is ignored. */
+    suspend fun abortAttempt(
+        attempt: PendingAttempt,
+        reason: String,
+        sendJson: suspend (String) -> Unit,
+    ) {
+        val won = synchronized(lock) { (pending === attempt).also { if (it) pending = null } }
+        if (!won) return
         logger.w { "Aborting pairing attempt: $reason" }
         sendJson(
             myJson.encodeToString(PairAbortMessage(payload = PairAbortPayload(reason = reason))),

@@ -17,6 +17,7 @@ import io.music_assistant.client.player.sendspin.model.ServerActivateMessage
 import io.music_assistant.client.player.sendspin.model.ServerActivatePayload
 import io.music_assistant.client.player.sendspin.model.UnpairedAccess
 import io.music_assistant.client.player.sendspin.model.VersionedRole
+import io.music_assistant.client.player.sendspin.noise.DH_LEN
 import io.music_assistant.client.player.sendspin.noise.HandshakeFailedException
 import io.music_assistant.client.player.sendspin.noise.HandshakeFrame
 import io.music_assistant.client.player.sendspin.noise.HandshakeIo
@@ -33,6 +34,7 @@ import io.music_assistant.client.player.sendspin.pairing.PairingHandler
 import io.music_assistant.client.player.sendspin.transport.InboundTransportEvent
 import io.music_assistant.client.player.sendspin.transport.SendspinTransport
 import io.music_assistant.client.utils.myJson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -202,7 +204,9 @@ internal class EncryptedSession(
         } catch (e: EpochInterrupted) {
             e.control
         } finally {
-            // Epoch over: quiesce senders until the next epoch decides the gate's fate.
+            // Epoch over: end any pairing attempt and quiesce senders until the
+            // next epoch decides the gate's fate.
+            pairingTimeoutJob?.cancel()
             if (gate.value != GateState.FAILED) {
                 setGate(GateState.CLOSED)
             }
@@ -330,9 +334,12 @@ internal class EncryptedSession(
             serverId = outcome.serverId,
             matched = outcome.matched,
         )
-        // Activities and role grants don't carry across a key swap.
+        // Activities, role grants, and any in-flight pairing attempt don't carry
+        // across a key swap.
         currentActivities = emptySet()
         persistedActiveRoles = emptyList()
+        pairingTimeoutJob?.cancel()
+        pairingHandler.discardAttempt()
     }
 
     /** Next decrypted JSON message during establishment, where nothing else may flow. */
@@ -472,6 +479,11 @@ internal class EncryptedSession(
     @Suppress("ReturnCount", "LongMethod")
     private suspend fun handleActivate(text: String, isReconnectEpoch: Boolean) {
         val secure = channel ?: return
+        // Receiving any server/activate ends an in-flight pairing attempt —
+        // including activations this method goes on to reject — so nothing from
+        // a superseded attempt can be persisted or aborted later.
+        pairingTimeoutJob?.cancel()
+        pairingHandler.discardAttempt()
         val payload: ServerActivatePayload = try {
             myJson.decodeFromString<ServerActivateMessage>(text).payload
         } catch (e: Exception) {
@@ -542,10 +554,6 @@ internal class EncryptedSession(
             },
         )
 
-        // An activation during a pairing attempt abandons it silently.
-        pairingTimeoutJob?.cancel()
-        pairingHandler.discardAttempt()
-
         emitEvent(
             SessionEvent.Activated(
                 activities = payload.activities,
@@ -588,7 +596,11 @@ internal class EncryptedSession(
         val secure = requireChannel()
         when (secure.matched.category) {
             PskCategory.LONG_TERM_STORED -> {
-                trustStore.removeRecord(secure.matched.psk)
+                if (!trustStore.removeRecord(secure.matched.psk)) {
+                    // Already re-paired or removed: pairing state transiently
+                    // disagrees with the server; the next connect resolves it.
+                    logger.w { "server/unpair for a record no longer in the trust store" }
+                }
                 sendGoodbyeAndDisconnect(GOODBYE_UNPAIRED)
             }
 
@@ -622,15 +634,15 @@ internal class EncryptedSession(
 
     private suspend fun startPairingAttempt() {
         val serverId = requireChannel().serverId
-        pairingHandler.startAttempt(serverId) { sendEncryptedJson(it) }
+        val attempt = pairingHandler.startAttempt(serverId) { sendEncryptedJson(it) }
         pairingTimeoutJob = launch {
             delay(config.pairingAttemptTimeoutMillis)
-            if (pairingHandler.pending != null) {
-                try {
-                    pairingHandler.abortAttempt("attempt_timeout") { sendEncryptedJson(it) }
-                } catch (e: Exception) {
-                    logger.w { "Failed to send pair/abort: ${e.message}" }
-                }
+            try {
+                pairingHandler.abortAttempt(attempt, "attempt_timeout") { sendEncryptedJson(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w { "Failed to send pair/abort: ${e.message}" }
             }
         }
     }
@@ -673,6 +685,7 @@ internal class EncryptedSession(
             prologue = secure.handshakeHash,
             serverId = secure.serverId,
             serverStaticPublic = SendspinBase64.decodeOrNull(secure.serverId)
+                ?.takeIf { it.size == DH_LEN }
                 ?: throw HandshakeFailedException("malformed server id"),
             // Noise message 2 still travels under the old transport keys.
             sendMessage = { sendEncryptedFrame(NoiseFraming.TYPE_JSON, it.encodeToByteArray()) },
