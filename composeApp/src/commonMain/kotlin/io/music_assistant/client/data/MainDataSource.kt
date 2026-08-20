@@ -734,7 +734,7 @@ class MainDataSource(
         favoriteOverrides: Map<String, Boolean>,
         oldValues: DataState<List<PlayerData>>,
     ): List<PlayerData> {
-        val localPlayerId = settings.sendspinClientId.value
+        val localPlayerId = settings.sendspinEffectivePlayerId.value
         val playerDataList = allPlayers
             .map { player ->
                 val isLocal = player.id == localPlayerId
@@ -945,7 +945,7 @@ class MainDataSource(
 
     fun playerAction(playerId: String, action: PlayerAction) {
         // Delegate to data-based overload for local player (handles optimistic + routing)
-        if (playerId == settings.sendspinClientId.value) {
+        if (playerId == settings.sendspinEffectivePlayerId.value) {
             localPlayerController.localPlayerData.value?.let { localData ->
                 playerAction(localData, action)
                 return
@@ -1195,7 +1195,7 @@ class MainDataSource(
                         is PlayerUpdatedEvent -> {
                             val data = playerFactory.create(event.data)
                             // Forward to local player repository if this is the local player
-                            if (data.id == settings.sendspinClientId.value) {
+                            if (data.id == settings.sendspinEffectivePlayerId.value) {
                                 localPlayerController.onServerPlayerUpdate(data)
                             }
                             _serverPlayers.update { oldState ->
@@ -1226,7 +1226,7 @@ class MainDataSource(
                             val data = queueFactory.create(event.data).takeIfNotStale("QueueAdded")
                                 ?: return@collect
 
-                            val localPlayerId = settings.sendspinClientId.value
+                            val localPlayerId = settings.sendspinEffectivePlayerId.value
                             if (data.id == localPlayerId ||
                                 (_serverPlayers.value as? DataState.Data)?.data
                                     ?.find { it.id == localPlayerId }?.queueId == data.id
@@ -1261,7 +1261,7 @@ class MainDataSource(
                                     ?: return@collect
 
                             // Forward to local player repository if this is the local player's queue
-                            val localPlayerId = settings.sendspinClientId.value
+                            val localPlayerId = settings.sendspinEffectivePlayerId.value
                             if (data.id == localPlayerId ||
                                 (_serverPlayers.value as? DataState.Data)?.data
                                     ?.find { it.id == localPlayerId }?.queueId == data.id
@@ -1467,7 +1467,7 @@ class MainDataSource(
                         DataState.Data(visiblePlayers)
                     }
                     // Forward to repository: real player if found, synthetic if not
-                    val localPlayerId = settings.sendspinClientId.value
+                    val localPlayerId = settings.sendspinEffectivePlayerId.value
                     val localServerPlayer = visiblePlayers.find { it.id == localPlayerId }
                     localPlayerController.onInitialPlayersReceived(
                         hasLocalPlayer = localServerPlayer != null,
@@ -1499,7 +1499,7 @@ class MainDataSource(
                     }
 
                     // Forward local player's queue to repository
-                    val localPlayerId = settings.sendspinClientId.value
+                    val localPlayerId = settings.sendspinEffectivePlayerId.value
                     val localQueueId = (_serverPlayers.value as? DataState.Data)?.data
                         ?.find { it.id == localPlayerId }?.queueId
                     mergedSnapshot.find { it.id == localPlayerId || it.id == localQueueId }

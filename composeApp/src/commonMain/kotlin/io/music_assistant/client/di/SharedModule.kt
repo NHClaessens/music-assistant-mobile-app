@@ -21,6 +21,8 @@ import io.music_assistant.client.input.VolumeButtonService
 import io.music_assistant.client.logging.LogSharer
 import io.music_assistant.client.player.MediaPlayerController
 import io.music_assistant.client.player.sendspin.SendspinClientFactory
+import io.music_assistant.client.player.sendspin.identity.SendspinKeyStore
+import io.music_assistant.client.player.sendspin.identity.SettingsSendspinKeyStore
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.settings.provideSettings
 import io.music_assistant.client.ui.BackgroundRestrictionViewModel
@@ -78,6 +80,9 @@ fun sharedModule(
         single<AuthCoordinator> { get<AuthenticationManager>() }
         singleOf(::MediaPlayerController)  // Used by the local (Sendspin) player sink
         singleOf(::SendspinClientFactory)   // Factory for creating Sendspin clients
+        // Sendspin encrypted-protocol identity/trust persistence — the same
+        // app settings storage as everything else.
+        single<SendspinKeyStore> { SettingsSendspinKeyStore(get()) }
         single { PlayerPositionTracker() }  // Shared live-position source of truth
         singleOf(::PlayerRequestFactory)    // Pure PlayerAction → Request mapper
         singleOf(::LocalPlayerController)    // Local player: lifecycle + state + commands

@@ -61,7 +61,7 @@ class HomeScreenViewModel(
     // Local (Sendspin) player identity — used by the group dialog to decide
     // whether to show the playback-delay adjuster.
     val localPlayerId: String
-        get() = settings.sendspinClientId.value
+        get() = settings.sendspinEffectivePlayerId.value
 
     fun adjustSendspinStaticDelayMs(deltaMs: Int) {
         settings.setSendspinStaticDelayMs(settings.sendspinStaticDelayMs.value + deltaMs)

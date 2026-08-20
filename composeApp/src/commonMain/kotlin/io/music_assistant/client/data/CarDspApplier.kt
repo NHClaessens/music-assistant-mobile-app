@@ -63,7 +63,7 @@ class CarDspApplier(
             logger.i { "$edge: not ready within ${READY_TIMEOUT_MS}ms, skipping DSP apply" }
             return
         }
-        val playerId = settings.sendspinClientId.value
+        val playerId = settings.sendspinEffectivePlayerId.value
         when (action) {
             is CarDspAction.Disable -> {
                 val config = dataSource.getDspConfig(playerId) ?: return

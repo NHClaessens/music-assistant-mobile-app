@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -483,11 +484,9 @@ class WebRTCConnectionManager(
             try {
                 // Sole collector of the ma-api channel's ordered inbound
                 // stream; this channel carries text RPC frames only.
-                channel.inbound.collect { msg ->
-                    if (msg is DataChannelInbound.Text) {
-                        _incomingMessages.emit(msg.text)
-                    }
-                }
+                channel.inbound
+                    .filterIsInstance<DataChannelInbound.Text>()
+                    .collect { _incomingMessages.emit(it.text) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
