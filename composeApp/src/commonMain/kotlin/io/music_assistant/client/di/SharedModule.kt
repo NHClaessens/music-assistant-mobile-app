@@ -24,6 +24,7 @@ import io.music_assistant.client.player.sendspin.SendspinClientFactory
 import io.music_assistant.client.player.sendspin.identity.SendspinKeyStore
 import io.music_assistant.client.player.sendspin.identity.SettingsSendspinKeyStore
 import io.music_assistant.client.settings.SettingsRepository
+import io.music_assistant.client.settings.provideSecretSettings
 import io.music_assistant.client.settings.provideSettings
 import io.music_assistant.client.ui.BackgroundRestrictionViewModel
 import io.music_assistant.client.ui.SchemaVersionWarningViewModel
@@ -49,14 +50,26 @@ import io.music_assistant.client.utils.NetworkMonitor
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
+
+/**
+ * Qualifier for the secrets store. Its backing file is excluded from the
+ * Android backup, so put a value here only when it authenticates to the
+ * user's server or identifies it.
+ */
+const val SECRETS = "secrets"
 
 fun sharedModule(
     serviceClientConstructor: (SettingsRepository, ErrorMessageBus) -> ServiceClient = ::KtorServiceClient,
 ) =
     module {
+        // The general store stays unqualified so that any consumer resolving
+        // `Settings` by type keeps the backed-up store. Only the secrets store
+        // is qualified — ask for it on purpose.
         single { provideSettings() }
-        singleOf(::SettingsRepository)
+        single(named(SECRETS)) { provideSecretSettings() }
+        single { SettingsRepository(get(), get(named(SECRETS))) }
         singleOf(::NetworkMonitor)
         singleOf(::ErrorMessageBus)
         singleOf(::DeepLinkBus)
