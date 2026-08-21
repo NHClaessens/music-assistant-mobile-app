@@ -913,6 +913,10 @@ class MainDataSource(
             .getOrNull()?.resultAs<DspConfig>()
     }
 
+    suspend fun applyDspPreset(playerId: String, presetId: String): DspConfig? =
+        apiClient.sendRequest(Request.Dsp.applyPreset(playerId, presetId))
+            .getOrNull()?.resultAs<DspConfig>()
+
     suspend fun getDspPresets(): List<DspConfigPreset> =
         apiClient.sendRequest(Request.Dsp.getPresets())
             .getOrNull()?.resultAs<List<DspConfigPreset>>() ?: emptyList()
