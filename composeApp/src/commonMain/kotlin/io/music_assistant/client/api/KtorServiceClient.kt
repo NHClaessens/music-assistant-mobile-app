@@ -28,6 +28,8 @@ import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.createPlatformHttpClient
 import io.music_assistant.client.utils.currentTimeMillis
 import io.music_assistant.client.utils.myJson
+import io.music_assistant.client.utils.platformLocale
+import io.music_assistant.client.utils.serverLocalizationLocale
 import io.music_assistant.client.utils.update
 import io.music_assistant.client.webrtc.model.RemoteId
 import kotlinx.coroutines.CancellationException
@@ -791,7 +793,9 @@ class KtorServiceClient(
                     shouldAttempt = { _sessionState.value is SessionState.Connected },
                     onAttempt = { setAuthState(AuthProcessState.InProgress) },
                     send = {
-                        sendRequestRaw(Request.Auth.login(username, password, settings.deviceName.value))
+                        sendRequestRaw(
+                            Request.Auth.login(username, password, settings.deviceName.value),
+                        )
                     },
                 )
             ) {
@@ -853,7 +857,18 @@ class KtorServiceClient(
                             state.authProcessState != AuthProcessState.LoggedOut
                     },
                     onAttempt = { setAuthState(AuthProcessState.InProgress) },
-                    send = { sendRequestRaw(Request.Auth.authorize(token, settings.deviceName.value)) },
+                    send = {
+                        sendRequestRaw(
+                            Request.Auth.authorize(
+                                token,
+                                settings.deviceName.value,
+                                locale = serverLocalizationLocale(
+                                    (_sessionState.value as? HasConnectionData)?.serverInfo?.schemaVersion,
+                                    platformLocale(),
+                                ),
+                            ),
+                        )
+                    },
                 )
             ) {
                 AuthResolution.Aborted -> return
