@@ -76,12 +76,14 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
+import io.music_assistant.client.data.ChapterProgressPreference
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.client.Lyrics
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
 import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueue
 import io.music_assistant.client.data.model.client.PlayerDataFixtures.toQueueTrack
+import io.music_assistant.client.data.model.client.chapterSeekSeconds
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.player.sendspin.SendspinState
@@ -136,15 +138,8 @@ import musicassistantclient.composeapp.generated.resources.queue_clear
 import musicassistantclient.composeapp.generated.resources.queue_no_other_players
 import musicassistantclient.composeapp.generated.resources.queue_transfer
 import org.jetbrains.compose.resources.stringResource
-import kotlin.math.ceil
+import org.koin.compose.koinInject
 import kotlin.math.roundToInt
-
-/**
- * Seek target (whole seconds) for a chapter tap. The seek API takes integer
- * seconds, so a fractional [startSec] is rounded up — landing inside the
- * tapped chapter rather than a fraction of a second before it, in the prior one.
- */
-internal fun chapterSeekSeconds(startSec: Double): Long = ceil(startSec).toLong()
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -167,6 +162,10 @@ fun PlayersPager(
 
         val colorsSource = rememberExtractedColorsSource()
         val dynamicColorsEnabled = rememberDynamicColorsEnabled()
+        // Server-synced audiobook_chapter_progress preference; gates the
+        // chapter-relative timeline in FullPlayerItem.
+        val chapterProgressEnabled by koinInject<ChapterProgressPreference>()
+            .enabled.collectAsStateWithLifecycle()
 
         val playerAction1 =
             { data: PlayerData, action: PlayerAction ->
@@ -340,6 +339,7 @@ fun PlayersPager(
                                 bufferedAheadSecFlow = bufferedAheadSecFlow,
                                 lyricsAvailable = isCurrentPage && lyrics != null,
                                 onLyricsClick = { sheetLyrics = lyrics },
+                                chapterProgressEnabled = chapterProgressEnabled,
                             )
                         }
                         sheetLyrics?.let { shown ->
@@ -434,6 +434,7 @@ private fun ExpandedPlayerPage(
     bufferedAheadSecFlow: Flow<Double>? = null,
     lyricsAvailable: Boolean = false,
     onLyricsClick: () -> Unit = {},
+    chapterProgressEnabled: Boolean = true,
 ) {
     val isLargeScreen = WindowClass.isAtLeastLarge()
     val dismissThresholdPx = with(LocalDensity.current) { 120.dp.toPx() }
@@ -597,6 +598,7 @@ private fun ExpandedPlayerPage(
                             onLyricsClick = onLyricsClick,
                             livePositionFlow = livePositionFlow,
                             bufferedAheadSecFlow = bufferedAheadSecFlow,
+                            chapterProgressEnabled = chapterProgressEnabled,
                         )
                     }
                 }

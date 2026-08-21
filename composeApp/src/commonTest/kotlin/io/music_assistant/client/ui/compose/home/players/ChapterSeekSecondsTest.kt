@@ -1,5 +1,6 @@
 package io.music_assistant.client.ui.compose.home.players
 
+import io.music_assistant.client.data.model.client.chapterSeekSeconds
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

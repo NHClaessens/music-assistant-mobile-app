@@ -8,6 +8,7 @@ import io.music_assistant.client.auth.AuthCoordinator
 import io.music_assistant.client.auth.AuthenticationManager
 import io.music_assistant.client.connection.ConnectionManager
 import io.music_assistant.client.data.CarDspApplier
+import io.music_assistant.client.data.ChapterProgressPreference
 import io.music_assistant.client.data.LocalPlayerController
 import io.music_assistant.client.data.MainDataSource
 import io.music_assistant.client.data.PlayerPositionTracker
@@ -97,6 +98,7 @@ fun sharedModule(
         // app settings storage as everything else.
         single<SendspinKeyStore> { SettingsSendspinKeyStore(get()) }
         single { PlayerPositionTracker() }  // Shared live-position source of truth
+        single { ChapterProgressPreference() }  // Server-synced chapter-progress gate
         singleOf(::PlayerRequestFactory)    // Pure PlayerAction → Request mapper
         singleOf(::LocalPlayerController)    // Local player: lifecycle + state + commands
         singleOf(::MediaItemFactory)        // Stateless DTO → domain mapper
