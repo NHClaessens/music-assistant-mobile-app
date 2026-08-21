@@ -105,6 +105,7 @@ object APICommands {
     // DSP commands
     const val CONFIG_PLAYERS_DSP_GET = "config/players/dsp/get"
     const val CONFIG_PLAYERS_DSP_SAVE = "config/players/dsp/save"
+    const val CONFIG_PLAYERS_DSP_APPLY_PRESET = "config/players/dsp/apply_preset"
     const val CONFIG_DSP_PRESETS_GET = "config/dsp_presets/get"
 
     // Media type kinds
