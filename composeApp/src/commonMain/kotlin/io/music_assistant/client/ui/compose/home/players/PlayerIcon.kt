@@ -9,8 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import io.music_assistant.client.data.model.client.Player
 import io.music_assistant.client.sharedicons.SharedIcons
-import musicassistantclient.composeapp.generated.resources.Res
-import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import kotlin.collections.get
 

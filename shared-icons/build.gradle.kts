@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.androidMultiplatformLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
@@ -51,6 +50,7 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
+                implementation(libs.compose.runtime)
                 implementation(libs.compose.components.resources)
                 // Add KMP dependencies here
             }
