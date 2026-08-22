@@ -56,7 +56,7 @@ sealed interface SessionEvent {
     /** An in-band re-handshake completed and new session keys are in place. */
     data object RehandshakeCompleted : SessionEvent
 
-    /** The session failed. [permanent] mirrors the transport's judgment. */
+    /** The session failed after best-effort transport cleanup; [permanent] mirrors the transport's judgment. */
     data class Failed(val cause: Throwable, val permanent: Boolean) : SessionEvent
 }
 
@@ -211,12 +211,13 @@ internal abstract class AbstractSendspinSession(
 
     /** Epoch establishment failed with [cause]; close the connection silently. */
     protected open suspend fun onEpochFailed(cause: Exception) {
-        emitEvent(SessionEvent.Failed(cause, permanent = false))
         try {
             transport.disconnect()
         } catch (_: Exception) {
             // Best-effort close; the socket may already be gone.
         }
+        // Publish failure after cleanup so consumers can safely react to it.
+        emitEvent(SessionEvent.Failed(cause, permanent = false))
     }
 
     /** One step of an epoch: a frame of this epoch, or the ending control event. */
