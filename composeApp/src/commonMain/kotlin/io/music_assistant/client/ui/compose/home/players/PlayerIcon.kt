@@ -1,7 +1,5 @@
 package io.music_assistant.client.ui.compose.home.players
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
@@ -9,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import io.music_assistant.client.data.model.client.Player
 import io.music_assistant.client.sharedicons.SharedIcons
+import io.music_assistant.client.ui.compose.common.providers.MdiIcon
 import org.jetbrains.compose.resources.painterResource
 import kotlin.collections.get
 
@@ -26,16 +25,18 @@ fun PlayerIcon(
     modifier: Modifier = Modifier,
     tint: Color = LocalContentColor.current,
 ) {
-    if (isLocal) {
-        Icon(Icons.Default.Smartphone, contentDescription = null, modifier = modifier, tint = tint)
-        return
-    }
-
-    val iconRes = SharedIcons.getIcon(player.icon)
-    Icon(
-        painter = painterResource(iconRes),
-        contentDescription = null,
+    MdiIcon(
+        name = player.icon,
         modifier = modifier,
         tint = tint,
+        fallback = {
+            val iconRes = SharedIcons.getIcon(if (isLocal) SharedIcons.SMARTPHONE else player.icon)
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                modifier = modifier,
+                tint = tint,
+            )
+        },
     )
 }
