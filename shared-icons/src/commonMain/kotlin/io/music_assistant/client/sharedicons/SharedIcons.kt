@@ -41,10 +41,10 @@ import musicassistantclient.shared_icons.generated.resources.wiim
 import org.jetbrains.compose.resources.DrawableResource
 
 object SharedIcons {
-    fun getIcon(id: String?): DrawableResource = iconMap[id] ?: Res.drawable.speaker
+    fun getResource(id: String?): DrawableResource = resourceMap[id] ?: Res.drawable.speaker
 
     const val SMARTPHONE = "smartphone"
-    private val iconMap: Map<String, DrawableResource> = mapOf(
+    private val resourceMap: Map<String, DrawableResource> = mapOf(
         "homepod-mini" to Res.drawable.homepod_mini,
         "sonos" to Res.drawable.sonos,
         "mac" to Res.drawable.mac,

@@ -9,7 +9,6 @@ import io.music_assistant.client.data.model.client.Player
 import io.music_assistant.client.sharedicons.SharedIcons
 import io.music_assistant.client.ui.compose.common.providers.MdiIcon
 import org.jetbrains.compose.resources.painterResource
-import kotlin.collections.get
 
 /**
  * Canonical renderer for a player's icon across all surfaces.
@@ -30,7 +29,8 @@ fun PlayerIcon(
         modifier = modifier,
         tint = tint,
         fallback = {
-            val iconRes = SharedIcons.getIcon(if (isLocal) SharedIcons.SMARTPHONE else player.icon)
+            val iconId = if (isLocal) SharedIcons.SMARTPHONE else player.icon
+            val iconRes = SharedIcons.getResource(iconId)
             Icon(
                 painter = painterResource(iconRes),
                 contentDescription = null,
