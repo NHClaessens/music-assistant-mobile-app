@@ -19,6 +19,8 @@ kotlin {
 
         withHostTestBuilder {
         }
+
+        androidResources.enable = true
     }
 
     // For iOS targets, this is also where you should
