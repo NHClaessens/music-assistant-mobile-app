@@ -32,11 +32,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -69,6 +72,14 @@ class HomeScreenViewModel(
 
     /** Live elapsed-time flow for the slider. Ticks at 500 ms only while playing + subscribed. */
     fun observePosition(queueId: String) = dataSource.positionTracker.observe(queueId)
+
+    /**
+     * Server-synced `audiobook_chapter_progress` gate for the chapter-relative timeline.
+     * The web frontend owns the toggle; this client refreshes it on connect.
+     */
+    val chapterProgressEnabled: StateFlow<Boolean> =
+        dataSource.userPreferences.chapterProgressEnabled
+            .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     /**
      * Seconds of audio buffered ahead of the local playhead, sampled to ~2 Hz so the buffered

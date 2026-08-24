@@ -15,6 +15,8 @@ import io.music_assistant.client.data.model.client.QueueTrack
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.image
+import io.music_assistant.client.data.model.client.presentationChapter
+import io.music_assistant.client.data.model.client.toAbsoluteSeekSeconds
 import io.music_assistant.client.player.MediaPlayerController
 import io.music_assistant.client.player.sendspin.EncryptionRequiredUnavailable
 import io.music_assistant.client.player.sendspin.SendspinClient
@@ -84,6 +86,7 @@ class LocalPlayerController(
     private val sendspinClientFactory: SendspinClientFactory,
     private val playerRequestFactory: PlayerRequestFactory,
     private val positionTracker: PlayerPositionTracker,
+    private val userPreferences: UserPreferences,
     private val errorBus: ErrorMessageBus,
 ) : CoroutineScope {
     private val log = Logger.withTag("LocalPlayerCtrl")
@@ -543,7 +546,9 @@ class LocalPlayerController(
             localPlayerData.value?.let { playerData ->
                 log.i { "Remote command: $command" }
                 remoteCommandToPlayerAction(command, playerData.queueInfo)
-                    ?.let { action -> handleLocalCommand(playerData, action) }
+                    ?.let { action ->
+                        handleLocalCommand(playerData, remapChapterRelativeSeek(playerData, action))
+                    }
                     ?: log.w { "Unknown remote command: $command" }
             } ?: log.w { "No local player available for remote command: $command" }
         }
@@ -842,6 +847,20 @@ class LocalPlayerController(
                 else -> commandQueue.add(entry)
             }
         }
+    }
+
+    /**
+     * Remaps chapter-relative system-scrubber SeekTo payloads to absolute seconds.
+     * SeekBy and chapter navigation are resolved by [PlayerRequestFactory].
+     */
+    private fun remapChapterRelativeSeek(
+        data: PlayerData,
+        action: PlayerAction,
+    ): PlayerAction {
+        if (action !is PlayerAction.SeekTo || !userPreferences.isChapterProgressEnabled) return action
+        val elapsedSec = data.queueInfo?.id?.let(positionTracker::effectiveSec)
+        val chapter = data.presentationChapter(elapsedSec) ?: return action
+        return PlayerAction.SeekTo(chapter.toAbsoluteSeekSeconds(action.position.toDouble()))
     }
 
     private companion object {

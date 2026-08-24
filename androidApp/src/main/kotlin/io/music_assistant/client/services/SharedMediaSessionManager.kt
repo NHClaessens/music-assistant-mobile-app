@@ -26,9 +26,13 @@ import io.music_assistant.client.data.MainDataSource
 import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.RepeatMode
+import io.music_assistant.client.data.model.client.ResolvedChapter
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.canBeFavorited
+import io.music_assistant.client.data.model.client.presentationChapter
+import io.music_assistant.client.data.model.client.toAbsoluteSeekSeconds
+import io.music_assistant.client.data.withPresentationChapter
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import kotlinx.coroutines.CoroutineScope
@@ -311,16 +315,26 @@ class SharedMediaSessionManager(
 
     private fun nowPlayingDataFlow(): Flow<MediaNotificationData> =
         sourcePlayerData()
-            .map { (player, multiplePlayers) ->
+            .withPresentationChapter(
+                preferences = dataSource.userPreferences,
+                positionTracker = dataSource.positionTracker,
+                playerOf = { (player, _) -> player },
+            )
+            .map { (source, chapter, elapsedSec) ->
+                val (player, multiplePlayers) = source
                 MediaNotificationData.from(
                     playerData = player,
                     multiplePlayers = multiplePlayers,
-                    effectiveElapsedSec = player.queueInfo?.id?.let {
-                        dataSource.positionTracker.effectiveSec(it)
-                    },
+                    effectiveElapsedSec = elapsedSec,
+                    currentChapter = chapter,
                 )
             }
             .distinctUntilChanged { old, new -> MediaNotificationData.areTooSimilarToUpdate(old, new) }
+
+    /** Pref-gated chapter for chapter-relative session presentation. */
+    private fun sessionChapter(player: PlayerData, elapsedSec: Double?): ResolvedChapter? =
+        player.presentationChapter(elapsedSec)
+            .takeIf { dataSource.userPreferences.isChapterProgressEnabled }
 
     private fun createCallback(): MediaSessionCompat.Callback =
         object : MediaSessionCompat.Callback() {
@@ -328,7 +342,17 @@ class SharedMediaSessionManager(
             override fun onPause() = act(PlayerAction.Pause)
             override fun onSkipToNext() = act(PlayerAction.Next)
             override fun onSkipToPrevious() = act(PlayerAction.Previous)
-            override fun onSeekTo(pos: Long) = act(PlayerAction.SeekTo(pos / 1000))
+
+            override fun onSeekTo(pos: Long) {
+                // Host scrubbers return chapter-relative targets; remap them to absolute seconds.
+                val targetSec = pos / 1000
+                val player = currentPlayer()
+                val elapsedSec = player?.queueInfo?.id?.let {
+                    dataSource.positionTracker.effectiveSec(it)
+                }
+                val chapter = player?.let { sessionChapter(it, elapsedSec) }
+                act(PlayerAction.SeekTo(chapter.toAbsoluteSeekSeconds(targetSec.toDouble())))
+            }
 
             override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
                 autoPlayHandler?.onPlayFromMediaId(mediaId, extras)
@@ -544,7 +568,8 @@ class SharedMediaSessionManager(
             )
             .putString(
                 MediaMetadataCompat.METADATA_KEY_ALBUM,
-                data.album,
+                // Chapter mode uses the chapter name instead of the album/book grouping.
+                data.chapterName ?: data.album,
             )
             .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap)
             .also { builder ->

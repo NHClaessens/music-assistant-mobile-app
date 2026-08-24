@@ -1,5 +1,6 @@
 package io.music_assistant.client.data
 
+import io.music_assistant.client.data.model.client.Chapter
 import io.music_assistant.client.data.model.client.ImageInfo
 import io.music_assistant.client.data.model.client.ImageType
 import io.music_assistant.client.data.model.client.MediaType
@@ -15,7 +16,10 @@ import io.music_assistant.client.data.model.client.items.Album
 import io.music_assistant.client.data.model.client.items.Artist
 import io.music_assistant.client.data.model.client.items.PlayableItem
 import io.music_assistant.client.data.model.client.items.Track
+import io.music_assistant.client.data.model.client.msUntilChapterEnd
+import io.music_assistant.client.data.model.client.presentationChapter
 import io.music_assistant.client.data.model.client.testAudiobook
+import io.music_assistant.client.data.model.client.testPodcastEpisode
 import io.music_assistant.client.data.model.client.testRadio
 import io.music_assistant.client.data.model.client.testTrack
 import io.music_assistant.client.ui.compose.common.DataState
@@ -317,6 +321,103 @@ class NowPlayingModesChannelTest {
         assertFalse(
             buildNowPlayingModes(playerData(testAudiobook(), queueInfo(queueId = "queue-1")))!!.togglesEnabled,
         )
+    }
+}
+
+/** Chapter-relative channels expose chapter position/duration; the domain stays absolute. */
+class NowPlayingChapterPresentationTest {
+    private val queueId = "queue-1"
+
+    private fun audiobookWithChapters(): PlayableItem = testAudiobook().copy(
+        duration = 400.0,
+        chapters = listOf(
+            Chapter(position = 0, name = "Ch1", start = 0.0, end = 100.0),
+            Chapter(position = 1, name = "Ch2", start = 100.0, end = 200.0),
+            Chapter(position = 2, name = "Ch3", start = 200.0, end = null),
+        ),
+    )
+
+    private fun playerDataAt(item: PlayableItem): PlayerData =
+        playerData(item, queueInfo(queueId = queueId))
+
+    @Test
+    fun presentationChapterResolvesAudiobookChapterAtPosition() {
+        val chapter = playerDataAt(audiobookWithChapters()).presentationChapter(150.0)
+        assertEquals("Ch2", chapter?.chapter?.name)
+        assertEquals(100.0, chapter?.start)
+        assertEquals(200.0, chapter?.end)
+    }
+
+    @Test
+    fun presentationChapterIsAudiobookOnly() {
+        assertNull(playerDataAt(testTrack()).presentationChapter(150.0))
+        assertNull(playerDataAt(testPodcastEpisode()).presentationChapter(150.0))
+    }
+
+    @Test
+    fun openEndedFinalChapterUsesTrackDuration() {
+        val chapter = playerDataAt(audiobookWithChapters()).presentationChapter(250.0)
+        assertEquals("Ch3", chapter?.chapter?.name)
+        assertEquals(400.0, chapter?.end)
+    }
+
+    @Test
+    fun trackChannelPresentsChapterNameAndDuration() {
+        val data = playerDataAt(audiobookWithChapters())
+        val chapter = data.presentationChapter(150.0)
+        val built = buildNowPlayingTrack(data, chapter)!!
+        assertEquals("Ch2", built.album)
+        assertEquals(100.0, built.duration)
+        // Identity and title stay the book's.
+        assertEquals("id", built.mediaItemId)
+        assertEquals("name", built.title)
+    }
+
+    @Test
+    fun transportChannelPresentsChapterRelativeElapsed() {
+        val tracker = PlayerPositionTracker()
+        tracker.setAnchor(queueId, elapsedSec = 150.0, isPlaying = false)
+        val data = playerDataAt(audiobookWithChapters())
+        val transport = buildNowPlayingTransport(
+            playerData = data,
+            positionTracker = tracker,
+            anchorMs = 10_000L,
+            currentChapter = data.presentationChapter(150.0),
+        )
+        assertEquals(50.0, transport?.elapsedSec)
+    }
+
+    @Test
+    fun msUntilChapterEndScalesByPlaybackSpeed() {
+        val data = playerData(
+            audiobookWithChapters(),
+            queueInfo(queueId = queueId, playbackSpeed = 2.0),
+        )
+        val chapter = data.presentationChapter(150.0)
+        // 50 media-seconds left at 2x → 25 s of wall clock, plus the boundary pad.
+        assertEquals(25_250L, data.msUntilChapterEnd(chapter, 150.0))
+    }
+
+    @Test
+    fun msUntilChapterEndIsNullOnceTheChapterEndIsBehindThePosition() {
+        // resolveCurrentChapter holds the final chapter at exact media completion.
+        // There is no boundary left to wake for, so no wake-up must be scheduled —
+        // a pad-length delay here re-resolves at 4 Hz until playback stops.
+        val data = playerDataAt(audiobookWithChapters())
+        val finalChapter = data.presentationChapter(400.0)
+        assertEquals(400.0, finalChapter?.end)
+        assertNull(data.msUntilChapterEnd(finalChapter, 400.0))
+        assertNull(data.msUntilChapterEnd(finalChapter, 450.0))
+    }
+
+    @Test
+    fun msUntilChapterEndIsNullWhenPausedOrChapterless() {
+        val data = playerDataAt(audiobookWithChapters())
+        val paused = data.copy(player = data.player.copy(isPlaying = false))
+        val chapter = data.presentationChapter(150.0)
+        assertNull(paused.msUntilChapterEnd(chapter, 150.0))
+        assertNull(data.msUntilChapterEnd(null, 150.0))
+        assertNull(data.msUntilChapterEnd(chapter, null))
     }
 }
 
