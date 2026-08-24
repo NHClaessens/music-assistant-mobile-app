@@ -40,6 +40,11 @@ import musicassistantclient.shared_icons.generated.resources.volume
 import musicassistantclient.shared_icons.generated.resources.wiim
 import org.jetbrains.compose.resources.DrawableResource
 
+/**
+ * Compose Multiplatform implementation of
+ * https://github.com/music-assistant/shared-icons/blob/main/manifest.json. Icons can be provided
+ * as [DrawableResource] objects using [getResource].
+ */
 object SharedIcons {
     fun getResource(id: String?): DrawableResource = resourceMap[id] ?: Res.drawable.speaker
 
