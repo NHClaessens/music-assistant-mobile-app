@@ -93,6 +93,8 @@ kotlin {
         }
 
         commonMain.dependencies {
+            implementation(project(":shared-icons"))
+
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
