@@ -13,6 +13,7 @@ import io.music_assistant.client.data.model.client.items.PlayableItem
 import io.music_assistant.client.data.model.client.testAudiobook
 import io.music_assistant.client.data.model.client.testPodcastEpisode
 import io.music_assistant.client.data.model.client.testTrack
+import io.music_assistant.client.data.model.server.ServerUserPreferences
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import kotlin.test.Test
@@ -48,8 +49,10 @@ class PlayerRequestFactoryTest {
         val tracker = PlayerPositionTracker()
         // Paused anchor → effectiveSec returns exactly positionSec (no wall-clock drift).
         tracker.setAnchor(queueId = queueId, elapsedSec = positionSec, isPlaying = false)
-        val preference = ChapterProgressPreference().apply { update(chapterProgressEnabled) }
-        return PlayerRequestFactory(tracker, preference).resolve(playerDataWith(item), action)
+        val preferences = UserPreferences().apply {
+            update(ServerUserPreferences(audiobookChapterProgress = chapterProgressEnabled))
+        }
+        return PlayerRequestFactory(tracker, preferences).resolve(playerDataWith(item), action)
     }
 
     @Test

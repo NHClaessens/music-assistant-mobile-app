@@ -22,8 +22,6 @@ import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.items.image
-import io.music_assistant.client.data.model.client.msUntilChapterEnd
-import io.music_assistant.client.data.model.client.presentationChapter
 import io.music_assistant.client.data.model.server.DspConfig
 import io.music_assistant.client.data.model.server.DspConfigPreset
 import io.music_assistant.client.data.model.server.ProviderManifest
@@ -59,12 +57,10 @@ import io.music_assistant.client.utils.currentTimeMillis
 import io.music_assistant.client.utils.resultAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -78,7 +74,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
@@ -95,7 +90,7 @@ internal fun mergeFullQueueSnapshot(
     }
 }
 
-@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+@OptIn(FlowPreview::class)
 class MainDataSource(
     private val settings: SettingsRepository,
     val apiClient: ServiceClient,
@@ -112,8 +107,8 @@ class MainDataSource(
      * [PlayerRequestFactory] (and [LocalPlayerController] through it) via DI.
      */
     val positionTracker: PlayerPositionTracker,
-    /** Server-synced chapter gate, refreshed from `auth/me` and shared by all surfaces. */
-    val chapterProgressPreference: ChapterProgressPreference,
+    /** Server-synced user preferences, refreshed from `auth/me` and shared by all surfaces. */
+    val userPreferences: UserPreferences,
     private val mediaItemFactory: MediaItemFactory,
     private val playerFactory: PlayerFactory,
     private val queueFactory: QueueFactory,
@@ -204,21 +199,17 @@ class MainDataSource(
             data?.let { applyFavoriteOverride(it, overrides) }
         }.stateIn(this, SharingStarted.Eagerly, null)
 
+    /** Local player paired with the chapter every system-media channel presents. */
+    private val localPlayerPresentation =
+        localPlayer.withPresentationChapter(userPreferences, positionTracker) { it }
+
     /**
      * Local system-media metadata; chapter presentation re-emits at boundaries
      * because no server event announces the duration/album change.
      */
     val nowPlayingTrack: StateFlow<NowPlayingTrack?> =
-        combine(localPlayer, chapterProgressPreference.enabled, ::Pair)
-            .transformLatest { (playerData, chapterPrefEnabled) ->
-                while (true) {
-                    val elapsedSec = playerData?.queueInfo?.id?.let(positionTracker::effectiveSec)
-                    val chapter = playerData?.presentationChapter(elapsedSec)
-                        ?.takeIf { chapterPrefEnabled }
-                    emit(buildNowPlayingTrack(playerData, chapter))
-                    delay(playerData?.msUntilChapterEnd(chapter, elapsedSec) ?: break)
-                }
-            }
+        localPlayerPresentation
+            .map { buildNowPlayingTrack(it.value, it.chapter) }
             .distinctUntilChanged()
             .stateIn(this, SharingStarted.Eagerly, null)
 
@@ -227,22 +218,13 @@ class MainDataSource(
      * Track and transport have no ordering guarantee; no-track states remain null.
      */
     val nowPlayingTransport: StateFlow<NowPlayingTransport?> =
-        combine(localPlayer, chapterProgressPreference.enabled, ::Pair)
-            .transformLatest { (playerData, chapterPrefEnabled) ->
-                // Re-emit at chapter boundaries so the chapter-relative anchor resets.
-                while (true) {
-                    val elapsedSec = playerData?.queueInfo?.id?.let(positionTracker::effectiveSec)
-                    val chapter = playerData?.presentationChapter(elapsedSec)
-                        ?.takeIf { chapterPrefEnabled }
-                    emit(
-                        buildNowPlayingTransport(
-                            playerData = playerData,
-                            positionTracker = positionTracker,
-                            currentChapter = chapter,
-                        ),
-                    )
-                    delay(playerData?.msUntilChapterEnd(chapter, elapsedSec) ?: break)
-                }
+        localPlayerPresentation
+            .map {
+                buildNowPlayingTransport(
+                    playerData = it.value,
+                    positionTracker = positionTracker,
+                    currentChapter = it.chapter,
+                )
             }
             .distinctUntilChanged(NowPlayingChannelChangeDetection::sameTransport)
             .stateIn(this, SharingStarted.Eagerly, null)
@@ -934,6 +916,8 @@ class MainDataSource(
         _serverPlayers.update { DataState.NoData() }
         _queueInfos.update { emptyList() }
         positionTracker.clear()
+        // Server-scoped: another server must not inherit this one's preferences.
+        userPreferences.clear()
         localPlayerController.clearState()
         // Note: _providersIcons deliberately NOT cleared (static data)
     }
@@ -1556,12 +1540,12 @@ class MainDataSource(
         }
     }
 
-    /** Refreshes the chapter preference from `auth/me`; failed fetches keep the current value. */
+    /** Refreshes preferences from `auth/me`; a failed fetch keeps the current values. */
     private fun updateUserPreferences() {
         launch {
             apiClient.sendRequest(Request(APICommands.AUTH_ME))
                 .resultAs<ServerUser>()
-                ?.let { chapterProgressPreference.update(it.preferences?.audiobookChapterProgress) }
+                ?.let { userPreferences.update(it.preferences) }
         }
     }
 

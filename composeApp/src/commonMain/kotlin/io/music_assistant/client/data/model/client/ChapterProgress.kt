@@ -61,15 +61,28 @@ fun PlayerData.presentationChapter(elapsedSec: Double?): ResolvedChapter? =
 fun chapterSeekSeconds(positionSec: Double): Long = ceil(positionSec).toLong()
 
 /**
+ * Absolute whole-second seek target for a value read off a presentation timeline.
+ * With a chapter the timeline is chapter-relative, so map it back and round up;
+ * without one the timeline is already absolute and keeps the truncating target
+ * the server and PlayerPositionTracker agree on. Every host surface that owns
+ * a scrubber converts through here, so the two coordinate systems meet in one place.
+ */
+fun ResolvedChapter?.toAbsoluteSeekSeconds(timelineSec: Double): Long =
+    this?.let { chapterSeekSeconds(it.absoluteSec(timelineSec)) } ?: timelineSec.toLong()
+
+/**
  * Wall-clock ms until [chapter]'s end at queue speed, or null if no wake-up is needed.
  * Adds a pad so boundary re-resolution lands inside the next chapter.
+ *
+ * The end can already be behind the position: [resolveCurrentChapter] holds the
+ * final chapter at exact media completion. There is no boundary left to wake for,
+ * so return null instead of a pad-length delay that would re-resolve at 4 Hz.
  */
 fun PlayerData.msUntilChapterEnd(chapter: ResolvedChapter?, elapsedSec: Double?): Long? {
     if (chapter == null || elapsedSec == null || !player.isPlaying) return null
     val speed = (queueInfo?.playbackSpeed ?: 1.0).takeIf { it > 0 } ?: return null
-    val mediaSecondsLeft = chapter.end - elapsedSec
-    return ((mediaSecondsLeft / speed) * 1000).toLong().coerceAtLeast(0L) +
-        CHAPTER_BOUNDARY_PAD_MS
+    val mediaSecondsLeft = (chapter.end - elapsedSec).takeIf { it > 0 } ?: return null
+    return ((mediaSecondsLeft / speed) * 1000).toLong() + CHAPTER_BOUNDARY_PAD_MS
 }
 
 private const val CHAPTER_BOUNDARY_PAD_MS = 250L

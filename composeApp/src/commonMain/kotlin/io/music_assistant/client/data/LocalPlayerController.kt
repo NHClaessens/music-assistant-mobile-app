@@ -13,10 +13,10 @@ import io.music_assistant.client.data.model.client.Queue
 import io.music_assistant.client.data.model.client.QueueInfo
 import io.music_assistant.client.data.model.client.QueueTrack
 import io.music_assistant.client.data.model.client.RepeatMode
-import io.music_assistant.client.data.model.client.chapterSeekSeconds
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.image
 import io.music_assistant.client.data.model.client.presentationChapter
+import io.music_assistant.client.data.model.client.toAbsoluteSeekSeconds
 import io.music_assistant.client.player.MediaPlayerController
 import io.music_assistant.client.player.sendspin.EncryptionRequiredUnavailable
 import io.music_assistant.client.player.sendspin.SendspinClient
@@ -86,7 +86,7 @@ class LocalPlayerController(
     private val sendspinClientFactory: SendspinClientFactory,
     private val playerRequestFactory: PlayerRequestFactory,
     private val positionTracker: PlayerPositionTracker,
-    private val chapterProgressPreference: ChapterProgressPreference,
+    private val userPreferences: UserPreferences,
     private val errorBus: ErrorMessageBus,
 ) : CoroutineScope {
     private val log = Logger.withTag("LocalPlayerCtrl")
@@ -857,12 +857,10 @@ class LocalPlayerController(
         data: PlayerData,
         action: PlayerAction,
     ): PlayerAction {
-        if (action !is PlayerAction.SeekTo || !chapterProgressPreference.isEnabled) return action
+        if (action !is PlayerAction.SeekTo || !userPreferences.isChapterProgressEnabled) return action
         val elapsedSec = data.queueInfo?.id?.let(positionTracker::effectiveSec)
         val chapter = data.presentationChapter(elapsedSec) ?: return action
-        return PlayerAction.SeekTo(
-            chapterSeekSeconds(chapter.absoluteSec(action.position.toDouble())),
-        )
+        return PlayerAction.SeekTo(chapter.toAbsoluteSeekSeconds(action.position.toDouble()))
     }
 
     private companion object {

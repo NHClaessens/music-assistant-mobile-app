@@ -399,6 +399,18 @@ class NowPlayingChapterPresentationTest {
     }
 
     @Test
+    fun msUntilChapterEndIsNullOnceTheChapterEndIsBehindThePosition() {
+        // resolveCurrentChapter holds the final chapter at exact media completion.
+        // There is no boundary left to wake for, so no wake-up must be scheduled —
+        // a pad-length delay here re-resolves at 4 Hz until playback stops.
+        val data = playerDataAt(audiobookWithChapters())
+        val finalChapter = data.presentationChapter(400.0)
+        assertEquals(400.0, finalChapter?.end)
+        assertNull(data.msUntilChapterEnd(finalChapter, 400.0))
+        assertNull(data.msUntilChapterEnd(finalChapter, 450.0))
+    }
+
+    @Test
     fun msUntilChapterEndIsNullWhenPausedOrChapterless() {
         val data = playerDataAt(audiobookWithChapters())
         val paused = data.copy(player = data.player.copy(isPlaying = false))

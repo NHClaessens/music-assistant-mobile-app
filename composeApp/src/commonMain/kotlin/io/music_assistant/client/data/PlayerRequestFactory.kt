@@ -14,7 +14,7 @@ import io.music_assistant.client.ui.compose.common.action.PlayerAction
  */
 class PlayerRequestFactory(
     private val positionTracker: PlayerPositionTracker,
-    private val chapterProgressPreference: ChapterProgressPreference,
+    private val userPreferences: UserPreferences,
 ) {
     /**
      * Resolves relative seeks and chapter navigation to absolute [PlayerAction.SeekTo] targets.
@@ -130,7 +130,7 @@ class PlayerRequestFactory(
      * Null selects the plain next/previous command.
      */
     private fun PlayerData.chapterNavigationTargets(): List<Chapter>? =
-        if (chapterProgressPreference.isEnabled) {
+        if (userPreferences.isChapterProgressEnabled) {
             queueInfo?.currentItem?.track.navigationChapters()
         } else {
             null

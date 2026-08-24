@@ -58,7 +58,6 @@ import coil3.compose.AsyncImage
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
 import io.music_assistant.client.data.model.client.ResolvedChapter
-import io.music_assistant.client.data.model.client.chapterSeekSeconds
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Audiobook
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
@@ -66,6 +65,7 @@ import io.music_assistant.client.data.model.client.items.QualityTier
 import io.music_assistant.client.data.model.client.items.canBeFavorited
 import io.music_assistant.client.data.model.client.items.qualityTier
 import io.music_assistant.client.data.model.client.presentationChapter
+import io.music_assistant.client.data.model.client.toAbsoluteSeekSeconds
 import io.music_assistant.client.imageloader.rememberArtworkRequest
 import io.music_assistant.client.player.sendspin.SendspinState
 import io.music_assistant.client.ui.alphaOn
@@ -434,6 +434,8 @@ fun FullPlayerItem(
         var userDragPosition by remember { mutableStateOf<Float?>(null) }
         var releasedSeekPosition by remember { mutableStateOf<Float?>(null) }
         // Latch the chapter at drag start so boundary crossings cannot shift the thumb.
+        // It outlives the gesture: the released latch is an absolute position in THIS
+        // chapter, and [currentChapter] may already have moved on to the next one.
         var dragChapter by remember { mutableStateOf<ResolvedChapter?>(null) }
 
         // A queue-item change mid-drag (track end, Next from another controller)
@@ -450,6 +452,7 @@ fun FullPlayerItem(
             val released = releasedSeekPosition ?: return@LaunchedEffect
             if (kotlin.math.abs(displayPosition - released) < SEEK_STICK_EPSILON_SECONDS) {
                 releasedSeekPosition = null
+                dragChapter = null
             }
         }
 
@@ -458,7 +461,7 @@ fun FullPlayerItem(
             else ->
                 userDragPosition
                 ?: releasedSeekPosition?.let { released ->
-                    currentChapter?.relativeSec(released.toDouble())?.toFloat() ?: released
+                    dragChapter?.relativeSec(released.toDouble())?.toFloat() ?: released
                 }
                 ?: timelinePosition
         }
@@ -483,13 +486,10 @@ fun FullPlayerItem(
                     userDragPosition?.let { seekPos ->
                         // Convert the latched chapter-relative value to an absolute,
                         // whole-second target to match server/tracker state.
-                        val seekSeconds = dragChapter
-                            ?.let { chapterSeekSeconds(it.absoluteSec(seekPos.toDouble())) }
-                            ?: seekPos.toLong()
+                        val seekSeconds = dragChapter.toAbsoluteSeekSeconds(seekPos.toDouble())
                         releasedSeekPosition = seekSeconds.toFloat()
                         playerAction(item, PlayerAction.SeekTo(seekSeconds))
                         userDragPosition = null  // Clear drag state
-                        dragChapter = null
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

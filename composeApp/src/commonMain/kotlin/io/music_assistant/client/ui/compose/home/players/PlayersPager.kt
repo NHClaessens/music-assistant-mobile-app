@@ -76,7 +76,6 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
-import io.music_assistant.client.data.ChapterProgressPreference
 import io.music_assistant.client.data.model.client.AppMediaItemFixtures
 import io.music_assistant.client.data.model.client.Lyrics
 import io.music_assistant.client.data.model.client.PlayerData
@@ -138,7 +137,6 @@ import musicassistantclient.composeapp.generated.resources.queue_clear
 import musicassistantclient.composeapp.generated.resources.queue_no_other_players
 import musicassistantclient.composeapp.generated.resources.queue_transfer
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
 @Composable
@@ -164,8 +162,8 @@ fun PlayersPager(
         val dynamicColorsEnabled = rememberDynamicColorsEnabled()
         // Server-synced audiobook_chapter_progress preference; gates the
         // chapter-relative timeline in FullPlayerItem.
-        val chapterProgressEnabled by koinInject<ChapterProgressPreference>()
-            .enabled.collectAsStateWithLifecycle()
+        val chapterProgressEnabled by homeScreenViewModel.chapterProgressEnabled
+            .collectAsStateWithLifecycle()
 
         val playerAction1 =
             { data: PlayerData, action: PlayerAction ->

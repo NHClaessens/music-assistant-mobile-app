@@ -27,12 +27,12 @@ import io.music_assistant.client.data.model.client.MediaType
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.ResolvedChapter
-import io.music_assistant.client.data.model.client.chapterSeekSeconds
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.canBeFavorited
-import io.music_assistant.client.data.model.client.msUntilChapterEnd
 import io.music_assistant.client.data.model.client.presentationChapter
+import io.music_assistant.client.data.model.client.toAbsoluteSeekSeconds
+import io.music_assistant.client.data.withPresentationChapter
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +41,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -54,7 +53,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -316,40 +314,27 @@ class SharedMediaSessionManager(
         }
 
     private fun nowPlayingDataFlow(): Flow<MediaNotificationData> =
-        combine(
-            sourcePlayerData(),
-            dataSource.chapterProgressPreference.enabled,
-        ) { (player, multiplePlayers), chapterPrefEnabled ->
-            Triple(player, multiplePlayers, chapterPrefEnabled)
-        }
-            .transformLatest { (player, multiplePlayers, chapterPrefEnabled) ->
-                // Re-emit at chapter boundaries because no server event announces presentation changes.
-                while (true) {
-                    val elapsedSec = player.queueInfo?.id?.let {
-                        dataSource.positionTracker.effectiveSec(it)
-                    }
-                    val chapter = player.presentationChapter(elapsedSec)
-                        ?.takeIf { chapterPrefEnabled }
-                    emit(
-                        MediaNotificationData.from(
-                            playerData = player,
-                            multiplePlayers = multiplePlayers,
-                            effectiveElapsedSec = elapsedSec,
-                            currentChapter = chapter,
-                        ),
-                    )
-                    delay(player.msUntilChapterEnd(chapter, elapsedSec) ?: break)
-                }
+        sourcePlayerData()
+            .withPresentationChapter(
+                preferences = dataSource.userPreferences,
+                positionTracker = dataSource.positionTracker,
+                playerOf = { (player, _) -> player },
+            )
+            .map { (source, chapter, elapsedSec) ->
+                val (player, multiplePlayers) = source
+                MediaNotificationData.from(
+                    playerData = player,
+                    multiplePlayers = multiplePlayers,
+                    effectiveElapsedSec = elapsedSec,
+                    currentChapter = chapter,
+                )
             }
             .distinctUntilChanged { old, new -> MediaNotificationData.areTooSimilarToUpdate(old, new) }
 
     /** Pref-gated chapter for chapter-relative session presentation. */
     private fun sessionChapter(player: PlayerData, elapsedSec: Double?): ResolvedChapter? =
-        if (dataSource.chapterProgressPreference.isEnabled) {
-            player.presentationChapter(elapsedSec)
-        } else {
-            null
-        }
+        player.presentationChapter(elapsedSec)
+            .takeIf { dataSource.userPreferences.isChapterProgressEnabled }
 
     private fun createCallback(): MediaSessionCompat.Callback =
         object : MediaSessionCompat.Callback() {
@@ -366,12 +351,7 @@ class SharedMediaSessionManager(
                     dataSource.positionTracker.effectiveSec(it)
                 }
                 val chapter = player?.let { sessionChapter(it, elapsedSec) }
-                act(
-                    PlayerAction.SeekTo(
-                        chapter?.let { chapterSeekSeconds(it.absoluteSec(targetSec.toDouble())) }
-                            ?: targetSec,
-                    ),
-                )
+                act(PlayerAction.SeekTo(chapter.toAbsoluteSeekSeconds(targetSec.toDouble())))
             }
 
             override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
