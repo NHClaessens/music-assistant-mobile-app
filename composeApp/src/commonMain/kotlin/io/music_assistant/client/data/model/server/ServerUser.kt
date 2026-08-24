@@ -16,5 +16,5 @@ data class ServerUserPreferences(
     @SerialName("audiobook_chapter_progress") val audiobookChapterProgress: Boolean? = null,
 ) {
     /** Resolved chapter gate; an absent field means the server default. */
-    val chapterProgressEnabled: Boolean get() = audiobookChapterProgress ?: true
+    val chapterProgressEnabled: Boolean get() = audiobookChapterProgress != false
 }
