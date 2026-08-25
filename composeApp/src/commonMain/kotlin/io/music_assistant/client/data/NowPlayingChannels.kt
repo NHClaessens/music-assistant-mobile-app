@@ -6,10 +6,10 @@ import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.QueueTrack
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.ResolvedChapter
-import io.music_assistant.client.data.model.client.navigationChapters
 import io.music_assistant.client.data.model.client.items.PlayableItem
 import io.music_assistant.client.data.model.client.items.image
 import io.music_assistant.client.data.model.client.items.isLongFormSpokenContent
+import io.music_assistant.client.data.model.client.navigationChapters
 import io.music_assistant.client.utils.monotonicMs
 import kotlin.math.abs
 
