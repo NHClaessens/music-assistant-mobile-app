@@ -309,6 +309,7 @@ fun PlayersPager(
                                 onSelectPlayer = onSelectPlayer,
                                 onGroupButton = onGroupButton,
                                 playerAction = playerAction1,
+                                chapterProgressEnabled = chapterProgressEnabled,
                             )
                         } else {
                             ExpandedPlayerPage(
@@ -520,6 +521,7 @@ private fun ExpandedPlayerPage(
                     onGroupButton = if (isExpandedScreen && !isQueueExpanded) onGroupButton else null,
                     showAdditionalControls = isExpandedScreen,
                     sendSpinState = sendspinState,
+                    chapterProgressEnabled = chapterProgressEnabled,
                 )
             }
         }
@@ -966,6 +968,8 @@ private fun CollapsedPlayerPage(
     onSelectPlayer: () -> Unit,
     onGroupButton: () -> Unit,
     playerAction: (PlayerData, PlayerAction) -> Unit,
+    // Server preference gate for chapter-based Next enablement.
+    chapterProgressEnabled: Boolean = true,
 ) {
     if (!isExpandedScreen) {
         Row(
@@ -990,6 +994,7 @@ private fun CollapsedPlayerPage(
         onSelectPlayer = if (isExpandedScreen) onSelectPlayer else null,
         onGroupButton = if (isExpandedScreen) onGroupButton else null,
         sendSpinState = sendspinState,
+        chapterProgressEnabled = chapterProgressEnabled,
     )
 }
 
