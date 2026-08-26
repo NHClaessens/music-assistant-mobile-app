@@ -209,7 +209,13 @@ class MainDataSource(
      */
     val nowPlayingTrack: StateFlow<NowPlayingTrack?> =
         localPlayerPresentation
-            .map { buildNowPlayingTrack(it.value, it.chapter) }
+            .map {
+                buildNowPlayingTrack(
+                    playerData = it.value,
+                    currentChapter = it.chapter,
+                    chapterNavigationEnabled = userPreferences.isChapterProgressEnabled,
+                )
+            }
             .distinctUntilChanged()
             .stateIn(this, SharingStarted.Eagerly, null)
 

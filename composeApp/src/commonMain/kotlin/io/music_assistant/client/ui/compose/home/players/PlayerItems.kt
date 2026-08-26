@@ -108,6 +108,8 @@ fun CompactPlayerItem(
     onGroupButton: (() -> Unit)? = null,
     showAdditionalControls: Boolean = false,
     sendSpinState: SendspinState?,
+    // Server preference gate for chapter-based Next enablement.
+    chapterProgressEnabled: Boolean = true,
 ) {
     val currentMedia = item.player.currentMedia
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
@@ -239,6 +241,7 @@ fun CompactPlayerItem(
                 showSkip = true,
                 showSkipBack = onSelectPlayer != null,
                 tint = colors.controlTint,
+                chapterProgressEnabled = chapterProgressEnabled,
             )
         }
 
@@ -717,6 +720,7 @@ fun FullPlayerItem(
                 playerAction = playerAction,
                 mainButtonSize = 60.dp,
                 tint = controlTint,
+                chapterProgressEnabled = chapterProgressEnabled,
             )
             // Mirrors the heart slot: lyrics button when available, else a spacer
             // so the transport controls stay centered.
