@@ -38,7 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.AllInclusive
-import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
@@ -99,6 +99,7 @@ import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import io.music_assistant.client.ui.compose.common.bufferIndicatorMenuOption
 import io.music_assistant.client.ui.compose.common.dynamicColorsMenuOption
+import io.music_assistant.client.ui.compose.common.icons.CrossfadeIcon
 import io.music_assistant.client.ui.compose.common.icons.VolumeIcon
 import io.music_assistant.client.ui.compose.common.icons.VolumeMutedIcon
 import io.music_assistant.client.ui.compose.common.items.AddToPlaylistDialog
@@ -128,12 +129,15 @@ import musicassistantclient.composeapp.generated.resources.cd_mute
 import musicassistantclient.composeapp.generated.resources.cd_unmute
 import musicassistantclient.composeapp.generated.resources.player_power_off
 import musicassistantclient.composeapp.generated.resources.player_power_on
+import musicassistantclient.composeapp.generated.resources.player_sleep_timer
 import musicassistantclient.composeapp.generated.resources.players_dsp_settings
 import musicassistantclient.composeapp.generated.resources.players_loading
 import musicassistantclient.composeapp.generated.resources.players_none_available
 import musicassistantclient.composeapp.generated.resources.queue_autoplay_disable
 import musicassistantclient.composeapp.generated.resources.queue_autoplay_enable
 import musicassistantclient.composeapp.generated.resources.queue_clear
+import musicassistantclient.composeapp.generated.resources.queue_crossfade_disable
+import musicassistantclient.composeapp.generated.resources.queue_crossfade_enable
 import musicassistantclient.composeapp.generated.resources.queue_no_other_players
 import musicassistantclient.composeapp.generated.resources.queue_transfer
 import org.jetbrains.compose.resources.stringResource
@@ -167,6 +171,10 @@ fun PlayersPager(
         // Server-synced audiobook_chapter_progress preference; gates the
         // chapter-relative timeline in FullPlayerItem.
         val chapterProgressEnabled by homeScreenViewModel.chapterProgressEnabled
+            .collectAsStateWithLifecycle()
+        // Sleep timers are a server-side feature from schema 35 on; below that the
+        // menu entry and the badge stay hidden entirely.
+        val sleepTimerSupported by homeScreenViewModel.sleepTimerSupported
             .collectAsStateWithLifecycle()
 
         val playerAction1 =
@@ -227,9 +235,11 @@ fun PlayersPager(
                 val player = playerDataList.getOrNull(page) ?: return@HorizontalPager
                 var showGroupDialog by remember { mutableStateOf(false) }
                 var showDspDialog by remember { mutableStateOf(false) }
+                var showSleepTimerDialog by remember { mutableStateOf(false) }
                 val onSelectPlayer = { selectDialogPlayerId = player.player.id }
                 val onGroupButton = { showGroupDialog = true }
                 val onDspButton = { showDspDialog = true }
+                val onSleepTimerButton = { showSleepTimerDialog = true }
                 if (showGroupDialog) {
                     GroupSettingsDialog(
                         player = player,
@@ -251,6 +261,16 @@ fun PlayersPager(
                         playerId = player.player.id,
                         dspSettingsViewModel = dspSettingsViewModel,
                         onDismissRequest = { showDspDialog = false },
+                    )
+                }
+                if (showSleepTimerDialog) {
+                    SleepTimerDialog(
+                        expiresAtSec = player.player.sleepTimerExpiresAt,
+                        onSelect = {
+                            homeScreenViewModel.setSleepTimer(player.player.id, it)
+                        },
+                        onClear = { homeScreenViewModel.clearSleepTimer(player.player.id) },
+                        onDismissRequest = { showSleepTimerDialog = false },
                     )
                 }
 
@@ -322,6 +342,7 @@ fun PlayersPager(
                                 onSelectPlayer = onSelectPlayer,
                                 onGroupButton = onGroupButton,
                                 onDspButton = onDspButton.takeIf { !player.player.isGroup },
+                                onSleepTimerButton = onSleepTimerButton.takeIf { sleepTimerSupported },
                                 playerAction = playerAction1,
                                 playlistActions = actionsViewModel,
                                 onFavoriteClick = {
@@ -419,6 +440,7 @@ private fun ExpandedPlayerPage(
     onSelectPlayer: () -> Unit,
     onGroupButton: () -> Unit,
     onDspButton: (() -> Unit)?,
+    onSleepTimerButton: (() -> Unit)?,
     playerAction: (PlayerData, PlayerAction) -> Unit,
     playlistActions: PlaylistActions? = null,
     onFavoriteClick: (AppMediaItem) -> Unit,
@@ -482,29 +504,35 @@ private fun ExpandedPlayerPage(
                 )
             },
             end = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (player.queueInfo?.isRadioOn == true) {
-                        Icon(
-                            imageVector = Icons.Default.CellTower,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = colors.controlTint,
-                        )
-                    }
-                    PlayerOverflowMenu(
-                        currentPlayer = player,
-                        allPlayers = allPlayers,
-                        playerAction = { playerAction(player, it) },
-                        queueAction = queueAction,
-                        navigateToItem = {
-                            navigateToItem(it)
-                            onClose()
-                        },
-                        onPlayerSelected = { moveToPlayer(it) },
-                        onOpenDsp = onDspButton,
-                        playlistActions = playlistActions,
-                    )
-                }
+                PlayerOverflowMenu(
+                    currentPlayer = player,
+                    allPlayers = allPlayers,
+                    playerAction = { playerAction(player, it) },
+                    queueAction = queueAction,
+                    navigateToItem = {
+                        navigateToItem(it)
+                        onClose()
+                    },
+                    onPlayerSelected = { moveToPlayer(it) },
+                    onOpenDsp = onDspButton,
+                    onOpenSleepTimer = onSleepTimerButton,
+                    playlistActions = playlistActions,
+                )
+            },
+        )
+
+        // Status badges live on their own fixed-height row so appearing/disappearing
+        // badges never reflow the player below, and so they never compete with the
+        // player name for width.
+        PlayerBadgesRow(
+            player = player,
+            tint = colors.controlTint,
+            onSleepTimerClick = onSleepTimerButton,
+            onToggleAutoplay = { current ->
+                playerAction(player, PlayerAction.ToggleDontStopTheMusic(current = current))
+            },
+            onToggleCrossfade = { current ->
+                playerAction(player, PlayerAction.ToggleCrossfade(current = current))
             },
         )
 
@@ -792,6 +820,7 @@ private fun PlayerOverflowMenu(
     navigateToItem: (AppMediaItem) -> Unit,
     onPlayerSelected: (String) -> Unit,
     onOpenDsp: (() -> Unit)?,
+    onOpenSleepTimer: (() -> Unit)?,
     playlistActions: PlaylistActions? = null,
 ) {
     var transferMenuExpanded by remember { mutableStateOf(false) }
@@ -836,6 +865,24 @@ private fun PlayerOverflowMenu(
                                     queueData.data.info.autoPlayEnabled == true,
                                 ),
                             )
+                        },
+                    ),
+                )
+            }
+
+            queueData.data.info.crossfadeEnabled?.let { crossfadeEnabled ->
+                add(
+                    OverflowMenuOption(
+                        title = stringResource(
+                            if (crossfadeEnabled) {
+                                Res.string.queue_crossfade_disable
+                            } else {
+                                Res.string.queue_crossfade_enable
+                            },
+                        ),
+                        icon = CrossfadeIcon,
+                        onClick = {
+                            playerAction(PlayerAction.ToggleCrossfade(crossfadeEnabled))
                         },
                     ),
                 )
@@ -908,6 +955,15 @@ private fun PlayerOverflowMenu(
                     title = stringResource(Res.string.players_dsp_settings),
                     icon = Icons.Default.Tune,
                     onClick = onOpenDsp,
+                ),
+            )
+        }
+        if (onOpenSleepTimer != null) {
+            add(
+                OverflowMenuOption(
+                    title = stringResource(Res.string.player_sleep_timer),
+                    icon = Icons.Default.Bedtime,
+                    onClick = onOpenSleepTimer,
                 ),
             )
         }
@@ -1026,6 +1082,7 @@ fun ExpandedPlayerPagePreview() {
             onSelectPlayer = {},
             onGroupButton = {},
             onDspButton = null,
+            onSleepTimerButton = null,
             playerAction = { _, _ -> },
             onFavoriteClick = {},
             onClose = {},
@@ -1062,6 +1119,7 @@ fun ExpandedPlayerPageMediumScreenPreview() {
             onSelectPlayer = {},
             onGroupButton = {},
             onDspButton = null,
+            onSleepTimerButton = null,
             playerAction = { _, _ -> },
             onFavoriteClick = {},
             onClose = {},
@@ -1098,6 +1156,7 @@ fun ExpandedPlayerPageExpandedScreenPreview() {
             onSelectPlayer = {},
             onGroupButton = {},
             onDspButton = null,
+            onSleepTimerButton = null,
             playerAction = { _, _ -> },
             onFavoriteClick = {},
             onClose = {},
@@ -1138,6 +1197,7 @@ fun ExpandedPlayerPageExpandedScreenPlusPreview() {
             onSelectPlayer = {},
             onGroupButton = {},
             onDspButton = null,
+            onSleepTimerButton = null,
             playerAction = { _, _ -> },
             onFavoriteClick = {},
             onClose = {},
@@ -1175,6 +1235,7 @@ fun ExpandedPlayerPagePhoneLandscapePreview() {
             onSelectPlayer = {},
             onGroupButton = {},
             onDspButton = null,
+            onSleepTimerButton = null,
             playerAction = { _, _ -> },
             onFavoriteClick = {},
             onClose = {},
@@ -1211,6 +1272,7 @@ fun ExpandedPlayerPageLargeScreenPreview() {
             onSelectPlayer = {},
             onGroupButton = {},
             onDspButton = null,
+            onSleepTimerButton = null,
             playerAction = { _, _ -> },
             onFavoriteClick = {},
             onClose = {},

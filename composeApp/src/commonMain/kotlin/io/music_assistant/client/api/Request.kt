@@ -64,6 +64,26 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             },
         )
 
+        fun setSleepTimer(
+            playerId: String,
+            seconds: Int,
+        ) = Request(
+            command = APICommands.PLAYERS_SLEEP_TIMER_SET,
+            args = buildJsonObject {
+                put("player_id", JsonPrimitive(playerId))
+                put("seconds", JsonPrimitive(seconds))
+            },
+        )
+
+        fun clearSleepTimer(
+            playerId: String,
+        ) = Request(
+            command = APICommands.PLAYERS_SLEEP_TIMER_CLEAR,
+            args = buildJsonObject {
+                put("player_id", JsonPrimitive(playerId))
+            },
+        )
+
         fun seek(
             queueId: String,
             position: Long,
@@ -238,6 +258,12 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             },
         )
 
+        /**
+         * Deliberately still the legacy command. `player_queues/dont_stop_the_music` is a
+         * live server-side alias that delegates to `set_autoplay`, so it works on old AND
+         * new servers, whereas `player_queues/autoplay` does not exist before 2.10. Do not
+         * "modernize" this to match the read path — that would break older servers.
+         */
         fun setDontStopTheMusic(
             queueId: String,
             enabled: Boolean,
@@ -246,6 +272,22 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             args = buildJsonObject {
                 put("queue_id", JsonPrimitive(queueId))
                 put("dont_stop_the_music_enabled", JsonPrimitive(enabled))
+            },
+        )
+
+        /**
+         * Absolute setter, not a toggle: the server applies the value it is given.
+         * Unlike autoplay this command was never renamed, so there is no legacy alias
+         * to prefer — see `ServerQueue.crossfadeEnabled`.
+         */
+        fun setCrossfade(
+            queueId: String,
+            enabled: Boolean,
+        ) = Request(
+            command = APICommands.PLAYER_QUEUES_CROSSFADE,
+            args = buildJsonObject {
+                put("queue_id", JsonPrimitive(queueId))
+                put("crossfade_enabled", JsonPrimitive(enabled))
             },
         )
 
