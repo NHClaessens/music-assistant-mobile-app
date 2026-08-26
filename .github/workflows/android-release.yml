@@ -115,6 +115,7 @@ jobs:
           serviceAccountJson: ${{ steps.gcloud-auth.outputs.credentials_file_path }}
           packageName: io.music_assistant.client
           releaseFiles: androidApp/build/outputs/bundle/release/androidApp-release.aab
+          mappingFile: androidApp/build/outputs/mapping/release/mapping.txt
           track: beta
           status: completed
           whatsNewDirectory: distribution/whatsnew
@@ -177,7 +178,9 @@ jobs:
 
             `music-assistant-${{ steps.version.outputs.name }}.apk` — universal build
             signed with the Google Play app key (installs alongside / updates Play installs).
-          files: dist/music-assistant-*.apk
+          files: |
+            dist/music-assistant-*.apk
+            androidApp/build/outputs/mapping/release/mapping.txt
           generate_release_notes: true
           draft: false
           prerelease: false
