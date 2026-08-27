@@ -663,6 +663,9 @@ class KtorServiceClient(
             backgroundInfo = { BackgroundedConnectionInfo.Direct(connection) },
             onFreshConnect = {
                 settings.setLastConnectionMode("direct")
+                // Provisional: the server has not named itself yet, so this row has no id.
+                // It keeps JIT reconnect able to recover a login that did not finish, and
+                // AuthenticationManager absorbs it once the server identifies itself.
                 settings.addOrUpdateHistoryEntry(
                     ConnectionHistoryEntry(
                         type = ConnectionType.DIRECT,
@@ -718,6 +721,7 @@ class KtorServiceClient(
             backgroundInfo = { BackgroundedConnectionInfo.WebRTC(remoteId) },
             onFreshConnect = {
                 settings.setLastConnectionMode("webrtc")
+                // Provisional — see the Direct path above.
                 settings.addOrUpdateHistoryEntry(
                     ConnectionHistoryEntry(
                         type = ConnectionType.WEBRTC,
@@ -1052,16 +1056,8 @@ class KtorServiceClient(
     }
 
     private fun savedTokenForState(state: SessionState.Connected): String? {
-        val id = when (state) {
-            is SessionState.Connected.Direct -> settings.getDirectServerIdentifier(
-                state.connectionInfo.host,
-                state.connectionInfo.port,
-                state.connectionInfo.isTls,
-                state.connectionInfo.basePath,
-            )
-            is SessionState.Connected.WebRTC -> settings.getWebRTCServerIdentifier(state.remoteId.rawId)
-        }
-        return settings.getTokenForServer(id)
+        // Null until `server/hello` lands: without the server id there is no token to find.
+        return state.serverInfo?.serverId?.let { settings.getTokenForServer(it) }
     }
 
     override suspend fun sendRequest(request: Request): Result<Answer> {
