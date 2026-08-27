@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.cd_sleep_timer
 import musicassistantclient.composeapp.generated.resources.cd_sleep_timer_off
+import musicassistantclient.composeapp.generated.resources.player_sleep_timer
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -80,7 +81,11 @@ fun SleepTimerBadge(
             modifier = Modifier.size(BADGE_ICON_SIZE),
         )
         Text(
-            text = remaining.formatDuration(),
+            text = if (remaining != null) {
+                remaining.formatDuration()
+            } else {
+                stringResource(Res.string.player_sleep_timer)
+            },
             style = MaterialTheme.typography.labelSmall,
         )
     }

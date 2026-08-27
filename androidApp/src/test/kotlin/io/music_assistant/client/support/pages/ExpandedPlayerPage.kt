@@ -20,7 +20,6 @@ import musicassistantclient.composeapp.generated.resources.action_go_to_artist
 import musicassistantclient.composeapp.generated.resources.cd_more
 import musicassistantclient.composeapp.generated.resources.cd_sleep_timer
 import musicassistantclient.composeapp.generated.resources.cd_sleep_timer_off
-import musicassistantclient.composeapp.generated.resources.player_sleep_timer
 import musicassistantclient.composeapp.generated.resources.queue_clear
 import musicassistantclient.composeapp.generated.resources.queue_label_with_position
 import musicassistantclient.composeapp.generated.resources.queue_transfer
@@ -69,15 +68,12 @@ class ExpandedPlayerPage(
         return ExpandedPlayerPage(name, false, null, composeTestRule).assertOnPage()
     }
 
-    fun openSleepTimerFromMenu(): SleepTimerPage {
-        clickMore()
-        composeTestRule.onNodeWithText(Res.string.player_sleep_timer.get()).performClick()
-        return SleepTimerPage(name, boolean, item, composeTestRule).assertOnPage()
-    }
+    fun openSleepTimerFromBadge(active: Boolean): SleepTimerPage {
+        assertSleepTimerBadge(active)
 
-    fun openSleepTimerFromBadge(): SleepTimerPage {
+        val description = getSleepTimerBadgeContentDescription(active)
         composeTestRule
-            .onNodeWithContentDescription(Res.string.cd_sleep_timer.get())
+            .onNodeWithContentDescription(description)
             .performClick()
         return SleepTimerPage(name, boolean, item, composeTestRule).assertOnPage()
     }
@@ -90,11 +86,7 @@ class ExpandedPlayerPage(
      * debounced `playersData` rebuild, which lags the click that set the timer.
      */
     fun assertSleepTimerBadge(active: Boolean): ExpandedPlayerPage {
-        val description = if (active) {
-            Res.string.cd_sleep_timer.get()
-        } else {
-            Res.string.cd_sleep_timer_off.get()
-        }
+        val description = getSleepTimerBadgeContentDescription(active)
         composeTestRule.waitUntil {
             composeTestRule.onNodeWithContentDescription(description).isDisplayed()
         }
@@ -138,5 +130,14 @@ class ExpandedPlayerPage(
     fun clickQualityTier(tier: String): AudioChainPage {
         composeTestRule.onNodeWithText(tier).performClick()
         return AudioChainPage(composeTestRule).assertOnPage()
+    }
+
+    private fun getSleepTimerBadgeContentDescription(active: Boolean): String {
+        val description = if (active) {
+            Res.string.cd_sleep_timer.get()
+        } else {
+            Res.string.cd_sleep_timer_off.get()
+        }
+        return description
     }
 }
