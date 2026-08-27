@@ -20,7 +20,6 @@ import musicassistantclient.composeapp.generated.resources.action_go_to_artist
 import musicassistantclient.composeapp.generated.resources.cd_more
 import musicassistantclient.composeapp.generated.resources.cd_sleep_timer
 import musicassistantclient.composeapp.generated.resources.cd_sleep_timer_off
-import musicassistantclient.composeapp.generated.resources.player_sleep_timer
 import musicassistantclient.composeapp.generated.resources.queue_clear
 import musicassistantclient.composeapp.generated.resources.queue_label_with_position
 import musicassistantclient.composeapp.generated.resources.queue_transfer
@@ -70,6 +69,8 @@ class ExpandedPlayerPage(
     }
 
     fun openSleepTimerFromBadge(active: Boolean): SleepTimerPage {
+        assertSleepTimerBadge(active)
+
         val description = getSleepTimerBadgeContentDescription(active)
         composeTestRule
             .onNodeWithContentDescription(description)
@@ -90,15 +91,6 @@ class ExpandedPlayerPage(
             composeTestRule.onNodeWithContentDescription(description).isDisplayed()
         }
         return this
-    }
-
-    private fun getSleepTimerBadgeContentDescription(active: Boolean): String {
-        val description = if (active) {
-            Res.string.cd_sleep_timer.get()
-        } else {
-            Res.string.cd_sleep_timer_off.get()
-        }
-        return description
     }
 
     private fun clickMore() {
@@ -138,5 +130,14 @@ class ExpandedPlayerPage(
     fun clickQualityTier(tier: String): AudioChainPage {
         composeTestRule.onNodeWithText(tier).performClick()
         return AudioChainPage(composeTestRule).assertOnPage()
+    }
+
+    private fun getSleepTimerBadgeContentDescription(active: Boolean): String {
+        val description = if (active) {
+            Res.string.cd_sleep_timer.get()
+        } else {
+            Res.string.cd_sleep_timer_off.get()
+        }
+        return description
     }
 }
