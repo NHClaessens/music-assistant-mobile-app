@@ -12,13 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -37,6 +37,8 @@ import musicassistantclient.composeapp.generated.resources.cd_autoplay_off
 import musicassistantclient.composeapp.generated.resources.cd_autoplay_on
 import musicassistantclient.composeapp.generated.resources.cd_crossfade_off
 import musicassistantclient.composeapp.generated.resources.cd_crossfade_on
+import musicassistantclient.composeapp.generated.resources.player_autoplay
+import musicassistantclient.composeapp.generated.resources.player_crossfade
 import org.jetbrains.compose.resources.stringResource
 
 /** Fixed so badges appearing and disappearing never reflow the player below. */
@@ -127,7 +129,6 @@ fun PlayerBadgesRow(
 @Composable
 private fun CrossfadeBadge(tint: Color, on: Boolean, onClick: (() -> Unit)?) {
     BadgePill(
-        modifier = Modifier.width(36.dp),
         contentDescription = stringResource(
             if (on) Res.string.cd_crossfade_on else Res.string.cd_crossfade_off,
         ),
@@ -141,13 +142,16 @@ private fun CrossfadeBadge(tint: Color, on: Boolean, onClick: (() -> Unit)?) {
             contentDescription = null,
             modifier = Modifier.size(BADGE_ICON_SIZE),
         )
+        Text(
+            text = stringResource(Res.string.player_crossfade),
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 
 @Composable
 private fun AutoplayBadge(tint: Color, on: Boolean, onClick: (() -> Unit)?) {
     BadgePill(
-        modifier = Modifier.width(36.dp),
         contentDescription = stringResource(
             if (on) Res.string.cd_autoplay_on else Res.string.cd_autoplay_off,
         ),
@@ -161,6 +165,10 @@ private fun AutoplayBadge(tint: Color, on: Boolean, onClick: (() -> Unit)?) {
             imageVector = Icons.Default.AllInclusive,
             contentDescription = null,
             modifier = Modifier.size(BADGE_ICON_SIZE),
+        )
+        Text(
+            text = stringResource(Res.string.player_autoplay),
+            style = MaterialTheme.typography.labelSmall,
         )
     }
 }
