@@ -37,8 +37,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.AllInclusive
-import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
@@ -99,7 +97,6 @@ import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import io.music_assistant.client.ui.compose.common.bufferIndicatorMenuOption
 import io.music_assistant.client.ui.compose.common.dynamicColorsMenuOption
-import io.music_assistant.client.ui.compose.common.icons.CrossfadeIcon
 import io.music_assistant.client.ui.compose.common.icons.VolumeIcon
 import io.music_assistant.client.ui.compose.common.icons.VolumeMutedIcon
 import io.music_assistant.client.ui.compose.common.items.AddToPlaylistDialog
@@ -129,15 +126,10 @@ import musicassistantclient.composeapp.generated.resources.cd_mute
 import musicassistantclient.composeapp.generated.resources.cd_unmute
 import musicassistantclient.composeapp.generated.resources.player_power_off
 import musicassistantclient.composeapp.generated.resources.player_power_on
-import musicassistantclient.composeapp.generated.resources.player_sleep_timer
 import musicassistantclient.composeapp.generated.resources.players_dsp_settings
 import musicassistantclient.composeapp.generated.resources.players_loading
 import musicassistantclient.composeapp.generated.resources.players_none_available
-import musicassistantclient.composeapp.generated.resources.queue_autoplay_disable
-import musicassistantclient.composeapp.generated.resources.queue_autoplay_enable
 import musicassistantclient.composeapp.generated.resources.queue_clear
-import musicassistantclient.composeapp.generated.resources.queue_crossfade_disable
-import musicassistantclient.composeapp.generated.resources.queue_crossfade_enable
 import musicassistantclient.composeapp.generated.resources.queue_no_other_players
 import musicassistantclient.composeapp.generated.resources.queue_transfer
 import org.jetbrains.compose.resources.stringResource
@@ -520,7 +512,6 @@ private fun ExpandedPlayerPage(
                     },
                     onPlayerSelected = { moveToPlayer(it) },
                     onOpenDsp = onDspButton,
-                    onOpenSleepTimer = onSleepTimerButton,
                     playlistActions = playlistActions,
                 )
             },
@@ -825,7 +816,6 @@ private fun PlayerOverflowMenu(
     navigateToItem: (AppMediaItem) -> Unit,
     onPlayerSelected: (String) -> Unit,
     onOpenDsp: (() -> Unit)?,
-    onOpenSleepTimer: (() -> Unit)?,
     playlistActions: PlaylistActions? = null,
 ) {
     var transferMenuExpanded by remember { mutableStateOf(false) }
@@ -853,45 +843,6 @@ private fun PlayerOverflowMenu(
                     onClick = { queueAction(QueueAction.ClearQueue(queueId)) },
                 ),
             )
-            if (queueData.data.info.let { it.autoPlayEnabled != null && !it.isDynamicPlaylist }) {
-                add(
-                    OverflowMenuOption(
-                        title = stringResource(
-                            if (queueData.data.info.autoPlayEnabled == true) {
-                                Res.string.queue_autoplay_disable
-                            } else {
-                                Res.string.queue_autoplay_enable
-                            },
-                        ),
-                        icon = Icons.Default.AllInclusive,
-                        onClick = {
-                            playerAction(
-                                PlayerAction.ToggleDontStopTheMusic(
-                                    queueData.data.info.autoPlayEnabled == true,
-                                ),
-                            )
-                        },
-                    ),
-                )
-            }
-
-            queueData.data.info.crossfadeEnabled?.let { crossfadeEnabled ->
-                add(
-                    OverflowMenuOption(
-                        title = stringResource(
-                            if (crossfadeEnabled) {
-                                Res.string.queue_crossfade_disable
-                            } else {
-                                Res.string.queue_crossfade_enable
-                            },
-                        ),
-                        icon = CrossfadeIcon,
-                        onClick = {
-                            playerAction(PlayerAction.ToggleCrossfade(crossfadeEnabled))
-                        },
-                    ),
-                )
-            }
         }
     } else {
         emptyList()
@@ -960,15 +911,6 @@ private fun PlayerOverflowMenu(
                     title = stringResource(Res.string.players_dsp_settings),
                     icon = Icons.Default.Tune,
                     onClick = onOpenDsp,
-                ),
-            )
-        }
-        if (onOpenSleepTimer != null) {
-            add(
-                OverflowMenuOption(
-                    title = stringResource(Res.string.player_sleep_timer),
-                    icon = Icons.Default.Bedtime,
-                    onClick = onOpenSleepTimer,
                 ),
             )
         }

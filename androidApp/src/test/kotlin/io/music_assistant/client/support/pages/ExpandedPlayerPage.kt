@@ -69,15 +69,10 @@ class ExpandedPlayerPage(
         return ExpandedPlayerPage(name, false, null, composeTestRule).assertOnPage()
     }
 
-    fun openSleepTimerFromMenu(): SleepTimerPage {
-        clickMore()
-        composeTestRule.onNodeWithText(Res.string.player_sleep_timer.get()).performClick()
-        return SleepTimerPage(name, boolean, item, composeTestRule).assertOnPage()
-    }
-
-    fun openSleepTimerFromBadge(): SleepTimerPage {
+    fun openSleepTimerFromBadge(active: Boolean): SleepTimerPage {
+        val description = getSleepTimerBadgeContentDescription(active)
         composeTestRule
-            .onNodeWithContentDescription(Res.string.cd_sleep_timer.get())
+            .onNodeWithContentDescription(description)
             .performClick()
         return SleepTimerPage(name, boolean, item, composeTestRule).assertOnPage()
     }
@@ -90,15 +85,20 @@ class ExpandedPlayerPage(
      * debounced `playersData` rebuild, which lags the click that set the timer.
      */
     fun assertSleepTimerBadge(active: Boolean): ExpandedPlayerPage {
+        val description = getSleepTimerBadgeContentDescription(active)
+        composeTestRule.waitUntil {
+            composeTestRule.onNodeWithContentDescription(description).isDisplayed()
+        }
+        return this
+    }
+
+    private fun getSleepTimerBadgeContentDescription(active: Boolean): String {
         val description = if (active) {
             Res.string.cd_sleep_timer.get()
         } else {
             Res.string.cd_sleep_timer_off.get()
         }
-        composeTestRule.waitUntil {
-            composeTestRule.onNodeWithContentDescription(description).isDisplayed()
-        }
-        return this
+        return description
     }
 
     private fun clickMore() {
