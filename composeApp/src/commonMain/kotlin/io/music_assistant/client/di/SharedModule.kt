@@ -16,6 +16,7 @@ import io.music_assistant.client.data.UserPreferences
 import io.music_assistant.client.data.factory.MediaItemFactory
 import io.music_assistant.client.data.factory.PlayerFactory
 import io.music_assistant.client.data.factory.QueueFactory
+import io.music_assistant.client.data.repository.AiRadioRepository
 import io.music_assistant.client.data.repository.MediaItemRepository
 import io.music_assistant.client.imageloader.ImageCacheInvalidator
 import io.music_assistant.client.input.VolumeButtonService
@@ -38,6 +39,7 @@ import io.music_assistant.client.ui.compose.home.players.DspSettingsViewModel
 import io.music_assistant.client.ui.compose.item.ItemDetailsViewModel
 import io.music_assistant.client.ui.compose.item.ItemListViewModel
 import io.music_assistant.client.ui.compose.item.ViewModeViewModel
+import io.music_assistant.client.ui.compose.library.AiRadioViewModel
 import io.music_assistant.client.ui.compose.library.BrowseViewModel
 import io.music_assistant.client.ui.compose.library.LibraryCategoriesViewModel
 import io.music_assistant.client.ui.compose.library.LibraryListViewModel
@@ -105,6 +107,7 @@ fun sharedModule(
         singleOf(::PlayerFactory)           // Stateless DTO → domain mapper
         singleOf(::QueueFactory)            // Stateless DTO → domain mapper (depends on MediaItemFactory)
         singleOf(::MediaItemRepository)     // Server DTO/event → client model boundary for UI
+        singleOf(::AiRadioRepository)       // Optional ai_radio plugin: list and run stations
         singleOf(::MainDataSource)          // Singleton - held by foreground service
         single(createdAtStart = true) {     // Eager - must observe car edges from launch
             CarDspApplier(get(), get(), get(), get())
@@ -117,15 +120,16 @@ fun sharedModule(
         factory { ActionsViewModel(get(), get(), get()) }
         factory { SettingsViewModel(get(), get(), get()) }
         factory { DefaultClickActionsViewModel(get()) }
-        factory { CarActionsViewModel(get()) }
+        factory { CarActionsViewModel(get(), get()) }
         factory { CarDspViewModel(get(), get()) }
+        factory { AiRadioViewModel(get(), get()) }
         factory {
             AuthenticationViewModel(
                 auth = get(),
                 sessionStateFlow = get<ServiceClient>().sessionState,
             )
         }
-        factory { LibraryCategoriesViewModel(get()) }
+        factory { LibraryCategoriesViewModel(get(), get()) }
         factory { params -> LibraryListViewModel(params[0], get(), get(), get(), get()) }
         factory { params -> BrowseViewModel(params.getOrNull<String>(), get(), get(), get()) }
         factory { params ->

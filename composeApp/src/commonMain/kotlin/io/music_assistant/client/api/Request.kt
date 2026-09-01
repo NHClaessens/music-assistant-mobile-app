@@ -877,4 +877,48 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
 
         fun getPresets() = Request(command = APICommands.CONFIG_DSP_PRESETS_GET)
     }
+
+    /**
+     * The optional `ai_radio` plugin provider. Every one of these fails on a server without
+     * the plugin, so gate the call sites on the availability flow rather than calling blind.
+     */
+    data object AiRadio {
+        fun stations() = Request(command = APICommands.AI_RADIO_STATIONS_LIST)
+
+        /**
+         * Starts [stationId] on [playerId].
+         *
+         * The server resolves the override through `players.get_player`, so this must be a
+         * PLAYER id — not the queue id that most other commands take.
+         */
+        fun start(stationId: String, playerId: String) = Request(
+            command = APICommands.AI_RADIO_START,
+            args = buildJsonObject {
+                put("station_id", JsonPrimitive(stationId))
+                put("player_id_override", JsonPrimitive(playerId))
+            },
+        )
+
+        /**
+         * Stops whatever run [stationId] currently has on air.
+         *
+         * Deliberately by station and not by session id. The server ignores `station_id`
+         * whenever a `session_id` is present, and a session id can only come from an earlier
+         * poll — by the time the user presses Stop that run may have ended on its own, and the
+         * stale id is answered with "Session X is not running (status=finished)". Asking by
+         * station instead lets the server pick the run that is actually live, and its "no
+         * active run found for station" is at least true when there is none.
+         *
+         * Safe because the provider caps concurrent runs at one, so a station has at most one.
+         */
+        fun stop(stationId: String) = Request(
+            command = APICommands.AI_RADIO_STOP,
+            args = buildJsonObject {
+                put("station_id", JsonPrimitive(stationId))
+            },
+        )
+
+        /** All sessions, newest first. The provider emits no events, so this is poll-only. */
+        fun status() = Request(command = APICommands.AI_RADIO_STATUS)
+    }
 }
