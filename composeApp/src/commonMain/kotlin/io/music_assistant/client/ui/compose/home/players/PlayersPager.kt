@@ -198,6 +198,58 @@ fun PlayersPager(
                 onReorder = { homeScreenViewModel.onPlayersSortChanged(it) },
             )
         }
+
+        // Keep dialogs outside the pager so page removal/reordering cannot tear down a dialog
+        // while UIKit is cancelling its hover recognizers. IDs keep ownership stable while the
+        // player data itself continues to come from the latest server state.
+        var groupDialogPlayerId by remember { mutableStateOf<String?>(null) }
+        var dspDialogPlayerId by remember { mutableStateOf<String?>(null) }
+        var sleepTimerDialogPlayerId by remember { mutableStateOf<String?>(null) }
+        val groupDialogPlayer = groupDialogPlayerId?.let { id ->
+            playerDataList.firstOrNull { it.player.id == id }
+        }
+        val dspDialogPlayer = dspDialogPlayerId?.let { id ->
+            playerDataList.firstOrNull { it.player.id == id }
+        }
+        val sleepTimerDialogPlayer = sleepTimerDialogPlayerId?.let { id ->
+            playerDataList.firstOrNull { it.player.id == id }
+        }
+
+        groupDialogPlayer?.let { player ->
+            GroupSettingsDialog(
+                player = player,
+                onDismissRequest = { groupDialogPlayerId = null },
+                groupAction = { playerId: String, action: PlayerAction ->
+                    homeScreenViewModel.playerAction(
+                        playerId,
+                        action,
+                    )
+                },
+                localPlayerId = homeScreenViewModel.localPlayerId,
+                onAdjustPlaybackDelay = {
+                    homeScreenViewModel.adjustSendspinStaticDelayMs(it)
+                },
+                canLeaveGroup = leaderLeaveSupported,
+            )
+        }
+        dspDialogPlayer?.let { player ->
+            DspSettingsDialog(
+                playerId = player.player.id,
+                dspSettingsViewModel = dspSettingsViewModel,
+                onDismissRequest = { dspDialogPlayerId = null },
+            )
+        }
+        sleepTimerDialogPlayer?.let { player ->
+            SleepTimerDialog(
+                expiresAtSec = player.player.sleepTimerExpiresAt,
+                onSelect = {
+                    homeScreenViewModel.setSleepTimer(player.player.id, it)
+                },
+                onClear = { homeScreenViewModel.clearSleepTimer(player.player.id) },
+                onDismissRequest = { sleepTimerDialogPlayerId = null },
+            )
+        }
+
         val playerColors = playerDataList.associateWith {
             val media = it.player.currentMedia
             rememberAnimatedPlayerColors(
@@ -229,47 +281,10 @@ fun PlayersPager(
                 key = { page -> playerDataList.getOrNull(page)?.player?.id ?: page },
             ) { page ->
                 val player = playerDataList.getOrNull(page) ?: return@HorizontalPager
-                var showGroupDialog by remember { mutableStateOf(false) }
-                var showDspDialog by remember { mutableStateOf(false) }
-                var showSleepTimerDialog by remember { mutableStateOf(false) }
                 val onSelectPlayer = { selectDialogPlayerId = player.player.id }
-                val onGroupButton = { showGroupDialog = true }
-                val onDspButton = { showDspDialog = true }
-                val onSleepTimerButton = { showSleepTimerDialog = true }
-                if (showGroupDialog) {
-                    GroupSettingsDialog(
-                        player = player,
-                        onDismissRequest = { showGroupDialog = false },
-                        groupAction = { playerId: String, action: PlayerAction ->
-                            homeScreenViewModel.playerAction(
-                                playerId,
-                                action,
-                            )
-                        },
-                        localPlayerId = homeScreenViewModel.localPlayerId,
-                        onAdjustPlaybackDelay = {
-                            homeScreenViewModel.adjustSendspinStaticDelayMs(it)
-                        },
-                        canLeaveGroup = leaderLeaveSupported,
-                    )
-                }
-                if (showDspDialog) {
-                    DspSettingsDialog(
-                        playerId = player.player.id,
-                        dspSettingsViewModel = dspSettingsViewModel,
-                        onDismissRequest = { showDspDialog = false },
-                    )
-                }
-                if (showSleepTimerDialog) {
-                    SleepTimerDialog(
-                        expiresAtSec = player.player.sleepTimerExpiresAt,
-                        onSelect = {
-                            homeScreenViewModel.setSleepTimer(player.player.id, it)
-                        },
-                        onClear = { homeScreenViewModel.clearSleepTimer(player.player.id) },
-                        onDismissRequest = { showSleepTimerDialog = false },
-                    )
-                }
+                val onGroupButton = { groupDialogPlayerId = player.player.id }
+                val onDspButton = { dspDialogPlayerId = player.player.id }
+                val onSleepTimerButton = { sleepTimerDialogPlayerId = player.player.id }
 
                 val colors by playerColors.getValue(player)
 
