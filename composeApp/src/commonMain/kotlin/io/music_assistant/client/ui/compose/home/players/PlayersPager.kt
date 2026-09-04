@@ -616,46 +616,48 @@ private fun ExpandedPlayerPage(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (showHeader) {
-        CenteredThreeSlotRow(
-            modifier = Modifier.fillMaxWidth(),
-            start = {
-                IconButton(onClick = onClose) {
-                    Icon(
-                        Icons.Default.ExpandMore,
-                        "Collapse",
-                        modifier = Modifier.size(32.dp),
+            CenteredThreeSlotRow(
+                modifier = Modifier.fillMaxWidth(),
+                start = {
+                    IconButton(onClick = onClose) {
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            "Collapse",
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
+                },
+                center = {
+                    PlayerSelectionButton(
+                        player = player,
+                        controlTint = colors.controlTint,
+                        sendSpinState = sendspinState,
+                        onSelectPlayer = onSelectPlayer,
+                        onGroupButton = onGroupButton,
                     )
-                }
-            },
-            center = {
-                PlayerSelectionButton(
-                    player = player,
-                    controlTint = colors.controlTint,
-                    sendSpinState = sendspinState,
-                    onSelectPlayer = onSelectPlayer,
-                    onGroupButton = onGroupButton,
-                )
-            },
-            end = {
-                PlayerOverflowMenu(
-                    currentPlayer = player,
-                    allPlayers = allPlayers,
-                    playerAction = { playerAction(player, it) },
-                    queueAction = queueAction,
-                    navigateToItem = {
-                        navigateToItem(it)
-                        onClose()
-                    },
-                    onPlayerSelected = { moveToPlayer(it) },
-                    onOpenDsp = onDspButton,
-                    onAddToPlaylist = onAddToPlaylist,
-                )
-            },
-        )
+                },
+                end = {
+                    PlayerOverflowMenu(
+                        currentPlayer = player,
+                        allPlayers = allPlayers,
+                        playerAction = { playerAction(player, it) },
+                        queueAction = queueAction,
+                        navigateToItem = {
+                            navigateToItem(it)
+                            onClose()
+                        },
+                        onPlayerSelected = { moveToPlayer(it) },
+                        onOpenDsp = onDspButton,
+                        onAddToPlaylist = onAddToPlaylist,
+                    )
+                },
+            )
+        }
 
         // Status badges live on their own fixed-height row so appearing/disappearing
         // badges never reflow the player below, and so they never compete with the
-        // player name for width.
+        // player name for width. Kept outside [showHeader]: the expanded layout hoists
+        // the toolbar into [ExpandedPlayerHeader] but still needs badges per pager page.
         PlayerBadgesRow(
             player = player,
             tint = colors.controlTint,
@@ -667,7 +669,6 @@ private fun ExpandedPlayerPage(
                 playerAction(player, PlayerAction.ToggleCrossfade(current = current))
             },
         )
-        }
 
         AnimatedVisibility(
             visible = isQueueExpanded,
