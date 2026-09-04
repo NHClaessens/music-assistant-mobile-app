@@ -1116,21 +1116,8 @@ private fun CollapsedPlayerPage(
     // Server preference gate for chapter-based Next enablement.
     chapterProgressEnabled: Boolean = true,
 ) {
-    if (!isWideScreen) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            PlayerSelectionButton(
-                player = player,
-                controlTint = colors.controlTint,
-                sendSpinState = sendspinState,
-                onSelectPlayer = onSelectPlayer,
-                onGroupButton = onGroupButton,
-            )
-        }
-    }
-
+    // On narrow screens the player picker lives in [PlayerSwitcherRow] above the pager
+    // (animated dot strip + cross-fade). Only show the inline picker on wide layouts.
     CompactPlayerItem(
         modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         item = player,
