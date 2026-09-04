@@ -44,9 +44,9 @@ fun DefaultClickOption.isCarSupported(platform: CarPlatform, kind: ItemKind): Bo
 
     return if (this == DefaultClickOption.PLAY_FROM_HERE) {
         // Needs a parent container + start track, only resolvable for a TRACK tap inside an
-        // album/playlist drilldown — and only AA threads that context through (see AutoLibrary).
+        // album/playlist drilldown. Android Auto and CarPlay both thread that parent context.
         // Tap-only: TRACK is never a browsable bulk kind, so this also keeps it out of bulk lists.
-        platform == CarPlatform.ANDROID_AUTO && kind == ItemKind.TRACK
+        kind == ItemKind.TRACK
     } else {
         when (platform) {
             CarPlatform.ANDROID_AUTO -> true
@@ -69,18 +69,66 @@ fun Map<ItemKind, List<DefaultClickOption>>.carBulkActions(
 ): List<DefaultClickOption> =
     (this[kind] ?: defaultCarBulkActions).filter { it.isCarSupported(platform, kind) }
 
+/** Fully resolved media payload for a car-item tap. */
+data class CarItemDispatch(
+    val mediaUris: List<String>,
+    val option: QueueOption,
+    val endlessMixMode: Boolean,
+    val startItem: String? = null,
+)
+
+/**
+ * Resolve a configured car tap into an MA play-media payload. PLAY_FROM_HERE targets the parent
+ * album/playlist URI and starts at the tapped track when full context is available. If that context
+ * is incomplete, it falls back to replacing the queue with the tapped track, matching Android Auto.
+ */
+fun planCarItemDispatch(
+    action: DefaultClickOption,
+    itemUri: String?,
+    itemId: String?,
+    parentUri: String?,
+): CarItemDispatch? {
+    if (action == DefaultClickOption.PLAY_FROM_HERE) {
+        parentUri?.let { containerUri ->
+            itemId?.let { startItem ->
+                return CarItemDispatch(
+                    mediaUris = listOf(containerUri),
+                    option = QueueOption.REPLACE,
+                    endlessMixMode = false,
+                    startItem = startItem,
+                )
+            }
+        }
+
+        val mediaUri = itemUri ?: return null
+        return CarItemDispatch(
+            mediaUris = listOf(mediaUri),
+            option = QueueOption.REPLACE,
+            endlessMixMode = false,
+        )
+    }
+
+    val mediaUri = itemUri ?: return null
+    val dispatch = action.toCarDispatch()
+    return CarItemDispatch(
+        mediaUris = listOf(mediaUri),
+        option = dispatch.option,
+        endlessMixMode = dispatch.endlessMixMode,
+    )
+}
+
 /** How a [DefaultClickOption] is dispatched to a player: queue option + radio-mode flag. */
-data class CarDispatch(val option: QueueOption, val radioMode: Boolean)
+data class CarDispatch(val option: QueueOption, val endlessMixMode: Boolean)
 
 /** The single source for turning a chosen action into a play_media dispatch (AA and CarPlay share it). */
 fun DefaultClickOption.toCarDispatch(): CarDispatch = when (this) {
-    DefaultClickOption.PLAY_NOW -> CarDispatch(QueueOption.REPLACE, radioMode = false)
-    DefaultClickOption.INSERT_NEXT_AND_PLAY -> CarDispatch(QueueOption.PLAY, radioMode = false)
-    DefaultClickOption.INSERT_NEXT -> CarDispatch(QueueOption.NEXT, radioMode = false)
-    DefaultClickOption.ADD_TO_QUEUE -> CarDispatch(QueueOption.ADD, radioMode = false)
-    DefaultClickOption.START_RADIO -> CarDispatch(QueueOption.REPLACE, radioMode = true)
+    DefaultClickOption.PLAY_NOW -> CarDispatch(QueueOption.REPLACE, endlessMixMode = false)
+    DefaultClickOption.INSERT_NEXT_AND_PLAY -> CarDispatch(QueueOption.PLAY, endlessMixMode = false)
+    DefaultClickOption.INSERT_NEXT -> CarDispatch(QueueOption.NEXT, endlessMixMode = false)
+    DefaultClickOption.ADD_TO_QUEUE -> CarDispatch(QueueOption.ADD, endlessMixMode = false)
+    DefaultClickOption.START_ENDLESS_MIX -> CarDispatch(QueueOption.REPLACE, endlessMixMode = true)
     // PLAY_FROM_HERE isn't a plain queue-option dispatch — it needs a parent URI + start item,
-    // so it's resolved at the AA call site (AutoLibrary.play), never here.
+    // so Android Auto and CarPlay resolve it through their parent-aware call sites, never here.
     DefaultClickOption.PLAY_FROM_HERE ->
         throw IllegalArgumentException("$name must be handled at the call site, not toCarDispatch")
 }

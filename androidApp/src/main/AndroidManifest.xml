@@ -12,6 +12,8 @@
     <application
         android:name=".MyApplication"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:hasCode="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -130,6 +132,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!-- Serves browse-row artwork to media hosts as opaque content:// URIs, fetched in
+             this process. Not exported: readable only through the prefix grant that
+             AndroidAutoPlaybackService.onGetRoot hands to a verified, media-trusted caller. -->
+        <provider
+            android:name=".auto.AndroidAutoArtworkProvider"
+            android:authorities="${applicationId}.autoartwork"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 
 </manifest>

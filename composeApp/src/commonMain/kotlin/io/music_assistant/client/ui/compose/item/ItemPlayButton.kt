@@ -70,7 +70,9 @@ fun ItemPlayButton(
         when (action) {
             is ItemAction.Play -> onPlayClick(action.queueOption, false, false)
             ItemAction.InterleaveIntoQueue -> onPlayClick(QueueOption.NEXT, false, true)
-            ItemAction.StartRadio -> onPlayClick(QueueOption.REPLACE, true, false)
+            ItemAction.StartRadio,
+            ItemAction.StartEndlessMix,
+                -> onPlayClick(QueueOption.REPLACE, true, false)
             else -> Unit
         }
     }

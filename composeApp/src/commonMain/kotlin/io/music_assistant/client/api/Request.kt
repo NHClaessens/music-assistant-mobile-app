@@ -64,6 +64,26 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             },
         )
 
+        fun setSleepTimer(
+            playerId: String,
+            seconds: Int,
+        ) = Request(
+            command = APICommands.PLAYERS_SLEEP_TIMER_SET,
+            args = buildJsonObject {
+                put("player_id", JsonPrimitive(playerId))
+                put("seconds", JsonPrimitive(seconds))
+            },
+        )
+
+        fun clearSleepTimer(
+            playerId: String,
+        ) = Request(
+            command = APICommands.PLAYERS_SLEEP_TIMER_CLEAR,
+            args = buildJsonObject {
+                put("player_id", JsonPrimitive(playerId))
+            },
+        )
+
         fun seek(
             queueId: String,
             position: Long,
@@ -139,6 +159,18 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
                         myJson.decodeFromString<JsonArray>(myJson.encodeToString(it)),
                     )
                 }
+            },
+        )
+
+        /**
+         * Removes [playerId] from whatever group it is in. For an ad-hoc sync leader
+         * the server transfers the queue to a surviving member and resumes there; the
+         * client must not pick the new leader or call `player_queues/transfer` itself.
+         */
+        fun ungroup(playerId: String) = Request(
+            command = APICommands.PLAYERS_CMD_UNGROUP,
+            args = buildJsonObject {
+                put("player_id", JsonPrimitive(playerId))
             },
         )
     }
@@ -238,6 +270,12 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             },
         )
 
+        /**
+         * Deliberately still the legacy command. `player_queues/dont_stop_the_music` is a
+         * live server-side alias that delegates to `set_autoplay`, so it works on old AND
+         * new servers, whereas `player_queues/autoplay` does not exist before 2.10. Do not
+         * "modernize" this to match the read path — that would break older servers.
+         */
         fun setDontStopTheMusic(
             queueId: String,
             enabled: Boolean,
@@ -246,6 +284,22 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             args = buildJsonObject {
                 put("queue_id", JsonPrimitive(queueId))
                 put("dont_stop_the_music_enabled", JsonPrimitive(enabled))
+            },
+        )
+
+        /**
+         * Absolute setter, not a toggle: the server applies the value it is given.
+         * Unlike autoplay this command was never renamed, so there is no legacy alias
+         * to prefer — see `ServerQueue.crossfadeEnabled`.
+         */
+        fun setCrossfade(
+            queueId: String,
+            enabled: Boolean,
+        ) = Request(
+            command = APICommands.PLAYER_QUEUES_CROSSFADE,
+            args = buildJsonObject {
+                put("queue_id", JsonPrimitive(queueId))
+                put("crossfade_enabled", JsonPrimitive(enabled))
             },
         )
 
@@ -512,6 +566,24 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             providerInstanceIdOrDomain,
         )
 
+        fun getTopAlbums(
+            itemId: String,
+            providerInstanceIdOrDomain: String,
+        ) = Library.subItems(
+            APICommands.MUSIC_ARTISTS_TOP_ALBUMS,
+            itemId,
+            providerInstanceIdOrDomain,
+        )
+
+        fun getTopTracks(
+            itemId: String,
+            providerInstanceIdOrDomain: String,
+        ) = Library.subItems(
+            APICommands.MUSIC_ARTISTS_TOP_TRACKS,
+            itemId,
+            providerInstanceIdOrDomain,
+        )
+
         fun getSimilarArtists(
             itemId: String,
             providerInstanceIdOrDomain: String,
@@ -640,14 +712,14 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             media: List<String>,
             queueOrPlayerId: String,
             option: QueueOption,
-            radioMode: Boolean,
+            endlessMixMode: Boolean,
             startItem: String? = null,
         ) = Request(
             command = APICommands.PLAYER_QUEUES_PLAY_MEDIA,
             args = buildJsonObject {
                 put("media", JsonArray(media.map { JsonPrimitive(it) }))
                 put("option", JsonPrimitive(option.serverValue))
-                put("radio_mode", JsonPrimitive(radioMode))
+                put("radio_mode", JsonPrimitive(endlessMixMode))
                 put("queue_id", JsonPrimitive(queueOrPlayerId))
                 startItem?.let { put("start_item", JsonPrimitive(it)) }
             },
@@ -711,6 +783,18 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
 
         fun recommendations() = Request(command = APICommands.MUSIC_RECOMMENDATIONS)
 
+        /**
+         * Items of a single recommendation row. Only exists on servers that
+         * return [recommendations] rows without embedded items.
+         */
+        fun recommendationItems(provider: String, itemId: String) = Request(
+            command = APICommands.MUSIC_RECOMMENDATIONS_ITEMS,
+            args = buildJsonObject {
+                put("provider", JsonPrimitive(provider))
+                put("item_id", JsonPrimitive(itemId))
+            },
+        )
+
         fun providersManifests() = Request(command = APICommands.PROVIDERS_MANIFESTS)
 
         /** Loaded provider instances (music/player/…); filter client-side by type. */
@@ -753,11 +837,16 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
 
         fun logout() = Request(command = APICommands.AUTH_LOGOUT)
 
-        fun authorize(token: String, deviceName: String) = Request(
+        fun authorize(
+            token: String,
+            deviceName: String,
+            locale: String? = null,
+        ) = Request(
             command = APICommands.AUTH,
             args = buildJsonObject {
                 put("token", JsonPrimitive(token))
                 put("device_name", JsonPrimitive(deviceName))
+                locale?.let { put("locale", JsonPrimitive(it)) }
             },
         )
     }
@@ -778,6 +867,58 @@ data class Request @OptIn(ExperimentalUuidApi::class) constructor(
             },
         )
 
+        fun applyPreset(playerId: String, presetId: String) = Request(
+            command = APICommands.CONFIG_PLAYERS_DSP_APPLY_PRESET,
+            args = buildJsonObject {
+                put("player_id", JsonPrimitive(playerId))
+                put("preset_id", JsonPrimitive(presetId))
+            },
+        )
+
         fun getPresets() = Request(command = APICommands.CONFIG_DSP_PRESETS_GET)
+    }
+
+    /**
+     * The optional `ai_radio` plugin provider. Every one of these fails on a server without
+     * the plugin, so gate the call sites on the availability flow rather than calling blind.
+     */
+    data object AiRadio {
+        fun stations() = Request(command = APICommands.AI_RADIO_STATIONS_LIST)
+
+        /**
+         * Starts [stationId] on [playerId].
+         *
+         * The server resolves the override through `players.get_player`, so this must be a
+         * PLAYER id — not the queue id that most other commands take.
+         */
+        fun start(stationId: String, playerId: String) = Request(
+            command = APICommands.AI_RADIO_START,
+            args = buildJsonObject {
+                put("station_id", JsonPrimitive(stationId))
+                put("player_id_override", JsonPrimitive(playerId))
+            },
+        )
+
+        /**
+         * Stops whatever run [stationId] currently has on air.
+         *
+         * Deliberately by station and not by session id. The server ignores `station_id`
+         * whenever a `session_id` is present, and a session id can only come from an earlier
+         * poll — by the time the user presses Stop that run may have ended on its own, and the
+         * stale id is answered with "Session X is not running (status=finished)". Asking by
+         * station instead lets the server pick the run that is actually live, and its "no
+         * active run found for station" is at least true when there is none.
+         *
+         * Safe because the provider caps concurrent runs at one, so a station has at most one.
+         */
+        fun stop(stationId: String) = Request(
+            command = APICommands.AI_RADIO_STOP,
+            args = buildJsonObject {
+                put("station_id", JsonPrimitive(stationId))
+            },
+        )
+
+        /** All sessions, newest first. The provider emits no events, so this is poll-only. */
+        fun status() = Request(command = APICommands.AI_RADIO_STATUS)
     }
 }

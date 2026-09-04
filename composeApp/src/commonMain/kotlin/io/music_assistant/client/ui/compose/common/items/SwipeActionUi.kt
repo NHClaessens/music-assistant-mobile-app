@@ -40,7 +40,7 @@ fun SwipeActionOption.effectiveFor(item: AppMediaItem): ItemAction? {
     return when (base) {
         is ItemAction.Play -> if (item.isPlayable) base else null
         ItemAction.StartRadio ->
-            if (item.isPlayable && item.canStartRadio) base else null
+            if (item.isPlayable && item.canStartEndlessMix) base else null
         ItemAction.AddToLibrary -> if (!item.isInLibrary) base else null
         ItemAction.RemoveFromLibrary -> if (item.isInLibrary) base else null
         ItemAction.Favorite ->

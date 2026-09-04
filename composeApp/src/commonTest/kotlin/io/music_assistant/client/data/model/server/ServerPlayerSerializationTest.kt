@@ -37,6 +37,7 @@ class ServerPlayerSerializationTest {
         assertEquals("", player.provider)
         assertNull(player.type)
         assertEquals(false, player.available)
+        assertNull(player.needsSetup)
         assertTrue(player.supportedFeatures.isEmpty())
         assertEquals(true, player.enabled)
         assertEquals("", player.displayName)
@@ -108,6 +109,29 @@ class ServerPlayerSerializationTest {
         assertEquals(2, servers.size)
         assertEquals(PlayerType.PLAYER, playerFactory.create(servers[0]).type)
         assertEquals(PlayerType.PLAYER, playerFactory.create(servers[1]).type)
+    }
+
+    @Test
+    fun carriesSleepTimerExpiryThroughToTheClientPlayer() {
+        val json = """{
+            "player_id": "pl1",
+            "sleep_timer_expires_at": 1782000000.5
+        }"""
+
+        val server = myJson.decodeFromString<ServerPlayer>(json)
+
+        assertEquals(1782000000.5, server.sleepTimerExpiresAt)
+        assertEquals(1782000000.5, playerFactory.create(server).sleepTimerExpiresAt)
+    }
+
+    @Test
+    fun absentSleepTimerMeansNoTimer() {
+        // Pre-35 servers omit the field entirely; that must read as "no timer",
+        // not as a decoding failure.
+        val server = myJson.decodeFromString<ServerPlayer>("""{"player_id": "pl1"}""")
+
+        assertNull(server.sleepTimerExpiresAt)
+        assertNull(playerFactory.create(server).sleepTimerExpiresAt)
     }
 
     @Test

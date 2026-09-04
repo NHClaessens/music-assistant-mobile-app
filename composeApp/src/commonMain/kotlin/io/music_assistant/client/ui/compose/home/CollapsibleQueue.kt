@@ -5,7 +5,6 @@ package io.music_assistant.client.ui.compose.home
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -66,13 +64,13 @@ import io.music_assistant.client.data.model.client.Queue
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.items.image
+import io.music_assistant.client.imageloader.rememberArtworkRequest
 import io.music_assistant.client.ui.compose.common.DataState
+import io.music_assistant.client.ui.compose.common.NoOverscroll
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
 import io.music_assistant.client.ui.compose.common.icons.TrackIcon
-import io.music_assistant.client.ui.compose.common.items.AddToPlaylistDialog
 import io.music_assistant.client.ui.compose.common.items.DISABLED_ITEM_ALPHA
-import io.music_assistant.client.ui.compose.common.items.PlaylistActions
 import io.music_assistant.client.ui.compose.common.items.localizedSubtitle
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.ui.contentColorByLuminance
@@ -110,7 +108,7 @@ fun CollapsibleQueue(
     tint: Color,
     isCurrentPage: Boolean = true,
     contentPadding: PaddingValues,
-    playlistActions: PlaylistActions? = null,
+    onAddToPlaylist: ((AppMediaItem) -> Unit)? = null,
     onChapterClick: (Chapter) -> Unit = {},
     livePositionFlow: Flow<Double>? = null,
 ) {
@@ -172,7 +170,7 @@ fun CollapsibleQueue(
                 isCurrentPage = isCurrentPage,
                 contentPadding = contentPadding,
                 queueAction = queueAction,
-                playlistActions = playlistActions,
+                onAddToPlaylist = onAddToPlaylist,
                 onChapterClick = onChapterClick,
                 livePositionFlow = livePositionFlow,
             )
@@ -190,7 +188,7 @@ fun Queue(
     isCurrentPage: Boolean,
     contentPadding: PaddingValues,
     queueAction: (QueueAction) -> Unit,
-    playlistActions: PlaylistActions? = null,
+    onAddToPlaylist: ((AppMediaItem) -> Unit)? = null,
     onChapterClick: (Chapter) -> Unit = {},
     livePositionFlow: Flow<Double>? = null,
 ) {
@@ -198,11 +196,7 @@ fun Queue(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        // Drop the list's inner overscroll so a downward pull at the top reaches the
-        // ancestor collapse NestedScrollConnection instead of being eaten by the iOS
-        // Cupertino rubber-band. Covers both the populated LazyColumn and the empty
-        // verticalScroll Column.
-        CompositionLocalProvider(LocalOverscrollFactory provides null) {
+        NoOverscroll {
             val message: String? = when (queue) {
                 is DataState.Error -> stringResource(Res.string.queue_error)
                 is DataState.Loading -> stringResource(Res.string.queue_loading)
@@ -273,7 +267,6 @@ fun Queue(
                     var dragStartIndex by remember { mutableStateOf<Int?>(null) }
                     var dragEndIndex by remember { mutableStateOf<Int?>(null) }
                     var menuItemId by remember { mutableStateOf<String?>(null) }
-                    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
                     val listState = rememberLazyListState()
 
                     // Flattened rows: real queue items, plus chapter rows under the
@@ -458,7 +451,7 @@ fun Queue(
                                                 .clip(RoundedCornerShape(size = 4.dp)),
                                             placeholder = placeholder,
                                             fallback = placeholder,
-                                            model = item.track.image(ImageType.THUMB)?.url,
+                                            model = rememberArtworkRequest(item.track.image(ImageType.THUMB)?.url),
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
                                         )
@@ -535,7 +528,7 @@ fun Queue(
                                         onDismissRequest = { menuItemId = null },
                                     ) {
                                         val track = item.track as? Track
-                                        if (track != null && playlistActions != null) {
+                                        if (track != null && onAddToPlaylist != null) {
                                             DropdownMenuItem(
                                                 text = {
                                                     Text(stringResource(Res.string.action_add_to_playlist))
@@ -547,7 +540,7 @@ fun Queue(
                                                     )
                                                 },
                                                 onClick = {
-                                                    addToPlaylistTrack = track
+                                                    onAddToPlaylist(track)
                                                     menuItemId = null
                                                 },
                                             )
@@ -573,16 +566,6 @@ fun Queue(
                                     }
                                 }
                             }
-                        }
-                    }
-
-                    addToPlaylistTrack?.let { track ->
-                        if (playlistActions != null) {
-                            AddToPlaylistDialog(
-                                item = track,
-                                playlistActions = playlistActions,
-                                onDismiss = { addToPlaylistTrack = null },
-                            )
                         }
                     }
                 }

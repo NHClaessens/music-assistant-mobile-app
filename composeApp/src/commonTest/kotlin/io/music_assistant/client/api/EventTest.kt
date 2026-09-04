@@ -1,8 +1,12 @@
 package io.music_assistant.client.api
 
+import io.music_assistant.client.data.model.server.EventType
+import io.music_assistant.client.data.model.server.events.CoreStateUpdatedEvent
+import io.music_assistant.client.data.model.server.events.GenericEvent
 import io.music_assistant.client.data.model.server.events.PlayerRemovedEvent
 import io.music_assistant.client.data.model.server.events.PlayerUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueAddedEvent
+import io.music_assistant.client.utils.myJson
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
@@ -151,5 +155,82 @@ class EventTest {
         }"""
 
         assertNull(parse(raw).event())
+    }
+
+    @Test
+    fun decodesCoreStateUpdatedEvent() {
+        // `data` is the full `server/hello` payload plus a `status` (CoreState) field the
+        // client does not model yet — it must be dropped, not fail the decode.
+        val raw = """{
+            "event": "core_state_updated",
+            "object_id": null,
+            "data": {
+                "server_id": "srv1",
+                "server_version": "2.6.0",
+                "schema_version": 59,
+                "min_supported_schema_version": 40,
+                "name": "Music Assistant",
+                "internal_url": "http://ma.local:8095",
+                "external_url": "https://ma.example.com",
+                "has_remote_access": true,
+                "status": "running"
+            }
+        }"""
+
+        val decoded = parse(raw).event()
+
+        assertNotNull(decoded)
+        assertTrue(decoded is CoreStateUpdatedEvent)
+        assertEquals("srv1", decoded.data.serverId)
+        assertEquals(59, decoded.data.schemaVersion)
+        assertEquals("https://ma.example.com", decoded.data.externalUrl)
+        assertTrue(decoded.data.hasRemoteAccess)
+    }
+
+    @Test
+    fun returnsNullWhenCoreStateUpdatedPayloadHasNoServerId() {
+        // `server_id` is the only required ServerInfo field and the identity the merge guard
+        // keys on. Without it there is nothing to trust, so the event must be dropped quietly.
+        val raw = """{
+            "event": "core_state_updated",
+            "data": {"server_version": "2.6.0"}
+        }"""
+
+        assertNull(parse(raw).event())
+    }
+
+    @Test
+    fun returnsNullWhenCoreStateUpdatedPayloadIsNotAnObject() {
+        val raw = """{
+            "event": "core_state_updated",
+            "data": "not an object"
+        }"""
+
+        assertNull(parse(raw).event())
+    }
+
+    @Test
+    fun everyEventTypeDecodesFromItsWireValue() {
+        // The envelope's event kind must be resolved through the serializer, so
+        // a constant whose @SerialName differs from its Kotlin name (SHUTDOWN,
+        // ALL) still resolves. Round-trip through the same Json instance the
+        // decoder uses, so a future name/@SerialName divergence fails here.
+        EventType.entries.forEach { type ->
+            val wire = myJson.encodeToString(EventType.serializer(), type)
+            val decoded = myJson.decodeFromString<GenericEvent>("""{"event": $wire}""")
+
+            assertEquals(type, decoded.eventType, "wire value $wire")
+        }
+    }
+
+    @Test
+    fun resolvesApplicationShutdownWireValue() {
+        // Confirmed regression: SHUTDOWN is @SerialName("application_shutdown"),
+        // so constant-name matching resolved it to null.
+        val decoded = myJson.decodeFromString<GenericEvent>(
+            """{"event": "application_shutdown"}""",
+        )
+
+        assertEquals(EventType.SHUTDOWN, decoded.eventType)
     }
 }

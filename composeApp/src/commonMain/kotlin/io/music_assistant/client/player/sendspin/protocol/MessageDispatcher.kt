@@ -1,15 +1,9 @@
-// Log-payload truncation length is a debugging aid, not a protocol value.
-@file:Suppress("MagicNumber")
-
 package io.music_assistant.client.player.sendspin.protocol
 
 import co.touchlab.kermit.Logger
 import io.music_assistant.client.player.sendspin.ClockSynchronizer
-import io.music_assistant.client.player.sendspin.model.ClientAuthMessage
 import io.music_assistant.client.player.sendspin.model.ClientCommandMessage
 import io.music_assistant.client.player.sendspin.model.ClientGoodbyeMessage
-import io.music_assistant.client.player.sendspin.model.ClientHelloMessage
-import io.music_assistant.client.player.sendspin.model.ClientHelloPayload
 import io.music_assistant.client.player.sendspin.model.ClientStateMessage
 import io.music_assistant.client.player.sendspin.model.ClientStatePayload
 import io.music_assistant.client.player.sendspin.model.ClientTimeMessage
@@ -27,12 +21,10 @@ import io.music_assistant.client.player.sendspin.model.ServerHelloPayload
 import io.music_assistant.client.player.sendspin.model.ServerStateMessage
 import io.music_assistant.client.player.sendspin.model.ServerTimeMessage
 import io.music_assistant.client.player.sendspin.model.SessionUpdateMessage
-import io.music_assistant.client.player.sendspin.model.StreamClearMessage
-import io.music_assistant.client.player.sendspin.model.StreamEndMessage
 import io.music_assistant.client.player.sendspin.model.StreamMetadataMessage
 import io.music_assistant.client.player.sendspin.model.StreamMetadataPayload
 import io.music_assistant.client.player.sendspin.model.StreamStartMessage
-import io.music_assistant.client.player.sendspin.transport.SendspinTransport
+import io.music_assistant.client.player.sendspin.session.SendspinOutboundSender
 import io.music_assistant.client.utils.myJson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -55,16 +47,31 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.seconds
 
-class MessageDispatcher(
-    private val transport: SendspinTransport,
-    private val clockSynchronizer: ClockSynchronizer,
-    private val config: MessageDispatcherConfig,
-) : CoroutineScope {
-    // Convenience accessors for config properties
-    private val clientCapabilities: ClientHelloPayload get() = config.clientCapabilities
-    private val authToken: String? get() = config.authToken
-    private val requiresAuth: Boolean get() = config.requiresAuth
+/**
+ * Stream lifecycle events, carried on a single ordered flow so start/end/clear keep their
+ * relative order. Only [Start] carries a payload; end/clear messages have no body.
+ */
+sealed interface StreamLifecycleEvent {
+    data class Start(val message: StreamStartMessage) : StreamLifecycleEvent
+    data object End : StreamLifecycleEvent
+    data object Clear : StreamLifecycleEvent
+}
 
+/**
+ * Parses and routes application-level protocol messages over the session's
+ * ordered pump and serialized sender. Logs only message types and lengths —
+ * never raw JSON, which can carry secrets on the encrypted protocol.
+ *
+ * @param deferServerHelloSideEffects encrypted protocol: the initial
+ * `client/state` and clock sync move from `server/hello` handling to
+ * [startActivatedReporting], since nothing may be sent pre-activation.
+ */
+class MessageDispatcher(
+    private val inbound: Flow<String>,
+    private val sender: SendspinOutboundSender,
+    private val clockSynchronizer: ClockSynchronizer,
+    private val deferServerHelloSideEffects: Boolean = false,
+) : CoroutineScope {
     private val logger = Logger.withTag("MessageDispatcher")
     private val supervisorJob = SupervisorJob()
 
@@ -86,14 +93,11 @@ class MessageDispatcher(
     private val _streamMetadata = MutableStateFlow<StreamMetadataPayload?>(null)
     val streamMetadata: StateFlow<StreamMetadataPayload?> = _streamMetadata.asStateFlow()
 
-    private val _streamStartEvent = MutableSharedFlow<StreamStartMessage>(extraBufferCapacity = 1)
-    val streamStartEvent: Flow<StreamStartMessage> = _streamStartEvent.asSharedFlow()
-
-    private val _streamEndEvent = MutableSharedFlow<StreamEndMessage>(extraBufferCapacity = 1)
-    val streamEndEvent: Flow<StreamEndMessage> = _streamEndEvent.asSharedFlow()
-
-    private val _streamClearEvent = MutableSharedFlow<StreamClearMessage>(extraBufferCapacity = 1)
-    val streamClearEvent: Flow<StreamClearMessage> = _streamClearEvent.asSharedFlow()
+    // start/end/clear share one flow so their relative order is preserved; capacity 64
+    // is headroom so a skip burst never stalls the single message loop.
+    private val _streamLifecycleEvent =
+        MutableSharedFlow<StreamLifecycleEvent>(extraBufferCapacity = 64)
+    val streamLifecycleEvent: Flow<StreamLifecycleEvent> = _streamLifecycleEvent.asSharedFlow()
 
     private val _serverCommandEvent =
         MutableSharedFlow<ServerCommandMessage>(extraBufferCapacity = 5)
@@ -115,11 +119,11 @@ class MessageDispatcher(
         messageListenerJob?.cancel()
         messageListenerJob = launch {
             try {
-                transport.textMessages.collect { text ->
+                inbound.collect { text ->
                     try {
                         handleTextMessage(text)
                     } catch (e: Exception) {
-                        logger.e(e) { "Error handling text message: $text" }
+                        logger.e(e) { "Error handling message (${text.length} chars)" }
                     }
                 }
             } catch (e: CancellationException) {
@@ -135,18 +139,13 @@ class MessageDispatcher(
     }
 
     private suspend fun handleTextMessage(text: String) {
-        logger.d { "Handling message: ${text.take(200)}" }
-
         try {
             val json = myJson.parseToJsonElement(text).jsonObject
             val type = json["type"]?.jsonPrimitive?.contentOrNull
                 ?: throw IllegalArgumentException("Message missing or null 'type' field")
+            logger.d { "Handling message: $type (${text.length} chars)" }
 
             when (type) {
-                "auth_ok" -> {
-                    handleAuthOk()
-                }
-
                 "server/hello" -> {
                     val message = myJson.decodeFromJsonElement<ServerHelloMessage>(json)
                     handleServerHello(message)
@@ -163,13 +162,11 @@ class MessageDispatcher(
                 }
 
                 "stream/end" -> {
-                    val message = myJson.decodeFromJsonElement<StreamEndMessage>(json)
-                    handleStreamEnd(message)
+                    handleStreamEnd()
                 }
 
                 "stream/clear" -> {
-                    val message = myJson.decodeFromJsonElement<StreamClearMessage>(json)
-                    handleStreamClear(message)
+                    handleStreamClear()
                 }
 
                 "stream/metadata" -> {
@@ -202,56 +199,30 @@ class MessageDispatcher(
                 }
             }
         } catch (e: Exception) {
-            logger.e(e) { "Failed to parse message: $text" }
+            logger.e(e) { "Failed to parse message (${text.length} chars)" }
         }
     }
 
     // Outgoing messages
-
-    suspend fun sendAuth() {
-        val token = authToken
-        if (!requiresAuth || token == null) {
-            logger.w { "sendAuth called but auth not required or token missing" }
-            return
-        }
-
-        logger.i { "Sending auth message (proxy mode)" }
-
-        val message = ClientAuthMessage(
-            token = token,
-            clientId = clientCapabilities.clientId,
-        )
-        val json = myJson.encodeToString(message)
-        transport.sendText(json)
-    }
-
-    suspend fun sendHello() {
-        logger.i { "Sending client/hello" }
-
-        val message = ClientHelloMessage(payload = clientCapabilities)
-        val json = myJson.encodeToString(message)
-        transport.sendText(json)
-    }
 
     suspend fun sendTime() {
         val clientTransmitted = getCurrentTimeMicros()
         val message = ClientTimeMessage(
             payload = ClientTimePayload(clientTransmitted = clientTransmitted),
         )
-        val json = myJson.encodeToString(message)
-        transport.sendText(json)
+        sender.sendJson(myJson.encodeToString(message))
     }
 
     suspend fun sendState(state: PlayerStateObject) {
         val message = ClientStateMessage(
-            payload = ClientStatePayload(player = state),
+            payload = ClientStatePayload(player = state, available = true),
         )
         val json = myJson.encodeToString(message)
         if (state.state != lastLoggedState) {
             logger.i { "Sending client/state: ${state.state}" }
             lastLoggedState = state.state
         }
-        transport.sendText(json)
+        sender.sendJson(json)
     }
 
     suspend fun sendGoodbye(reason: GoodbyeReason) {
@@ -259,8 +230,7 @@ class MessageDispatcher(
         val message = ClientGoodbyeMessage(
             payload = GoodbyePayload(reason = reason.wire),
         )
-        val json = myJson.encodeToString(message)
-        transport.sendText(json)
+        sender.sendJson(myJson.encodeToString(message))
     }
 
     suspend fun sendCommand(command: String, value: CommandValue?) {
@@ -268,27 +238,35 @@ class MessageDispatcher(
         val message = ClientCommandMessage(
             payload = CommandPayload(command = command, value = value),
         )
-        val json = myJson.encodeToString(message)
-        transport.sendText(json)
+        sender.sendJson(myJson.encodeToString(message))
+    }
+
+    /** Initial `client/state` + clock sync, allowed only post-activation on the
+     *  encrypted protocol. Safe to call again after a re-handshake's activation. */
+    fun startActivatedReporting() {
+        launch {
+            try {
+                sendInitialState()
+            } catch (e: Exception) {
+                logger.w { "Failed to send initial state: ${e.message}" }
+            }
+            startClockSync()
+        }
     }
 
     // Message handlers
-
-    private suspend fun handleAuthOk() {
-        logger.i { "Received auth_ok - authentication successful" }
-        // Auth successful, now send hello
-        sendHello()
-    }
 
     private suspend fun handleServerHello(message: ServerHelloMessage) {
         logger.i { "Received server/hello from ${message.payload.name}" }
         _serverInfo.value = message.payload
 
-        // Send initial state (required by spec)
-        sendInitialState()
+        if (!deferServerHelloSideEffects) {
+            // Send initial state (required by the legacy flow)
+            sendInitialState()
 
-        // Start clock synchronization
-        startClockSync()
+            // Start clock synchronization
+            startClockSync()
+        }
 
         // Emit event so the state machine can transition to Ready
         _serverHelloEvent.emit(message.payload)
@@ -307,9 +285,9 @@ class MessageDispatcher(
                 try {
                     sendTime()
                     delay(1.seconds)
-                } catch (_: IllegalStateException) {
-                    // Transport not connected, stop clock sync
-                    logger.w { "Clock sync stopped: Transport not connected" }
+                } catch (e: IllegalStateException) {
+                    // Sender unavailable (transport down or session gate failed).
+                    logger.w { "Clock sync stopped: ${e.message}" }
                     break
                 } catch (e: Exception) {
                     logger.e(e) { "Error in clock sync" }
@@ -336,17 +314,17 @@ class MessageDispatcher(
 
     private suspend fun handleStreamStart(message: StreamStartMessage) {
         logger.i { "Received stream/start" }
-        _streamStartEvent.emit(message)
+        _streamLifecycleEvent.emit(StreamLifecycleEvent.Start(message))
     }
 
-    private suspend fun handleStreamEnd(message: StreamEndMessage) {
+    private suspend fun handleStreamEnd() {
         logger.i { "Received stream/end" }
-        _streamEndEvent.emit(message)
+        _streamLifecycleEvent.emit(StreamLifecycleEvent.End)
     }
 
-    private suspend fun handleStreamClear(message: StreamClearMessage) {
+    private suspend fun handleStreamClear() {
         logger.i { "Received stream/clear" }
-        _streamClearEvent.emit(message)
+        _streamLifecycleEvent.emit(StreamLifecycleEvent.Clear)
     }
 
     private fun handleStreamMetadata(message: StreamMetadataMessage) {
@@ -378,7 +356,7 @@ class MessageDispatcher(
     }
 
     private fun handleServerState(message: ServerStateMessage) {
-        logger.d { "Received server/state: ${message.payload}" }
+        logger.d { "Received server/state" }
 
         // Extract metadata from server/state payload if present
         // Note: duration/elapsed come from MainDataSource via regular API

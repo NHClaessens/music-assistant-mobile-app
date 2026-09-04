@@ -6,13 +6,13 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.pingInterval
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
-import io.ktor.http.appendPathSegments
 import io.ktor.http.encodeURLPathPart
 import io.ktor.http.encodeURLQueryComponent
 import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.music_assistant.client.data.model.server.AuthorizationResponse
 import io.music_assistant.client.data.model.server.LoginResponse
 import io.music_assistant.client.data.model.server.ServerInfo
+import io.music_assistant.client.data.model.server.events.CoreStateUpdatedEvent
 import io.music_assistant.client.data.model.server.events.Event
 import io.music_assistant.client.imageloader.ARTWORK_DECODE_SIZE
 import io.music_assistant.client.imageloader.ImageCacheInvalidator
@@ -28,7 +28,10 @@ import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.createPlatformHttpClient
 import io.music_assistant.client.utils.currentTimeMillis
 import io.music_assistant.client.utils.myJson
+import io.music_assistant.client.utils.platformLocale
+import io.music_assistant.client.utils.serverLocalizationLocale
 import io.music_assistant.client.utils.update
+import io.music_assistant.client.utils.withRefreshedServerInfo
 import io.music_assistant.client.webrtc.model.RemoteId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -80,10 +83,47 @@ class KtorServiceClient(
     override val coroutineContext: CoroutineContext =
         supervisorJob + Dispatchers.IO + scopeExceptionHandler
 
-    private val client = createPlatformHttpClient {
+    private val clientMutex = Mutex()
+
+    @kotlin.concurrent.Volatile
+    private var currentClient: HttpClient = createPlatformHttpClient {
         install(WebSockets) {
             contentConverter = KotlinxWebsocketSerializationConverter(myJson)
             pingInterval = 10.seconds
+        }
+    }
+
+    /**
+     * Creates a fresh HttpClient and closes the old one.
+     * Called when the network transitions from unavailable → available while reconnecting,
+     * to discard any cached DNS failures / connection-pool timeouts in the old engine.
+     */
+    private suspend fun rotateHttpClient() {
+        clientMutex.withLock {
+            val oldClient = currentClient
+            currentClient = createPlatformHttpClient {
+                install(WebSockets) {
+                    contentConverter = KotlinxWebsocketSerializationConverter(myJson)
+                    pingInterval = 10.seconds
+                }
+            }
+            oldClient.close()
+        }
+    }
+
+    // Observes network availability and rotates the HttpClient when the network
+    // comes back after an outage. This prevents stale DNS/connection-pool state
+    // (e.g. NSURLErrorCannotFindHost with WireGuard tunnels) from poisoning
+    // subsequent reconnect attempts.
+    private fun startNetworkObserver() {
+        launch {
+            networkMonitor.isAvailable
+                .collect { available ->
+                    if (available && _sessionState.value !is SessionState.Connected) {
+                        logger.i { "Network became available while not fully connected — rotating HttpClient" }
+                        rotateHttpClient()
+                    }
+                }
         }
     }
 
@@ -194,9 +234,11 @@ class KtorServiceClient(
             else -> buildWebRTCImageProxyUrl(path, provider)
         }
 
+    // `base` is a complete origin plus any reverse-proxy base path, with no trailing slash, so the
+    // endpoint path is appended as a string. Parsing a component-less base and calling
+    // appendPathSegments() would leave the leading slash up to Ktor's normalization.
     private fun buildHttpImageProxyUrl(base: String, path: String, provider: String): String =
-        URLBuilder(base).apply {
-            appendPathSegments("imageproxy")
+        URLBuilder("$base/imageproxy").apply {
             parameters.apply {
                 append("path", path.encodeURLQueryComponent())
                 append("provider", provider)
@@ -205,8 +247,7 @@ class KtorServiceClient(
         }.buildString()
 
     private fun buildHttpOpaqueProxyUrl(base: String, proxyId: String): String =
-        URLBuilder(base).apply {
-            appendPathSegments("imageproxy", proxyId)
+        URLBuilder("$base/imageproxy/${proxyId.encodeURLPathPart()}").apply {
             parameters.apply {
                 append("size", IMAGEPROXY_SIZE.toString())
                 append("checksum", "")
@@ -236,15 +277,22 @@ class KtorServiceClient(
         val path = parsed.encodedPath
         if (!path.contains("imageproxy", ignoreCase = true)) return rawUrl
         val tail = parsed.encodedQuery.let { if (it.isEmpty()) path else "$path?$it" }
-        val base = when (val state = _sessionState.value) {
-            is SessionState.Connected.Direct -> state.connectionInfo.webUrl
-            is SessionState.Reconnecting.Direct -> state.connectionInfo.webUrl
+        val (base, prefix) = when (val state = _sessionState.value) {
+            is SessionState.Connected.Direct -> state.connectionInfo.webUrl to state.connectionInfo.basePath
+            is SessionState.Reconnecting.Direct -> state.connectionInfo.webUrl to state.connectionInfo.basePath
             is SessionState.Connected.WebRTC,
             is SessionState.Reconnecting.WebRTC,
-                -> WEBRTC_PROXY_BASE
+                -> WEBRTC_PROXY_BASE to ""
             else -> return null
         }
-        return base.trimEnd('/') + tail
+        // The base already carries the reverse-proxy prefix. If the server was configured with its
+        // public URL it reports the prefix too, so strip it here instead of emitting "/ma/ma/...".
+        val relative = if (prefix.isNotEmpty() && tail.startsWith("$prefix/")) {
+            tail.removePrefix(prefix)
+        } else {
+            tail
+        }
+        return base.trimEnd('/') + relative
     }
 
     /**
@@ -294,16 +342,6 @@ class KtorServiceClient(
                 logger.i { "External consumer active: state=Backgrounded but no savedInfo, no reconnect" }
             }
             return
-        }
-
-        // AA hookup is functionally equivalent to phone foreground: cache may be
-        // empty, AA's first sendRequest assumes the gate handles staleness — but
-        // the gate trusts `isReadyForCommands`, which stays true for a half-open
-        // WS. Same probe as `onAppForeground` to catch that case.
-        val elapsed = currentTimeMillis() - backgroundedAt
-        if (elapsed > STALE_CONNECTION_THRESHOLD_MS && state is SessionState.Connected) {
-            logger.i { "External consumer active: probing connection after ${elapsed}ms in background" }
-            transport?.verifyConnection(probeReason = "external_consumer_active")
         }
     }
 
@@ -383,15 +421,6 @@ class KtorServiceClient(
             reconnectFromCurrent("was Backgrounded")
             return
         }
-
-        // Cheap probe for half-open TCP. Anything more invasive (re-auth, full
-        // reconnect) is request-driven via `ensureReadyForCommands` — see
-        // `feedback_request_driven_recovery` for the rationale.
-        val elapsed = currentTimeMillis() - backgroundedAt
-        if (elapsed > STALE_CONNECTION_THRESHOLD_MS && state is SessionState.Connected) {
-            logger.i { "App foregrounded: probing connection after ${elapsed}ms in background" }
-            transport?.verifyConnection(probeReason = "app_foreground")
-        }
     }
 
     /** Compact one-token label for a [SessionState], stable for log greps. */
@@ -430,6 +459,7 @@ class KtorServiceClient(
     )
 
     init {
+        startNetworkObserver()
         launch {
             isReadyForCommands.collect { ready ->
                 logger.i { "isReadyForCommands=$ready" }
@@ -615,7 +645,7 @@ class KtorServiceClient(
         startConnectWatchdog()
 
         val directTransport = DirectTransport(
-            client = client,
+            clientProvider = { currentClient },
             connectionInfoProvider = { connection },
             parentScope = this,
             networkAvailable = networkMonitor.isAvailable,
@@ -633,12 +663,16 @@ class KtorServiceClient(
             backgroundInfo = { BackgroundedConnectionInfo.Direct(connection) },
             onFreshConnect = {
                 settings.setLastConnectionMode("direct")
+                // Provisional: the server has not named itself yet, so this row has no id.
+                // It keeps JIT reconnect able to recover a login that did not finish, and
+                // AuthenticationManager absorbs it once the server identifies itself.
                 settings.addOrUpdateHistoryEntry(
                     ConnectionHistoryEntry(
                         type = ConnectionType.DIRECT,
                         host = connection.host,
                         port = connection.port,
                         isTls = connection.isTls,
+                        basePath = connection.basePath,
                     ),
                 )
             },
@@ -687,6 +721,7 @@ class KtorServiceClient(
             backgroundInfo = { BackgroundedConnectionInfo.WebRTC(remoteId) },
             onFreshConnect = {
                 settings.setLastConnectionMode("webrtc")
+                // Provisional — see the Direct path above.
                 settings.addOrUpdateHistoryEntry(
                     ConnectionHistoryEntry(
                         type = ConnectionType.WEBRTC,
@@ -772,7 +807,9 @@ class KtorServiceClient(
                     shouldAttempt = { _sessionState.value is SessionState.Connected },
                     onAttempt = { setAuthState(AuthProcessState.InProgress) },
                     send = {
-                        sendRequestRaw(Request.Auth.login(username, password, settings.deviceName.value))
+                        sendRequestRaw(
+                            Request.Auth.login(username, password, settings.deviceName.value),
+                        )
                     },
                 )
             ) {
@@ -834,7 +871,18 @@ class KtorServiceClient(
                             state.authProcessState != AuthProcessState.LoggedOut
                     },
                     onAttempt = { setAuthState(AuthProcessState.InProgress) },
-                    send = { sendRequestRaw(Request.Auth.authorize(token, settings.deviceName.value)) },
+                    send = {
+                        sendRequestRaw(
+                            Request.Auth.authorize(
+                                token,
+                                settings.deviceName.value,
+                                locale = serverLocalizationLocale(
+                                    (_sessionState.value as? HasConnectionData)?.serverInfo?.schemaVersion,
+                                    platformLocale(),
+                                ),
+                            ),
+                        )
+                    },
                 )
             ) {
                 AuthResolution.Aborted -> return
@@ -894,10 +942,32 @@ class KtorServiceClient(
             }
 
             message.containsKey("event") -> {
-                Event(message).event()?.let { _eventsFlow.emit(it) }
+                Event(message).event()?.let { event ->
+                    (event as? CoreStateUpdatedEvent)?.let { refreshServerInfo(it.data) }
+                    _eventsFlow.emit(event)
+                }
             }
 
             else -> logger.i { "Unknown message: $message" }
+        }
+    }
+
+    /**
+     * Live refresh of the cached [ServerInfo] from a `core_state_updated` push.
+     *
+     * The guard itself lives in [withRefreshedServerInfo] and runs inside the state update, so a
+     * concurrent auth write cannot be clobbered. The pre-check here only buys an early log of the
+     * ignored case.
+     */
+    private fun refreshServerInfo(incoming: ServerInfo) {
+        val cachedId = (_sessionState.value as? SessionState.Connected)?.serverInfo?.serverId
+        if (cachedId != incoming.serverId) {
+            logger.d { "Ignoring core_state_updated for ${incoming.serverId} (cached server: $cachedId)" }
+            return
+        }
+        _sessionState.update { state ->
+            val connected = state as? SessionState.Connected ?: return@update state
+            connected.update(connectionData = connected.connectionData.withRefreshedServerInfo(incoming))
         }
     }
 
@@ -986,15 +1056,8 @@ class KtorServiceClient(
     }
 
     private fun savedTokenForState(state: SessionState.Connected): String? {
-        val id = when (state) {
-            is SessionState.Connected.Direct -> settings.getDirectServerIdentifier(
-                state.connectionInfo.host,
-                state.connectionInfo.port,
-                state.connectionInfo.isTls,
-            )
-            is SessionState.Connected.WebRTC -> settings.getWebRTCServerIdentifier(state.remoteId.rawId)
-        }
-        return settings.getTokenForServer(id)
+        // Null until `server/hello` lands: without the server id there is no token to find.
+        return state.serverInfo?.serverId?.let { settings.getTokenForServer(it) }
     }
 
     override suspend fun sendRequest(request: Request): Result<Answer> {
@@ -1087,7 +1150,7 @@ class KtorServiceClient(
 
     fun close() {
         supervisorJob.cancel()
-        client.close()
+        currentClient.close()
     }
 
     private fun Request.playerControlLogLabel(): String? {
@@ -1105,7 +1168,6 @@ class KtorServiceClient(
     private fun JsonObject.stringArg(name: String): String? = (this[name] as? JsonPrimitive)?.content
 
     companion object {
-        private const val STALE_CONNECTION_THRESHOLD_MS = 30_000L
         private const val ENSURE_READY_TIMEOUT_MS = 10_000L
 
         // Upper bound on a single connect attempt before it's declared stuck. Generous

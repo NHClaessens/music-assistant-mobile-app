@@ -102,7 +102,7 @@ suspend fun playMediaItem(
                 media = media,
                 queueOrPlayerId = queueId,
                 option = QueueOption.REPLACE_NEXT,
-                radioMode = effectiveRadioMode,
+                endlessMixMode = effectiveRadioMode,
             ),
         )
         return
@@ -114,7 +114,7 @@ suspend fun playMediaItem(
             media = listOf(mediaUri),
             queueOrPlayerId = queueId,
             option = option,
-            radioMode = effectiveRadioMode,
+            endlessMixMode = effectiveRadioMode,
             startItem = startItem,
         ),
     )

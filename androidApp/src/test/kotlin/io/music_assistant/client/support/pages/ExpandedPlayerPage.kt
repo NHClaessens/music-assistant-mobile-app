@@ -3,6 +3,7 @@ package io.music_assistant.client.support.pages
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -17,6 +18,8 @@ import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.action_go_to_album
 import musicassistantclient.composeapp.generated.resources.action_go_to_artist
 import musicassistantclient.composeapp.generated.resources.cd_more
+import musicassistantclient.composeapp.generated.resources.cd_sleep_timer
+import musicassistantclient.composeapp.generated.resources.cd_sleep_timer_off
 import musicassistantclient.composeapp.generated.resources.queue_clear
 import musicassistantclient.composeapp.generated.resources.queue_label_with_position
 import musicassistantclient.composeapp.generated.resources.queue_transfer
@@ -65,16 +68,45 @@ class ExpandedPlayerPage(
         return ExpandedPlayerPage(name, false, null, composeTestRule).assertOnPage()
     }
 
+    fun openSleepTimerFromBadge(active: Boolean): SleepTimerPage {
+        assertSleepTimerBadge(active)
+
+        val description = getSleepTimerBadgeContentDescription(active)
+        composeTestRule
+            .onNodeWithContentDescription(description)
+            .performClick()
+        return SleepTimerPage(name, boolean, item, composeTestRule).assertOnPage()
+    }
+
+    /**
+     * The badge is always present while the server supports sleep timers; [active] is about
+     * its state, which the content description carries.
+     *
+     * waitUntil — the state only flips once `PlayerUpdatedEvent` has travelled through the
+     * debounced `playersData` rebuild, which lags the click that set the timer.
+     */
+    fun assertSleepTimerBadge(active: Boolean): ExpandedPlayerPage {
+        val description = getSleepTimerBadgeContentDescription(active)
+        composeTestRule.waitUntil {
+            composeTestRule.onNodeWithContentDescription(description).isDisplayed()
+        }
+        return this
+    }
+
     private fun clickMore() {
         composeTestRule
             .onNode(withinTag(FloatingBarSemantics.TAG).and(hasContentDescription(Res.string.cd_more.get())))
             .performClick()
     }
 
-    fun transferQueue(player: String): ExpandedPlayerPage {
+    fun transferQueue(
+        player: String,
+        awaitTransfer: () -> Unit = {},
+    ): ExpandedPlayerPage {
         clickMore()
         composeTestRule.onNodeWithText(Res.string.queue_transfer.get()).performClick()
         composeTestRule.onNodeWithText(player).performClick()
+        awaitTransfer()
         return ExpandedPlayerPage(player, true, item, composeTestRule).assertOnPage()
     }
 
@@ -93,5 +125,19 @@ class ExpandedPlayerPage(
         }
 
         return this
+    }
+
+    fun clickQualityTier(tier: String): AudioChainPage {
+        composeTestRule.onNodeWithText(tier).performClick()
+        return AudioChainPage(composeTestRule).assertOnPage()
+    }
+
+    private fun getSleepTimerBadgeContentDescription(active: Boolean): String {
+        val description = if (active) {
+            Res.string.cd_sleep_timer.get()
+        } else {
+            Res.string.cd_sleep_timer_off.get()
+        }
+        return description
     }
 }

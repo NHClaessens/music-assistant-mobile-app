@@ -15,7 +15,10 @@ import io.music_assistant.client.data.model.client.QueueTrack
 import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.image
+import io.music_assistant.client.data.model.client.presentationChapter
+import io.music_assistant.client.data.model.client.toAbsoluteSeekSeconds
 import io.music_assistant.client.player.MediaPlayerController
+import io.music_assistant.client.player.sendspin.EncryptionRequiredUnavailable
 import io.music_assistant.client.player.sendspin.SendspinClient
 import io.music_assistant.client.player.sendspin.SendspinClientFactory
 import io.music_assistant.client.player.sendspin.SendspinError
@@ -25,7 +28,7 @@ import io.music_assistant.client.player.sendspin.model.GoodbyeReason
 import io.music_assistant.client.settings.SettingsRepository
 import io.music_assistant.client.ui.compose.common.DataState
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
-import io.music_assistant.client.utils.SessionState
+import io.music_assistant.client.utils.authenticatedToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -55,6 +58,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.media_playback_stopped_connection_lost
+import musicassistantclient.composeapp.generated.resources.sendspin_encryption_required_unavailable
 import org.jetbrains.compose.resources.getString
 import kotlin.coroutines.CoroutineContext
 
@@ -82,6 +86,7 @@ class LocalPlayerController(
     private val sendspinClientFactory: SendspinClientFactory,
     private val playerRequestFactory: PlayerRequestFactory,
     private val positionTracker: PlayerPositionTracker,
+    private val userPreferences: UserPreferences,
     private val errorBus: ErrorMessageBus,
 ) : CoroutineScope {
     private val log = Logger.withTag("LocalPlayerCtrl")
@@ -115,6 +120,12 @@ class LocalPlayerController(
 
     private val _sendspinState = MutableStateFlow<SendspinState?>(null)
     val sendspinState: StateFlow<SendspinState?> = _sendspinState.asStateFlow()
+
+    // Seconds of audio buffered ahead of the local playhead — drives the buffered-progress
+    // indicator on the now-playing slider. Fed from the active client's pipeline; reset to 0
+    // whenever monitoring is torn down (client replaced/stopped).
+    private val _bufferedSeconds = MutableStateFlow(0.0)
+    val bufferedSeconds: StateFlow<Double> = _bufferedSeconds.asStateFlow()
 
     /**
      * Fires after Sendspin registers (state → Ready) so [MainDataSource] re-fetches
@@ -159,6 +170,17 @@ class LocalPlayerController(
         applyOptimisticUpdate(data, resolved)
         launch {
             val request = playerRequestFactory.buildRequest(data, resolved) ?: return@launch
+            // Request-driven recovery: if the Sendspin transport was torn down (e.g. the
+            // process outlived a foreground-service stop) while the feature is still enabled,
+            // revive it and queue this command for replay on Ready instead of firing it at a
+            // dead transport (which surfaces as "queue not available"). Nothing else
+            // resurrects the transport in-process — the play choke point does.
+            if (_sendspinState.value == null && settings.sendspinEnabled.value) {
+                log.i { "Local command with no live Sendspin transport — reviving and queueing" }
+                enqueue(resolved, request)
+                launch { start() }
+                return@launch
+            }
             sendOrQueue(resolved, request)
         }
     }
@@ -246,6 +268,10 @@ class LocalPlayerController(
 
             is PlayerAction.ToggleDontStopTheMusic -> {
                 updateOptimisticQueueInfo { it.copy(autoPlayEnabled = !action.current) }
+            }
+
+            is PlayerAction.ToggleCrossfade -> {
+                updateOptimisticQueueInfo { it.copy(crossfadeEnabled = !action.current) }
             }
 
             is PlayerAction.SeekTo -> {
@@ -382,11 +408,13 @@ class LocalPlayerController(
             _localPlayerData.update {
                 PlayerData(
                     player = Player(
-                        id = settings.sendspinClientId.value,
+                        id = settings.sendspinEffectivePlayerId.value,
                         name = settings.sendspinDeviceName.value,
                         provider = "builtin",
                         type = PlayerType.PLAYER,
-                        shouldBeShown = true,
+                        isListed = true,
+                        isAvailable = true,
+                        needsSetup = false,
                         canSetVolume = false,
                         volumeLevel = null,
                         volumeControl = null,
@@ -422,22 +450,11 @@ class LocalPlayerController(
      * Safe for background: this controller is a singleton held by the foreground service.
      */
     suspend fun start() = sendspinMutex.withLock {
-        // Get prerequisites
-        val authToken = when (val state = apiClient.sessionState.value) {
-            is SessionState.Connected.Direct ->
-                settings.getTokenForServer(
-                    settings.getDirectServerIdentifier(
-                        state.connectionInfo.host,
-                        state.connectionInfo.port,
-                        state.connectionInfo.isTls,
-                    ),
-                )
-
-            is SessionState.Connected.WebRTC ->
-                settings.getTokenForServer(settings.getWebRTCServerIdentifier(state.remoteId.rawId))
-
-            else -> null
-        }
+        // Get prerequisites. The token comes from the live session state, not from settings:
+        // the settings copy is written by AuthenticationManager's own sessionState collector on
+        // the main dispatcher, so reading it here (IO, same emission) can observe it empty and
+        // dead-end the whole start — no client, no state, no dot.
+        val authToken = apiClient.sessionState.value.authenticatedToken()
 
         // Stop existing client if any (but preserve if it's actively connected, connecting, or reconnecting)
         sendspinClient?.let { existing ->
@@ -470,6 +487,9 @@ class LocalPlayerController(
             existing.stop(GoodbyeReason.Restart)
             existing.close()
         }
+        // The old client's monitor collectors would otherwise keep pushing its
+        // teardown states over whatever this attempt reports (e.g. Degraded).
+        cancelSendspinMonitorJobs()
 
         // Create client using factory
         val createResult = sendspinClientFactory.createIfEnabled(
@@ -478,11 +498,35 @@ class LocalPlayerController(
         )
 
         createResult.onFailure { error ->
+            if (error is EncryptionRequiredUnavailable) {
+                // The user requires encrypted Sendspin but the server is too
+                // old: surface the player as unavailable with an explanation
+                // instead of silently falling back to cleartext. Degraded is
+                // deliberately non-retrying — only a settings or server
+                // change resolves it.
+                val message = getString(Res.string.sendspin_encryption_required_unavailable)
+                log.w { "Sendspin unavailable: encryption required but unsupported by server" }
+                _sendspinState.value = SendspinState.Error(
+                    SendspinError.Degraded(reason = message, impact = message),
+                )
+                errorBus.emit(message)
+                return@withLock
+            }
             if (error is WebRTCSendspinChannelExhausted) {
-                log.i { "WebRTC sendspin channel exhausted — forcing reconnect for fresh channels" }
-                apiClient.forceWebRTCReconnect()
-                // After reconnection, start() will be called again
-                // from the session state handler with a fresh channel.
+                // Budget the forced reconnects: a persistently failing attach on
+                // otherwise healthy channels must not renegotiate WebRTC forever.
+                if (sendspinRetryCount < MAX_SENDSPIN_RETRIES) {
+                    sendspinRetryCount++
+                    log.i {
+                        "WebRTC sendspin channel exhausted — forcing reconnect " +
+                            "($sendspinRetryCount/$MAX_SENDSPIN_RETRIES)"
+                    }
+                    apiClient.forceWebRTCReconnect()
+                    // After reconnection, start() will be called again
+                    // from the session state handler with a fresh channel.
+                } else {
+                    log.w { "WebRTC sendspin retry budget exhausted — giving up" }
+                }
                 return@withLock
             }
             log.w { "Cannot create Sendspin client: ${error.message}" }
@@ -496,30 +540,11 @@ class LocalPlayerController(
         mediaPlayerController.onRemoteCommand = { command ->
             localPlayerData.value?.let { playerData ->
                 log.i { "Remote command: $command" }
-                when (command) {
-                    "play" -> handleLocalCommand(playerData, PlayerAction.Play)
-                    "pause" -> handleLocalCommand(playerData, PlayerAction.Pause)
-                    "toggle_play_pause" -> handleLocalCommand(
-                        playerData,
-                        PlayerAction.TogglePlayPause,
-                    )
-
-                    "next" -> handleLocalCommand(playerData, PlayerAction.Next)
-                    "previous" -> handleLocalCommand(playerData, PlayerAction.Previous)
-                    else -> {
-                        if (command.startsWith("seek:")) {
-                            command.removePrefix("seek:").toDoubleOrNull()?.let { position ->
-                                handleLocalCommand(playerData, PlayerAction.SeekTo(position.toLong()))
-                            }
-                        } else if (command.startsWith("seek_by:")) {
-                            command.removePrefix("seek_by:").toLongOrNull()?.let { offset ->
-                                handleLocalCommand(playerData, PlayerAction.SeekBy(offset))
-                            }
-                        } else {
-                            log.w { "Unknown remote command: $command" }
-                        }
+                remoteCommandToPlayerAction(command, playerData.queueInfo)
+                    ?.let { action ->
+                        handleLocalCommand(playerData, remapChapterRelativeSeek(playerData, action))
                     }
-                }
+                    ?: log.w { "Unknown remote command: $command" }
             } ?: log.w { "No local player available for remote command: $command" }
         }
 
@@ -543,6 +568,11 @@ class LocalPlayerController(
             // Monitor for playback errors (e.g., Android Auto disconnect, audio output changed)
             // and pause the MA server player when they occur.
             client.playbackStoppedDueToError.filterNotNull().collect { pauseLocalIfPlaying() }
+        }
+
+        sendspinMonitorJobs += launch {
+            // Mirror pipeline buffer fill (µs → s) for the UI's buffered-progress indicator.
+            client.bufferState.collect { _bufferedSeconds.value = it.bufferedDuration / MICROS }
         }
 
         sendspinMonitorJobs += launch {
@@ -574,9 +604,36 @@ class LocalPlayerController(
                         sendspinRetryCount = 0
                         delay(1000) // Give server a moment to register the player
                         _needsServerRefresh.emit(Unit)
+                        // Replay any commands queued while the transport was down (e.g. a
+                        // play issued after a service-stop teardown). Atomic drain, so it's
+                        // idempotent with the external reconnect-path drains in MainDataSource.
+                        drainCommandQueue()
                     }
 
                     is SendspinState.Error -> {
+                        // A dead WebRTC channel must be replaced, not retried in
+                        // place: this check runs before the generic permanent-error
+                        // branch, which would otherwise stop and retry the same
+                        // dead wrapper (the factory would keep returning it
+                        // exhausted). One forced reconnect negotiates a fresh
+                        // channel; the reconnect handler then restarts the client.
+                        val error = state.error
+                        if (error is SendspinError.Permanent &&
+                            error.cause is WebRTCSendspinChannelExhausted
+                        ) {
+                            if (sendspinRetryCount < MAX_SENDSPIN_RETRIES) {
+                                sendspinRetryCount++
+                                log.i {
+                                    "WebRTC sendspin channel exhausted mid-session — forcing " +
+                                        "WebRTC reconnect ($sendspinRetryCount/$MAX_SENDSPIN_RETRIES)"
+                                }
+                                apiClient.forceWebRTCReconnect()
+                            } else {
+                                log.w { "WebRTC sendspin retry budget exhausted — giving up" }
+                            }
+                            return@collect
+                        }
+
                         // Retry if error is not being auto-retried and main API is connected
                         val shouldRetry = when (state.error) {
                             is SendspinError.Permanent -> true
@@ -650,6 +707,7 @@ class LocalPlayerController(
             sendspinMonitorJobs.forEach { it.cancel() }
             sendspinMonitorJobs.clear()
         }
+        _bufferedSeconds.value = 0.0
     }
 
     /**
@@ -775,6 +833,11 @@ class LocalPlayerController(
                     if (idx >= 0) commandQueue.removeAt(idx) else commandQueue.add(entry)
                 }
 
+                is PlayerAction.ToggleCrossfade -> {
+                    val idx = commandQueue.indexOfFirst { it.action is PlayerAction.ToggleCrossfade }
+                    if (idx >= 0) commandQueue.removeAt(idx) else commandQueue.add(entry)
+                }
+
                 is PlayerAction.SeekTo -> {
                     Logger.e("SeekTo: ${action.position}")
                     commandQueue.removeAll { it.action is PlayerAction.SeekTo }
@@ -786,6 +849,20 @@ class LocalPlayerController(
         }
     }
 
+    /**
+     * Remaps chapter-relative system-scrubber SeekTo payloads to absolute seconds.
+     * SeekBy and chapter navigation are resolved by [PlayerRequestFactory].
+     */
+    private fun remapChapterRelativeSeek(
+        data: PlayerData,
+        action: PlayerAction,
+    ): PlayerAction {
+        if (action !is PlayerAction.SeekTo || !userPreferences.isChapterProgressEnabled) return action
+        val elapsedSec = data.queueInfo?.id?.let(positionTracker::effectiveSec)
+        val chapter = data.presentationChapter(elapsedSec) ?: return action
+        return PlayerAction.SeekTo(chapter.toAbsoluteSeekSeconds(action.position.toDouble()))
+    }
+
     private companion object {
         private const val MAX_SENDSPIN_RETRIES = 5
 
@@ -794,5 +871,30 @@ class LocalPlayerController(
 
         /** Backstop for play requests that neither confirm nor fail. */
         private const val PENDING_PLAY_TIMEOUT_MS = 10_000L
+
+        private const val MICROS = 1_000_000.0
     }
+}
+
+/**
+ * Maps a platform remote-command string (Control Center / lock screen / CarPlay)
+ * to the [PlayerAction] to dispatch. Toggle commands read their current state
+ * from [queueInfo], defaulting to off when no queue exists. Returns null for
+ * unrecognized commands and malformed seek payloads.
+ */
+internal fun remoteCommandToPlayerAction(command: String, queueInfo: QueueInfo?): PlayerAction? = when {
+    command == "play" -> PlayerAction.Play
+    command == "pause" -> PlayerAction.Pause
+    command == "toggle_play_pause" -> PlayerAction.TogglePlayPause
+    command == "next" -> PlayerAction.Next
+    command == "previous" -> PlayerAction.Previous
+    command == "toggle_shuffle" ->
+        PlayerAction.ToggleShuffle(current = queueInfo?.shuffleEnabled == true)
+    command == "toggle_repeat" ->
+        PlayerAction.ToggleRepeatMode(current = queueInfo?.repeatMode ?: RepeatMode.OFF)
+    command.startsWith("seek:") ->
+        command.removePrefix("seek:").toDoubleOrNull()?.let { PlayerAction.SeekTo(it.toLong()) }
+    command.startsWith("seek_by:") ->
+        command.removePrefix("seek_by:").toLongOrNull()?.let { PlayerAction.SeekBy(it) }
+    else -> null
 }

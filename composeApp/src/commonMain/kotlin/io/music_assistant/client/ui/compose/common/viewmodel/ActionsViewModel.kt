@@ -2,11 +2,15 @@ package io.music_assistant.client.ui.compose.common.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import co.touchlab.kermit.Logger
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.api.ToastBus
 import io.music_assistant.client.data.MainDataSource
+import io.music_assistant.client.data.playMediaItem
+import io.music_assistant.client.data.model.client.QueueOption
 import io.music_assistant.client.data.model.client.items.AppMediaItem
+import io.music_assistant.client.data.model.client.items.Genre
 import io.music_assistant.client.data.model.client.items.MarkableItem
 import io.music_assistant.client.data.model.client.items.Playlist
 import io.music_assistant.client.data.repository.MediaItemChange
@@ -101,6 +105,12 @@ class ActionsViewModel(
         }
     }
 
+    /**
+     * [position] must be the 0-based index in the server's playlist order, which callers take from
+     * the displayed list. That only matches while playlist items stay in ORIGINAL ascending order —
+     * see `SortConfig.isUserSortable`. Restoring a sort option for PLAYLIST_ITEMS makes this delete
+     * the wrong track, so resolve the original index first if that ever changes.
+     */
     fun removeFromPlaylist(
         playlistId: String,
         position: Int,
@@ -155,6 +165,25 @@ class ActionsViewModel(
     }
 
     fun getProviderIcon(provider: String) = dataSource.providerIcon(provider)
+
+    fun onPlayClick(
+        item: AppMediaItem,
+        option: QueueOption,
+        radio: Boolean,
+        interleave: Boolean = false,
+    ) {
+        viewModelScope.launch {
+            playMediaItem(
+                apiClient = apiClient,
+                player = dataSource.selectedPlayer,
+                mediaItemRepository = mediaItemRepository,
+                item = item,
+                option = option,
+                radioMode = radio,
+                interleave = interleave,
+            )
+        }
+    }
 
     private companion object {
         // Upper bound for awaiting the server's "playlist added" confirmation.

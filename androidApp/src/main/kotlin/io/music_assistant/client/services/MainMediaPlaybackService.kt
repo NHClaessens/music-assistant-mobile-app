@@ -108,6 +108,15 @@ class MainMediaPlaybackService : MediaBrowserServiceCompat() {
             stopSelf()
             return
         }
+        // The car is connected with no local player: the session presents nothing, so there
+        // is no notification to show either. startForeground above is not skipped — the
+        // startForegroundService contract demands it before we may stop.
+        if (sharedSession.sessionBlocked.value) {
+            logger.i { "Session blocked (car connected, no local player) — no notification" }
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
 
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
         logger.i { "Registered audio device callback for routing change detection" }
@@ -123,6 +132,13 @@ class MainMediaPlaybackService : MediaBrowserServiceCompat() {
         scope.launch {
             // Block until everything is stopped, then bail
             dataSource.doesAnythingHavePlayableItem.filter { !it }.first()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+        scope.launch {
+            // Same, for the car-connected-without-local-player window.
+            sharedSession.sessionBlocked.filter { it }.first()
+            logger.i { "Session became blocked — removing notification" }
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
@@ -226,13 +242,11 @@ class MainMediaPlaybackService : MediaBrowserServiceCompat() {
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
             logger.i { "Unregistered audio device callback" }
             dataSource.apiClient.onPlaybackInactive()
-            // The control surface is gone (no notification): the user is done. Release the local
-            // audio stack (AudioTrack/decoder/consumer + Sendspin client) — unless Android Auto is
-            // still hosting the local player. onAppClosed() re-checks "nothing playing" and no-ops
-            // otherwise; it launches in the app-scoped MainDataSource, surviving this service.
-            if (!sharedSession.autoHostActive.value) {
-                dataSource.onAppClosed()
-            }
+            // Stopping this foreground service unpins the process so the OS can reclaim a
+            // backgrounded, idle app. We deliberately do NOT tear down the app-scoped Sendspin
+            // transport here: the connection lives as long as the process does. Only explicit
+            // user action (Sendspin disabled) or OS process death severs it — never a mere
+            // notification swipe / service stop.
         }
         sharedSession.release()
         scope.cancel()

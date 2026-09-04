@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
@@ -54,14 +55,18 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import io.music_assistant.client.data.model.client.Player
 import io.music_assistant.client.data.model.client.PlayerData
 import io.music_assistant.client.data.model.client.PlayerDataFixtures
+import io.music_assistant.client.data.model.client.ResolvedChapter
 import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.Audiobook
 import io.music_assistant.client.data.model.client.items.PodcastEpisode
 import io.music_assistant.client.data.model.client.items.QualityTier
 import io.music_assistant.client.data.model.client.items.canBeFavorited
 import io.music_assistant.client.data.model.client.items.qualityTier
+import io.music_assistant.client.data.model.client.presentationChapter
+import io.music_assistant.client.data.model.client.toAbsoluteSeekSeconds
 import io.music_assistant.client.imageloader.rememberArtworkRequest
 import io.music_assistant.client.player.sendspin.SendspinState
 import io.music_assistant.client.ui.alphaOn
@@ -80,14 +85,21 @@ import musicassistantclient.composeapp.generated.resources.Res
 import musicassistantclient.composeapp.generated.resources.cd_favorite
 import musicassistantclient.composeapp.generated.resources.cd_lyrics
 import musicassistantclient.composeapp.generated.resources.cd_playing
+import musicassistantclient.composeapp.generated.resources.player_needs_setup
 import musicassistantclient.composeapp.generated.resources.player_power_on
 import musicassistantclient.composeapp.generated.resources.player_powered_off
+import musicassistantclient.composeapp.generated.resources.player_standby
 import musicassistantclient.composeapp.generated.resources.players_nothing
 import musicassistantclient.composeapp.generated.resources.queue_cannot_play
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.DurationUnit
 
 private const val SEEK_STICK_EPSILON_SECONDS = 0.5f
+
+// Buffered-ahead band uses the slider's own control tint, one alpha, no health tint. Sits just
+// above the inactive track (0.4) so the buffered region reads a touch more opaque than "not yet
+// buffered" without introducing a second color.
+private const val BUFFER_TRACK_ALPHA = 0.45f
 
 @Composable
 fun CompactPlayerItem(
@@ -99,6 +111,8 @@ fun CompactPlayerItem(
     onGroupButton: (() -> Unit)? = null,
     showAdditionalControls: Boolean = false,
     sendSpinState: SendspinState?,
+    // Server preference gate for chapter-based Next enablement.
+    chapterProgressEnabled: Boolean = true,
 ) {
     val currentMedia = item.player.currentMedia
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
@@ -149,12 +163,9 @@ fun CompactPlayerItem(
 
             // Track info
             val poweredOff = item.player.isPoweredOff
-            val (trackName, trackContentDescription) = if (poweredOff) {
-                stringResource(Res.string.player_powered_off)
-                    .let { it to it }
-            } else {
-                trackNameAndContentDescription(currentMedia?.title)
-            }
+            val (trackName, trackContentDescription) = item.player.dormantLabel()
+                ?.let { it to it }
+                ?: trackNameAndContentDescription(currentMedia?.title)
             // Leading inset == fade width: at rest the left gradient covers only this empty pad
             // (first glyph crisp); the marquee scrolls the [pad][text] unit so text dissolves
             // toward the artwork when it overflows.
@@ -230,6 +241,7 @@ fun CompactPlayerItem(
                 showSkip = true,
                 showSkipBack = onSelectPlayer != null,
                 tint = colors.controlTint,
+                chapterProgressEnabled = chapterProgressEnabled,
             )
         }
 
@@ -271,8 +283,15 @@ fun FullPlayerItem(
     playerAction: (PlayerData, PlayerAction) -> Unit,
     onFavoriteClick: (AppMediaItem) -> Unit,
     livePositionFlow: Flow<Double>?,
+    bufferedAheadSecFlow: Flow<Double>? = null,
     lyricsAvailable: Boolean = false,
     onLyricsClick: () -> Unit = {},
+    // The quality pill and the speed pill only ask for their dialog; the dialogs themselves
+    // live outside the pager so a page change cannot tear them down mid-gesture.
+    onAudioChainClick: () -> Unit = {},
+    onPlaybackSpeedClick: () -> Unit = {},
+    // Server preference gate for the chapter-relative timeline.
+    chapterProgressEnabled: Boolean = true,
 ) {
     val currentMedia = item.player.currentMedia
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
@@ -318,11 +337,33 @@ fun FullPlayerItem(
 
         // Track info
         val poweredOff = item.player.isPoweredOff
-        val (trackName, trackContentDescription) = if (poweredOff) {
-            stringResource(Res.string.player_powered_off).let { it to it }
+        val (trackName, trackContentDescription) = item.player.dormantLabel()
+            ?.let { it to it }
+            ?: trackNameAndContentDescription(currentMedia?.title)
+
+        // Powered off: present the "no media" state — disabled slider, empty time labels.
+        val duration = if (poweredOff) null else currentMedia?.duration?.takeIf { it > 0 }?.toFloat()
+
+        // Live position from PlayerPositionTracker — single source of truth shared
+        // with notification + Android Auto. Recomposition scope is limited to this
+        // slider; the marquee/art/controls only recompose on real state changes.
+        val displayPosition = livePositionFlow
+            ?.collectAsStateWithLifecycle(initialValue = item.queueInfo?.elapsedTime ?: 0.0)
+            ?.value?.toFloat()
+            ?: item.queueInfo?.elapsedTime?.toFloat()
+            ?: 0f
+
+        // Chapter presentation maps the slider/subtitle to the active chapter.
+        // Domain positions, seeks, and tracker values remain absolute.
+        val currentChapter = if (chapterProgressEnabled && !poweredOff) {
+            item.presentationChapter(displayPosition.toDouble())
         } else {
-            trackNameAndContentDescription(currentMedia?.title)
+            null
         }
+        val timelineDuration = currentChapter?.duration?.toFloat() ?: duration
+        val timelinePosition =
+            currentChapter?.relativeSec(displayPosition.toDouble())?.toFloat() ?: displayPosition
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -362,7 +403,8 @@ fun FullPlayerItem(
                     // marquee on a blank string builds a degenerate layer tree that overflows the
                     // RenderThread's native stack (SIGSEGV in HWUI prepareTree) — no-subtitle radios
                     // hit this. The empty Text still reserves one line; it just doesn't scroll.
-                    val subtitle = currentMedia?.subtitle
+                    // Chapter mode uses the active chapter name as the subtitle.
+                    val subtitle = currentChapter?.displayName ?: currentMedia?.subtitle
                     Text(
                         modifier = Modifier.fillMaxWidth()
                             .then(
@@ -387,31 +429,47 @@ fun FullPlayerItem(
             }
         }
 
-        // Powered off: present the "no media" state — disabled slider, empty time labels.
-        val duration = if (poweredOff) null else currentMedia?.duration?.takeIf { it > 0 }?.toFloat()
+        // Buffered-ahead seconds (local player only; null → 0 for remote/preview).
+        val bufferedAheadSec = bufferedAheadSecFlow
+            ?.collectAsStateWithLifecycle(initialValue = 0.0)?.value?.toFloat() ?: 0f
 
-        // Live position from PlayerPositionTracker — single source of truth shared
-        // with notification + Android Auto. Recomposition scope is limited to this
-        // slider; the marquee/art/controls only recompose on real state changes.
-        val displayPosition = livePositionFlow
-            ?.collectAsStateWithLifecycle(initialValue = item.queueInfo?.elapsedTime ?: 0.0)
-            ?.value?.toFloat()
-            ?: item.queueInfo?.elapsedTime?.toFloat()
-            ?: 0f
-
-        // Latch the released seek until the tracker publishes its frozen anchor.
+        // Hold the released absolute seek until the tracker publishes its frozen anchor.
+        // Drag values are timeline-relative; convert the latch for display so it reconciles
+        // even when the seek lands in another chapter.
         var userDragPosition by remember { mutableStateOf<Float?>(null) }
         var releasedSeekPosition by remember { mutableStateOf<Float?>(null) }
+        // Latch the chapter at drag start so boundary crossings cannot shift the thumb.
+        // It outlives the gesture: the released latch is an absolute position in THIS
+        // chapter, and [currentChapter] may already have moved on to the next one.
+        var dragChapter by remember { mutableStateOf<ResolvedChapter?>(null) }
+
+        // A queue-item change mid-drag (track end, Next from another controller)
+        // invalidates the gesture: a release would seek the NEW item to the OLD
+        // item's coordinates. Cancel the drag and drop the released-seek latch
+        // (mirrors the web frontend clearing its pending seek on item change).
+        LaunchedEffect(item.queueInfo?.currentItem?.id) {
+            userDragPosition = null
+            releasedSeekPosition = null
+            dragChapter = null
+        }
 
         LaunchedEffect(displayPosition, releasedSeekPosition) {
             val released = releasedSeekPosition ?: return@LaunchedEffect
             if (kotlin.math.abs(displayPosition - released) < SEEK_STICK_EPSILON_SECONDS) {
                 releasedSeekPosition = null
+                dragChapter = null
             }
         }
 
-        val sliderPosition =
-            if (poweredOff) 0f else userDragPosition ?: releasedSeekPosition ?: displayPosition
+        val sliderPosition = when {
+            poweredOff -> 0f
+            else ->
+                userDragPosition
+                ?: releasedSeekPosition?.let { released ->
+                    dragChapter?.relativeSec(released.toDouble())?.toFloat() ?: released
+                }
+                ?: timelinePosition
+        }
 
         val progressSliderColors = SliderDefaults.colors().copy(
             thumbColor = controlTint,
@@ -423,15 +481,17 @@ fun FullPlayerItem(
         ) {
             Slider(
                 value = sliderPosition,
-                valueRange = duration?.let { 0f..it } ?: 0f..1f,
-                enabled = displayPosition.takeIf { duration != null } != null,
+                valueRange = timelineDuration?.let { 0f..it } ?: 0f..1f,
+                enabled = displayPosition.takeIf { timelineDuration != null } != null,
                 onValueChange = {
+                    if (userDragPosition == null) dragChapter = currentChapter
                     userDragPosition = it  // Track drag position locally
                 },
                 onValueChangeFinished = {
                     userDragPosition?.let { seekPos ->
-                        // Match the server/tracker whole-second seek target to avoid thumb snapback.
-                        val seekSeconds = seekPos.toLong()
+                        // Convert the latched chapter-relative value to an absolute,
+                        // whole-second target to match server/tracker state.
+                        val seekSeconds = dragChapter.toAbsoluteSeekSeconds(seekPos.toDouble())
                         releasedSeekPosition = seekSeconds.toFloat()
                         playerAction(item, PlayerAction.SeekTo(seekSeconds))
                         userDragPosition = null  // Clear drag state
@@ -439,7 +499,7 @@ fun FullPlayerItem(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 thumb = {
-                    sliderPosition.takeIf { duration != null }?.let {
+                    sliderPosition.takeIf { timelineDuration != null }?.let {
                         SliderDefaults.Thumb(
                             interactionSource = remember { MutableInteractionSource() },
                             thumbSize = DpSize(16.dp, 16.dp),
@@ -460,7 +520,37 @@ fun FullPlayerItem(
                             enabled = currentMedia != null && !item.player.isAnnouncing && !poweredOff,
                             modifier = Modifier.height(8.dp),
                         )
-                        if (!chapters.isNullOrEmpty() && duration != null && duration > 0f) {
+                        // Buffered-ahead highlight — the region between the real playhead and
+                        // the buffered point, at an alpha between the inactive (0.4) and active
+                        // (1.0) track. Local player with audio buffered ahead; shown while paused
+                        // too (pause keeps the buffer — only a genuine stop zeroes bufferedAhead).
+                        if (item.isLocal &&
+                            timelineDuration != null && timelineDuration > 0f && bufferedAheadSec > 0f
+                        ) {
+                            val playheadFraction =
+                                (timelinePosition / timelineDuration).coerceIn(0f, 1f)
+                            val bufferedFraction =
+                                ((timelinePosition + bufferedAheadSec) / timelineDuration)
+                                    .coerceIn(0f, 1f)
+                            // Same hue as the slider itself, just a touch more opaque than the
+                            // inactive track — a subtle "already buffered" band, no health tint.
+                            val bufferedColor = controlTint.copy(alpha = BUFFER_TRACK_ALPHA)
+                            Canvas(modifier = Modifier.fillMaxWidth().height(8.dp)) {
+                                val startX = playheadFraction * size.width
+                                val endX = bufferedFraction * size.width
+                                if (endX > startX) {
+                                    drawRect(
+                                        color = bufferedColor,
+                                        topLeft = Offset(startX, 0f),
+                                        size = Size(endX - startX, size.height),
+                                    )
+                                }
+                            }
+                        }
+                        // Chapter ticks use absolute starts, so show them only on the full-book timeline.
+                        if (currentChapter == null &&
+                            !chapters.isNullOrEmpty() && duration != null && duration > 0f
+                        ) {
                             val tickColor =
                                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             Canvas(modifier = Modifier.fillMaxWidth().height(8.dp)) {
@@ -485,8 +575,6 @@ fun FullPlayerItem(
             val currentQueueItem = item.queueInfo?.currentItem
             val tier = currentQueueItem?.qualityTier
             val isLq = tier == QualityTier.LQ
-            var showChainDialog by remember(currentQueueItem?.id) { mutableStateOf(false) }
-            var showSpeedDialog by remember(currentQueueItem?.id) { mutableStateOf(false) }
 
             // Variable speed: server-supported only for audiobooks/podcasts, and only
             // when the queue payload carries `playback_speed` (feature-detect gate).
@@ -495,29 +583,13 @@ fun FullPlayerItem(
                     currentQueueItem?.track is PodcastEpisode
             val showSpeed = isSpokenContent && playbackSpeed != null && !poweredOff
 
-            if (showChainDialog && currentQueueItem != null) {
-                AudioChainDialog(
-                    queueTrack = currentQueueItem,
-                    player = item,
-                    onDismissRequest = { showChainDialog = false },
-                )
-            }
-
-            if (showSpeedDialog && playbackSpeed != null) {
-                PlaybackSpeedDialog(
-                    currentSpeed = playbackSpeed,
-                    onConfirm = { playerAction(item, PlayerAction.SetPlaybackSpeed(it)) },
-                    onDismissRequest = { showSpeedDialog = false },
-                )
-            }
-
             CenteredThreeSlotRow(
                 modifier = Modifier.fillMaxWidth(),
                 start = {
                     Text(
                         text = sliderPosition.takeIf { currentMedia != null }
                             .formatDuration(DurationUnit.SECONDS)
-                            .takeIf { duration != null } ?: "",
+                            .takeIf { timelineDuration != null } ?: "",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -528,7 +600,7 @@ fun FullPlayerItem(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(colors.controlTint)
-                                .clickable { showSpeedDialog = true }
+                                .clickable(onClick = onPlaybackSpeedClick)
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                         ) {
                             Text(
@@ -554,7 +626,7 @@ fun FullPlayerItem(
                                         colors.controlTint
                                     },
                                 )
-                                .clickable(enabled = tier != null) { showChainDialog = true }
+                                .clickable(enabled = tier != null, onClick = onAudioChainClick)
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
                         ) {
                             Text(
@@ -577,7 +649,7 @@ fun FullPlayerItem(
                 end = {
                     Text(
                         text = currentMedia.takeUnless { poweredOff }
-                            ?.let { duration?.formatDuration(DurationUnit.SECONDS) ?: "\u221E" }
+                            ?.let { timelineDuration?.formatDuration(DurationUnit.SECONDS) ?: "\u221E" }
                             ?: "",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -632,6 +704,7 @@ fun FullPlayerItem(
                 playerAction = playerAction,
                 mainButtonSize = 60.dp,
                 tint = controlTint,
+                chapterProgressEnabled = chapterProgressEnabled,
             )
             // Mirrors the heart slot: lyrics button when available, else a spacer
             // so the transport controls stay centered.
@@ -656,6 +729,19 @@ fun FullPlayerItem(
 private val FULL_PLAYER_HORIZONTAL_PADDING = 16.dp
 
 private val previewPoweredOffColors = PlayerColors(dominant = Color.DarkGray, controlTint = Color.White)
+
+/**
+ * The line that replaces the track title while the player renders nothing, or null while it
+ * plays. [Player.isPoweredOff] covers both a switched-off device and one the server cannot
+ * reach any more, so the two are told apart here to word the label correctly.
+ */
+@Composable
+private fun Player.dormantLabel(): String? = when {
+    needsSetup -> stringResource(Res.string.player_needs_setup)
+    !isAvailable -> stringResource(Res.string.player_standby)
+    isPoweredOff -> stringResource(Res.string.player_powered_off)
+    else -> null
+}
 
 @Preview
 @Composable

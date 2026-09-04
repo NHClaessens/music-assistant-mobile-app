@@ -28,6 +28,7 @@ import io.music_assistant.client.data.model.client.RepeatMode
 import io.music_assistant.client.data.model.client.items.Audiobook
 import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.isLongFormSpokenContent
+import io.music_assistant.client.data.model.client.navigationChapters
 import io.music_assistant.client.ui.alphaOn
 import io.music_assistant.client.ui.compose.common.action.PlayerAction
 import io.music_assistant.client.ui.compose.common.icons.PauseIcon
@@ -54,6 +55,8 @@ fun PlayerControls(
     showSkip: Boolean = true,
     showSkipBack: Boolean = true,
     tint: Color = MaterialTheme.colorScheme.primary,
+    // Server audiobook_chapter_progress pref; gates chapter-based Next enablement.
+    chapterProgressEnabled: Boolean = true,
 ) {
     val player = playerData.player
     val queue = playerData.queueInfo
@@ -62,8 +65,15 @@ fun PlayerControls(
     // Audiobooks / podcast episodes swap shuffle & repeat for skip-back / skip-forward seek.
     val isLongForm = queue?.currentItem?.track.isLongFormSpokenContent
     val itemsCount = playerData.queueItems?.size ?: 0
+    // Next is a chapter jump when navigation applies (PlayerRequestFactory), so it stays
+    // enabled while a chapter starts after the (event-driven, close-enough) position.
+    val elapsedSec = queue?.elapsedTime ?: 0.0
+    val hasUpcomingChapter = chapterProgressEnabled &&
+        queue?.currentItem?.track.navigationChapters()?.any { it.start > elapsedSec } == true
     val skipForwardEnabled = when {
         queue?.currentIndex?.let { it < itemsCount - 1 } == true -> true
+        hasUpcomingChapter -> true
+        // Chapterless/last-chapter fallback: an in-progress audiobook still takes a plain next.
         (queue?.currentItem?.track as? Audiobook)?.let { it.fullyPlayed == false } == true -> true
         else -> false
     }

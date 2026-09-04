@@ -40,6 +40,7 @@ import musicassistantclient.composeapp.generated.resources.action_play_now
 import musicassistantclient.composeapp.generated.resources.action_play_playlist_from_here
 import musicassistantclient.composeapp.generated.resources.action_remove_from_library
 import musicassistantclient.composeapp.generated.resources.action_remove_from_playlist
+import musicassistantclient.composeapp.generated.resources.action_start_endless_mix
 import musicassistantclient.composeapp.generated.resources.action_start_radio
 import musicassistantclient.composeapp.generated.resources.action_unfavorite
 import org.jetbrains.compose.resources.StringResource
@@ -51,6 +52,7 @@ sealed class ItemAction(val kind: Kind) {
     data object InterleaveIntoQueue : ItemAction(Kind.PLAYBACK)
     data object PlayFromHere : ItemAction(Kind.PLAYBACK)
     data object StartRadio : ItemAction(Kind.PLAYBACK)
+    data object StartEndlessMix : ItemAction(Kind.PLAYBACK)
 
     data object AddToLibrary : ItemAction(Kind.OTHER)
     data object RemoveFromLibrary : ItemAction(Kind.OTHER)
@@ -86,6 +88,7 @@ fun ItemAction.title(context: ClickContext? = null): StringResource = when (this
     }
 
     ItemAction.StartRadio -> Res.string.action_start_radio
+    ItemAction.StartEndlessMix -> Res.string.action_start_endless_mix
     ItemAction.AddToLibrary -> Res.string.action_add_to_library
     ItemAction.RemoveFromLibrary -> Res.string.action_remove_from_library
     ItemAction.Favorite -> Res.string.action_favorite
@@ -115,6 +118,7 @@ fun ItemAction.icon(context: ClickContext?): ImageVector = when (this) {
     }
 
     ItemAction.StartRadio -> Icons.Default.CellTower
+    ItemAction.StartEndlessMix -> Icons.Default.CellTower
     ItemAction.AddToLibrary -> TablerIcons.FolderPlus
     ItemAction.RemoveFromLibrary -> TablerIcons.FolderMinus
     ItemAction.Favorite -> TablerIcons.Heart

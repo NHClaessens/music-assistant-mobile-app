@@ -5,10 +5,10 @@ package io.music_assistant.client.data
 
 import androidx.compose.ui.graphics.Color
 import co.touchlab.kermit.Logger
+import io.music_assistant.client.api.APICommands
 import io.music_assistant.client.api.Request
 import io.music_assistant.client.api.ServiceClient
 import io.music_assistant.client.data.MainDataSource.Companion.resolveSelectedPlayerId
-import io.music_assistant.client.data.MainDataSource.NowPlayingSnapshot.Companion.ELAPSED_ANCHOR_EPSILON_S
 import io.music_assistant.client.data.factory.MediaItemFactory
 import io.music_assistant.client.data.factory.PlayerFactory
 import io.music_assistant.client.data.factory.QueueFactory
@@ -22,13 +22,16 @@ import io.music_assistant.client.data.model.client.items.AppMediaItem
 import io.music_assistant.client.data.model.client.items.LongFormSeekDefaults
 import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.items.image
-import io.music_assistant.client.data.model.client.items.isLongFormSpokenContent
+import io.music_assistant.client.data.model.server.AI_RADIO_DOMAIN
+import io.music_assistant.client.data.model.server.AI_RADIO_REQUIRED_SCOPE
 import io.music_assistant.client.data.model.server.DspConfig
 import io.music_assistant.client.data.model.server.DspConfigPreset
 import io.music_assistant.client.data.model.server.ProviderManifest
 import io.music_assistant.client.data.model.server.ServerPlayer
+import io.music_assistant.client.data.model.server.ServerProviderInstance
 import io.music_assistant.client.data.model.server.ServerQueue
 import io.music_assistant.client.data.model.server.ServerQueueItem
+import io.music_assistant.client.data.model.server.ServerUser
 import io.music_assistant.client.data.model.server.events.MediaItemAddedEvent
 import io.music_assistant.client.data.model.server.events.MediaItemDeletedEvent
 import io.music_assistant.client.data.model.server.events.MediaItemPlayedEvent
@@ -40,6 +43,7 @@ import io.music_assistant.client.data.model.server.events.QueueAddedEvent
 import io.music_assistant.client.data.model.server.events.QueueItemsUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueTimeUpdatedEvent
 import io.music_assistant.client.data.model.server.events.QueueUpdatedEvent
+import io.music_assistant.client.data.model.server.grantsScope
 import io.music_assistant.client.player.MediaPlayerController
 import io.music_assistant.client.player.sendspin.model.GoodbyeReason
 import io.music_assistant.client.settings.SettingsRepository
@@ -52,6 +56,7 @@ import io.music_assistant.client.ui.compose.common.icons.BookshelfIcon
 import io.music_assistant.client.ui.compose.common.providers.ProviderIconModel
 import io.music_assistant.client.utils.AuthProcessState
 import io.music_assistant.client.utils.DataConnectionState
+import io.music_assistant.client.utils.HasConnectionData
 import io.music_assistant.client.utils.SessionState
 import io.music_assistant.client.utils.currentTimeMillis
 import io.music_assistant.client.utils.resultAs
@@ -68,6 +73,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -77,6 +83,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.CoroutineContext
+
+/** Preserve newer event/optimistic state when a delayed full snapshot arrives. */
+internal fun mergeFullQueueSnapshot(
+    retained: List<QueueInfo>,
+    incoming: List<QueueInfo>,
+): List<QueueInfo> {
+    val retainedById = retained.associateBy { it.id }
+    return incoming.map { candidate ->
+        val current = retainedById[candidate.id]
+        if (current != null && candidate.isBefore(current)) current else candidate
+    }
+}
 
 @OptIn(FlowPreview::class)
 class MainDataSource(
@@ -95,6 +113,8 @@ class MainDataSource(
      * [PlayerRequestFactory] (and [LocalPlayerController] through it) via DI.
      */
     val positionTracker: PlayerPositionTracker,
+    /** Server-synced user preferences, refreshed from `auth/me` and shared by all surfaces. */
+    val userPreferences: UserPreferences,
     private val mediaItemFactory: MediaItemFactory,
     private val playerFactory: PlayerFactory,
     private val queueFactory: QueueFactory,
@@ -112,12 +132,24 @@ class MainDataSource(
     /** Local (Sendspin) player lifecycle, state and commands live in the controller. */
     val sendspinState = localPlayerController.sendspinState
 
+    /** Seconds of audio buffered ahead of the local playhead (buffered-progress indicator). */
+    val localBufferedSeconds = localPlayerController.bufferedSeconds
+
     private val supervisorJob = SupervisorJob()
     override val coroutineContext: CoroutineContext = supervisorJob + Dispatchers.IO
 
     private val _serverPlayers = MutableStateFlow<DataState<List<Player>>>(DataState.Loading())
     private val _queueInfos = MutableStateFlow<List<QueueInfo>>(emptyList())
     private val _providersIcons = MutableStateFlow<Map<String, ProviderIconModel>>(emptyMap())
+
+    /**
+     * Whether the AI Radio UI may be offered: the optional `ai_radio` plugin is loaded AND
+     * the signed-in user's role grants the scope its start/stop commands demand. Both halves
+     * matter — a `user` role can list stations but cannot play any, so gating on the plugin
+     * alone would render a Library section where every tap fails.
+     */
+    private val _aiRadioAvailable = MutableStateFlow(false)
+    val aiRadioAvailable: StateFlow<Boolean> = _aiRadioAvailable.asStateFlow()
 
     /**
      * Authoritative favorite state per track, keyed by [favKey]. The server's
@@ -182,6 +214,49 @@ class MainDataSource(
             data?.let { applyFavoriteOverride(it, overrides) }
         }.stateIn(this, SharingStarted.Eagerly, null)
 
+    /** Local player paired with the chapter every system-media channel presents. */
+    private val localPlayerPresentation =
+        localPlayer.withPresentationChapter(userPreferences, positionTracker) { it }
+
+    /**
+     * Local system-media metadata; chapter presentation re-emits at boundaries
+     * because no server event announces the duration/album change.
+     */
+    val nowPlayingTrack: StateFlow<NowPlayingTrack?> =
+        localPlayerPresentation
+            .map {
+                buildNowPlayingTrack(
+                    playerData = it.value,
+                    currentChapter = it.chapter,
+                    chapterNavigationEnabled = userPreferences.isChapterProgressEnabled,
+                )
+            }
+            .distinctUntilChanged()
+            .stateIn(this, SharingStarted.Eagerly, null)
+
+    /**
+     * Local transport anchors carry content identity for cross-channel correlation.
+     * Track and transport have no ordering guarantee; no-track states remain null.
+     */
+    val nowPlayingTransport: StateFlow<NowPlayingTransport?> =
+        localPlayerPresentation
+            .map {
+                buildNowPlayingTransport(
+                    playerData = it.value,
+                    positionTracker = positionTracker,
+                    currentChapter = it.chapter,
+                )
+            }
+            .distinctUntilChanged(NowPlayingChannelChangeDetection::sameTransport)
+            .stateIn(this, SharingStarted.Eagerly, null)
+
+    /** Queue modes and their shared availability gate for system-media controls. */
+    val nowPlayingModes: StateFlow<NowPlayingModes?> =
+        localPlayer
+            .map(::buildNowPlayingModes)
+            .distinctUntilChanged()
+            .stateIn(this, SharingStarted.Eagerly, null)
+
     val isAnythingPlaying =
         playersData
             .mapNotNull { it as? DataState.Data<List<PlayerData>> }
@@ -238,12 +313,11 @@ class MainDataSource(
     // --- Canonical media-session "now playing" source ---
     // Single source of truth for what the MediaSession / notification presents,
     // consumed by the Android SharedMediaSessionManager (the sole session writer)
-    // and its transport callback. Players eligible for the session are those that
-    // can play and have a current queue item.
+    // and its transport callback. See [isSessionEligible] for who qualifies.
     private val sessionPlayers: StateFlow<List<PlayerData>> =
         playersData
             .mapNotNull { (it as? DataState.Data)?.data }
-            .map { list -> list.filter { it.player.canPlay && it.queueInfo?.currentItem != null } }
+            .map { list -> list.filter(::isSessionEligible) }
             .stateIn(this, SharingStarted.Eagerly, emptyList())
 
     val sessionMultiplePlayers: StateFlow<Boolean> =
@@ -333,32 +407,22 @@ class MainDataSource(
             }
                 .debounce(Timings.EVENT_DEBOUNCE) // Small debounce to batch rapid updates, but don't delay initial load
                 .collect { input ->
-                    _playersData.update { oldValues ->
-                        when (input.players) {
-                            is DataState.Error -> DataState.Error()
-                            is DataState.Loading -> DataState.Loading()
-                            is DataState.NoData -> DataState.NoData()
-                            is DataState.Data -> DataState.Data(
-                                buildPlayerDataList(
-                                    input.players.data,
-                                    input.queues,
-                                    input.localData,
-                                    input.favoriteOverrides,
-                                    oldValues,
-                                ),
-                            )
-
-                            is DataState.Stale -> DataState.Stale(
-                                data = buildPlayerDataList(
-                                    input.players.data,
-                                    input.queues,
-                                    input.localData,
-                                    input.favoriteOverrides,
-                                    oldValues,
-                                ),
-                                disconnectedAt = input.players.disconnectedAt,
-                                reason = input.players.reason,
-                            )
+                    if (input.players !is DataState.Stale) {
+                        _playersData.update { oldValues ->
+                            when (input.players) {
+                                is DataState.Error -> DataState.Error()
+                                is DataState.Loading -> DataState.Loading()
+                                is DataState.NoData -> DataState.NoData()
+                                is DataState.Data -> DataState.Data(
+                                    buildPlayerDataList(
+                                        input.players.data,
+                                        input.queues,
+                                        input.localData,
+                                        input.favoriteOverrides,
+                                        oldValues,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -412,6 +476,8 @@ class MainDataSource(
                                                 DataState.Data(currentState.data)
                                             }
                                             updateProvidersManifests()
+                                            updateUserPreferences()
+                                            updateAiRadioAvailability()
                                             localPlayerController.start()
                                             updatePlayersAndQueues()
                                             localPlayerController.drainCommandQueue()
@@ -423,6 +489,8 @@ class MainDataSource(
                                     // Already have data (shouldn't happen, but handle gracefully)
                                     log.w { "Connected while already in Data state - refreshing anyway" }
                                     updateProvidersManifests()
+                                    updateUserPreferences()
+                                    updateAiRadioAvailability()
                                     updatePlayersAndQueues()
                                     refreshSelectedPlayerQueueItems()
                                     // Safety net: reinit Sendspin if it's not already connected.
@@ -435,6 +503,8 @@ class MainDataSource(
                                     // Fresh connection or error recovery - show loading
                                     _serverPlayers.update { DataState.Loading() }
                                     updateProvidersManifests()
+                                    updateUserPreferences()
+                                    updateAiRadioAvailability()
                                     localPlayerController.start()
                                     updatePlayersAndQueues()
                                 }
@@ -643,13 +713,21 @@ class MainDataSource(
                 .collect { settings.setLastSelectedPlayerId(it) }
         }
         launch {
-            selectedPlayerIndex.filterNotNull().collect { index ->
-                // sendRequest's gate handles "not ready" — outer guard would only
-                // add a TOCTOU race. If we're offline, the gate fails fast.
-                (playersData.value as? DataState.Data)?.data?.let { list ->
-                    refreshPlayerQueueItems(list[index])
-                }
+            // Fetch queue items for the selected player. Keyed on
+            // (playerId, queueInfo.id) rather than the selection *index* so it
+            // also re-fires when the selected player's queueInfo arrives late —
+            // e.g. the local player, whose metadata lands only after Sendspin
+            // registers, long after its row (and index) first appears. An
+            // index-keyed trigger never re-emits for a same-slot player, leaving
+            // the active local player's items unfetched on cold start.
+            // sendRequest's gate handles "not ready"; a pre-check would only add
+            // a TOCTOU race.
+            combine(playersData, _selectedPlayerId) { pd, id ->
+                (pd as? DataState.Data)?.data?.firstOrNull { it.playerId == id }
             }
+                .mapNotNull { it?.takeIf { pd -> pd.queueInfo != null } }
+                .distinctUntilChangedBy { it.playerId to it.queueInfo?.id }
+                .collect { refreshPlayerQueueItems(it) }
         }
 
         // Watch for Sendspin settings changes
@@ -672,59 +750,6 @@ class MainDataSource(
             }
         }
 
-        // Keep Now Playing (iOS Control Center / Lock Screen) in sync with the
-        // local player. iOS interpolates the playback bar internally from the
-        // `(elapsed, timestamp, rate)` triple on every `setNowPlayingInfo`
-        // call; per Apple's guidance the right pattern is one anchor write
-        // per server event, plus track/rate transitions, and let iOS take
-        // it from there. So we drive this off `localPlayer` — which re-emits
-        // on track change, play/pause, and server queue event — and dedupe
-        // via [NowPlayingSnapshot.sameDictWriteWouldBe] so sub-second
-        // position jitter doesn't cause a write per tick. Mid-pause
-        // `elapsed_time = null` events flow through as `null` and the iOS
-        // adapter's skip-on-nil semantics preserve the previous anchor.
-        launch {
-            localPlayer
-                .map { pd ->
-                    val track = pd?.queueInfo?.currentItem?.track
-                    if (track == null) {
-                        NowPlayingSnapshot.Cleared
-                    } else {
-                        NowPlayingSnapshot.Active(
-                            title = track.displayName,
-                            artist = track.subtitle,
-                            album = track.parentName,
-                            artworkUrl = track.image(ImageType.THUMB)?.url,
-                            duration = track.duration,
-                            // Read live position from the tracker rather than the stale
-                            // anchor on `pd.queueInfo` (which is only updated by
-                            // QueueAdded/UpdatedEvent, not by QueueTimeUpdatedEvent).
-                            elapsedTime = pd.queueInfo.id.let {
-                                positionTracker.effectiveSec(it)
-                            } ?: pd.queueInfo.elapsedTime,
-                            isPlaying = pd.player.isPlaying,
-                            isPositionFrozen = positionTracker.isFrozenUntilConfirmed(pd.queueInfo.id),
-                            isLongFormContent = track.isLongFormSpokenContent,
-                        )
-                    }
-                }
-                .distinctUntilChanged { a, b -> NowPlayingSnapshot.sameDictWriteWouldBe(a, b) }
-                .collect { snapshot ->
-                    when (snapshot) {
-                        NowPlayingSnapshot.Cleared -> mediaPlayerController.clearNowPlaying()
-                        is NowPlayingSnapshot.Active -> mediaPlayerController.updateNowPlaying(
-                            title = snapshot.title,
-                            artist = snapshot.artist,
-                            album = snapshot.album,
-                            artworkUrl = snapshot.artworkUrl,
-                            duration = snapshot.duration,
-                            elapsedTime = snapshot.elapsedTime,
-                            playbackRate = if (snapshot.isPlaying && !snapshot.isPositionFrozen) 1.0 else 0.0,
-                            isLongFormContent = snapshot.isLongFormContent,
-                        )
-                    }
-                }
-        }
         // Arms `hasActivePlayback` so backgrounding mid-playback doesn't tear down
         // Sendspin (goodbye=shutdown → audio stops, server cold-resumes. Driven off
         // logical `isPlaying`, which survives the transient transport blip — unlike
@@ -734,72 +759,6 @@ class MainDataSource(
                 .map { it?.player?.isPlaying == true }
                 .distinctUntilChanged()
                 .collect { if (it) apiClient.onPlaybackActive() else apiClient.onPlaybackInactive() }
-        }
-    }
-
-    /**
-     * Captures the fields a single emission would push to iOS's Now Playing
-     * dict — [Active] when the local player has a track, [Cleared] when it
-     * doesn't. Paired with [Companion.sameDictWriteWouldBe] as a
-     * [distinctUntilChanged] key so the flow only emits once per visible
-     * anchor change (new track, pause/play, real elapsed jump).
-     */
-    internal sealed interface NowPlayingSnapshot {
-        data object Cleared : NowPlayingSnapshot
-        data class Active(
-            val title: String?,
-            val artist: String?,
-            val album: String?,
-            val artworkUrl: String?,
-            val duration: Double?,
-            val elapsedTime: Double?,
-            val isPlaying: Boolean,
-            val isPositionFrozen: Boolean = false,
-            val isLongFormContent: Boolean,
-        ) : NowPlayingSnapshot
-
-        companion object {
-            /**
-             * Threshold (seconds) below which two `elapsed` values are treated
-             * as the same anchor: iOS's own interpolator covers sub-second
-             * drift from `(elapsed, timestamp, rate)`, so writing a fresh
-             * value within this window is a no-op the user can't see.
-             *
-             * 2 s is comfortably wider than typical position-tracker jitter
-             * (we tick at 500 ms with ±50 ms of dispatch noise) and tighter
-             * than any user-visible seek.
-             */
-            internal const val ELAPSED_ANCHOR_EPSILON_S = 2.0
-
-            /**
-             * Returns `true` when [a] and [b] would produce indistinguishable
-             * `MPNowPlayingInfoCenter` dict writes — i.e. emitting [b] after
-             * [a] would not visibly change the lock screen / CarPlay bar.
-             *
-             * Most fields compare by value equality. `elapsedTime` is the
-             * exception: small drifts (within [ELAPSED_ANCHOR_EPSILON_S]) are
-             * treated as equal because iOS is already interpolating from the
-             * last anchor. Crossing the threshold (e.g. a server-side seek,
-             * a reconnect re-anchoring with a wildly different value) emits.
-             */
-            fun sameDictWriteWouldBe(a: NowPlayingSnapshot, b: NowPlayingSnapshot): Boolean {
-                if (a !is Active || b !is Active) return a === b
-                if (a.title != b.title) return false
-                if (a.artist != b.artist) return false
-                if (a.album != b.album) return false
-                if (a.artworkUrl != b.artworkUrl) return false
-                if (a.duration != b.duration) return false
-                if (a.isPlaying != b.isPlaying) return false
-                if (a.isPositionFrozen != b.isPositionFrozen) return false
-                if (a.isLongFormContent != b.isLongFormContent) return false
-                val ae = a.elapsedTime
-                val be = b.elapsedTime
-                return when {
-                    ae == null && be == null -> true
-                    ae == null || be == null -> false
-                    else -> kotlin.math.abs(ae - be) < ELAPSED_ANCHOR_EPSILON_S
-                }
-            }
         }
     }
 
@@ -814,7 +773,7 @@ class MainDataSource(
         favoriteOverrides: Map<String, Boolean>,
         oldValues: DataState<List<PlayerData>>,
     ): List<PlayerData> {
-        val localPlayerId = settings.sendspinClientId.value
+        val localPlayerId = settings.sendspinEffectivePlayerId.value
         val playerDataList = allPlayers
             .map { player ->
                 val isLocal = player.id == localPlayerId
@@ -827,7 +786,10 @@ class MainDataSource(
                     if (isLocal || parent != null) {
                         emptyList()
                     } else {
-                        allPlayers.mapNotNull { it.asChildBindFor(player) }
+                        // Grouping is a command, so an unreachable player is no candidate:
+                        // the server would drop the set_members call for it.
+                        allPlayers.filter { it.isAvailable }
+                            .mapNotNull { it.asChildBindFor(player) }
                     }
                 if (isLocal && localData != null) {
                     // Repository is source of truth for the local player; surface the
@@ -980,7 +942,12 @@ class MainDataSource(
         _serverPlayers.update { DataState.NoData() }
         _queueInfos.update { emptyList() }
         positionTracker.clear()
+        // Server-scoped: another server must not inherit this one's preferences.
+        userPreferences.clear()
         localPlayerController.clearState()
+        // Server-scoped: the plugin set and the user's role both belong to the old
+        // connection, so another server must not inherit this one's gate.
+        _aiRadioAvailable.value = false
         // Note: _providersIcons deliberately NOT cleared (static data)
     }
 
@@ -993,6 +960,10 @@ class MainDataSource(
             .getOrNull()?.resultAs<DspConfig>()
     }
 
+    suspend fun applyDspPreset(playerId: String, presetId: String): DspConfig? =
+        apiClient.sendRequest(Request.Dsp.applyPreset(playerId, presetId))
+            .getOrNull()?.resultAs<DspConfig>()
+
     suspend fun getDspPresets(): List<DspConfigPreset> =
         apiClient.sendRequest(Request.Dsp.getPresets())
             .getOrNull()?.resultAs<List<DspConfigPreset>>() ?: emptyList()
@@ -1003,6 +974,12 @@ class MainDataSource(
         // launch in [init] mirrors it into [SettingsRepository] for the next
         // app launch.
         _userSelectedPlayerId.update { player.id }
+    }
+
+    /** Re-read authoritative player and queue state without issuing playback commands. */
+    fun refreshPlayersAndQueues() {
+        log.i { "Refreshing authoritative player and queue state" }
+        updatePlayersAndQueues()
     }
 
     /** `null` if this event is older than what `_queueInfos` already holds for the same id. */
@@ -1019,7 +996,7 @@ class MainDataSource(
 
     fun playerAction(playerId: String, action: PlayerAction) {
         // Delegate to data-based overload for local player (handles optimistic + routing)
-        if (playerId == settings.sendspinClientId.value) {
+        if (playerId == settings.sendspinEffectivePlayerId.value) {
             localPlayerController.localPlayerData.value?.let { localData ->
                 playerAction(localData, action)
                 return
@@ -1136,6 +1113,10 @@ class MainDataSource(
                     ),
                 )
 
+                PlayerAction.LeaveGroup -> apiClient.sendRequest(
+                    Request.Player.ungroup(playerId = playerId),
+                )
+
                 else -> Unit
             }
         }
@@ -1193,6 +1174,30 @@ class MainDataSource(
                 .filterNotNull()
                 .distinctUntilChanged()
                 .first { it != previousVolume }
+        }
+    }
+
+    /**
+     * Starts a server-side sleep timer of [seconds] on [playerId].
+     *
+     * Deliberately not a [PlayerAction]: the timer lives on the server for every player,
+     * the local (Sendspin) one included — the server stops it over the normal protocol —
+     * so this must never take the local branch of [playerAction]. No optimistic state:
+     * the server calls `update_state()`, so the confirming `PlayerUpdatedEvent` carries
+     * the new expiry back within the same round trip.
+     */
+    fun setSleepTimer(playerId: String, seconds: Int) {
+        launch {
+            apiClient.sendRequest(Request.Player.setSleepTimer(playerId, seconds))
+                .onFailure { log.e(it) { "Failed to set sleep timer for $playerId" } }
+        }
+    }
+
+    /** Clears the server-side sleep timer on [playerId]. See [setSleepTimer]. */
+    fun clearSleepTimer(playerId: String) {
+        launch {
+            apiClient.sendRequest(Request.Player.clearSleepTimer(playerId))
+                .onFailure { log.e(it) { "Failed to clear sleep timer for $playerId" } }
         }
     }
 
@@ -1263,7 +1268,7 @@ class MainDataSource(
                     when (event) {
                         is PlayerAddedEvent -> {
                             playerFactory.create(event.data)
-                                .takeIf { it.shouldBeShown }
+                                .takeIf { it.isListed }
                                 ?.let { newPlayer ->
                                     _serverPlayers.update { oldState ->
                                         when (oldState) {
@@ -1306,7 +1311,7 @@ class MainDataSource(
                         is PlayerUpdatedEvent -> {
                             val data = playerFactory.create(event.data)
                             // Forward to local player repository if this is the local player
-                            if (data.id == settings.sendspinClientId.value) {
+                            if (data.id == settings.sendspinEffectivePlayerId.value) {
                                 localPlayerController.onServerPlayerUpdate(data)
                             }
                             _serverPlayers.update { oldState ->
@@ -1314,7 +1319,7 @@ class MainDataSource(
                                     is DataState.Data -> {
                                         val players = oldState.data
                                         DataState.Data(
-                                            if (data.shouldBeShown) {
+                                            if (data.isListed) {
                                                 if (players.any { it.id == data.id }) {
                                                     players.map { if (it.id == data.id) data else it }
                                                 } else {
@@ -1337,7 +1342,7 @@ class MainDataSource(
                             val data = queueFactory.create(event.data).takeIfNotStale("QueueAdded")
                                 ?: return@collect
 
-                            val localPlayerId = settings.sendspinClientId.value
+                            val localPlayerId = settings.sendspinEffectivePlayerId.value
                             if (data.id == localPlayerId ||
                                 (_serverPlayers.value as? DataState.Data)?.data
                                     ?.find { it.id == localPlayerId }?.queueId == data.id
@@ -1372,7 +1377,7 @@ class MainDataSource(
                                     ?: return@collect
 
                             // Forward to local player repository if this is the local player's queue
-                            val localPlayerId = settings.sendspinClientId.value
+                            val localPlayerId = settings.sendspinEffectivePlayerId.value
                             if (data.id == localPlayerId ||
                                 (_serverPlayers.value as? DataState.Data)?.data
                                     ?.find { it.id == localPlayerId }?.queueId == data.id
@@ -1573,13 +1578,16 @@ class MainDataSource(
             apiClient.sendRequest(Request.Player.all())
                 .resultAs<List<ServerPlayer>>()?.let { playerFactory.createList(it) }
                 ?.let { list ->
-                    val visiblePlayers = list.filter { it.shouldBeShown }
+                    val visiblePlayers = list.filter { it.isListed }
                     _serverPlayers.update {
                         DataState.Data(visiblePlayers)
                     }
                     // Forward to repository: real player if found, synthetic if not
-                    val localPlayerId = settings.sendspinClientId.value
-                    val localServerPlayer = visiblePlayers.find { it.id == localPlayerId }
+                    val localPlayerId = settings.sendspinEffectivePlayerId.value
+                    // An unreachable Sendspin player still counts as absent: the synthetic
+                    // local player must take over, or Android Auto is left without one.
+                    val localServerPlayer =
+                        visiblePlayers.find { it.id == localPlayerId && it.isAvailable }
                     localPlayerController.onInitialPlayersReceived(
                         hasLocalPlayer = localServerPlayer != null,
                     )
@@ -1591,8 +1599,11 @@ class MainDataSource(
         launch {
             apiClient.sendRequest(Request.Queue.all())
                 .resultAs<List<ServerQueue>>()?.let { queueFactory.createList(it) }?.let { list ->
-                    _queueInfos.update { list }
-                    list.forEach { queueInfo ->
+                    var mergedSnapshot = list
+                    _queueInfos.update { retained ->
+                        mergeFullQueueSnapshot(retained, list).also { mergedSnapshot = it }
+                    }
+                    mergedSnapshot.forEach { queueInfo ->
                         queueInfo.elapsedTime?.let { elapsed ->
                             val player = (_serverPlayers.value as? DataState.Data)
                                 ?.data?.find { it.queueId == queueInfo.id }
@@ -1607,10 +1618,10 @@ class MainDataSource(
                     }
 
                     // Forward local player's queue to repository
-                    val localPlayerId = settings.sendspinClientId.value
+                    val localPlayerId = settings.sendspinEffectivePlayerId.value
                     val localQueueId = (_serverPlayers.value as? DataState.Data)?.data
                         ?.find { it.id == localPlayerId }?.queueId
-                    list.find { it.id == localPlayerId || it.id == localQueueId }
+                    mergedSnapshot.find { it.id == localPlayerId || it.id == localQueueId }
                         ?.let { localPlayerController.onServerQueueUpdate(it) }
                 }
         }
@@ -1623,6 +1634,36 @@ class MainDataSource(
                 state is DataState.Data && state.data.any { it.queueInfo != null }
             }
             refreshAllPlayersQueueItems()
+        }
+    }
+
+    /** Refreshes preferences from `auth/me`; a failed fetch keeps the current values. */
+    private fun updateUserPreferences() {
+        launch {
+            apiClient.sendRequest(Request(APICommands.AUTH_ME))
+                .resultAs<ServerUser>()
+                ?.let { userPreferences.update(it.preferences) }
+        }
+    }
+
+    /**
+     * Resolves the AI Radio gate. Fails closed: any missing piece — plugin absent, role
+     * unknown, either fetch failing — leaves the feature hidden rather than half-offered.
+     */
+    private fun updateAiRadioAvailability() {
+        launch {
+            val pluginLoaded = apiClient.sendRequest(Request.Library.providers())
+                .resultAs<List<ServerProviderInstance>>()
+                ?.any { it.domain == AI_RADIO_DOMAIN && it.available } == true
+            if (!pluginLoaded) {
+                _aiRadioAvailable.value = false
+                return@launch
+            }
+            val roleScopes = apiClient.sendRequest(Request(APICommands.AUTH_SCOPES))
+                .resultAs<Map<String, List<String>>>()
+                .orEmpty()
+            val role = (apiClient.sessionState.value as? HasConnectionData)?.user?.role
+            _aiRadioAvailable.value = grantsScope(roleScopes, role, AI_RADIO_REQUIRED_SCOPE)
         }
     }
 
@@ -1737,18 +1778,6 @@ class MainDataSource(
         }
     }
 
-    /**
-     * Called when the app task is removed (user closed the app from recents).
-     * Stops Sendspin if nothing is actively playing — playing state is intentionally
-     * kept alive for background audio and is not affected by this call.
-     */
-    fun onAppClosed() {
-        if (!isAnythingPlaying.value) {
-            log.i { "App closed with no active playback — stopping Sendspin" }
-            launch { localPlayerController.stop(GoodbyeReason.Shutdown) }
-        }
-    }
-
     fun close() {
         supervisorJob.cancel()
     }
@@ -1771,6 +1800,18 @@ class MainDataSource(
          *     the user's choice is offline.
          *  3. `null` when [visiblePlayerIds] is empty.
          */
+        /**
+         * True when the player may back the media session / notification.
+         *
+         * A player the server cannot reach is excluded even though it stays listed in the
+         * app: it accepts no commands, so a notification pointing at it would only offer
+         * dead transport buttons.
+         */
+        internal fun isSessionEligible(data: PlayerData): Boolean =
+            data.player.isAvailable &&
+                data.player.canPlay &&
+                data.queueInfo?.currentItem != null
+
         internal fun resolveSelectedPlayerId(
             visiblePlayerIds: List<String>,
             userChoice: String?,

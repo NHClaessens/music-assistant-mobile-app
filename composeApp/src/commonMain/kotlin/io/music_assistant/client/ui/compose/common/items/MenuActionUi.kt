@@ -43,7 +43,7 @@ fun MenuActionOption.toItemAction(
         } else {
             null
         }
-    MenuActionOption.START_RADIO -> if (item.canStartRadio) ItemAction.StartRadio else null
+    MenuActionOption.START_RADIO -> if (item.canStartEndlessMix) ItemAction.StartRadio else null
     MenuActionOption.LIBRARY ->
         if (item is Genre) {
             null
