@@ -5,8 +5,8 @@ name: Auto-Merge Upstream with LLM Conflict Resolution
     - cron: '0 * * * *'  # Runs hourly
   workflow_dispatch:
     inputs:
-      force_docker_build:
-        description: Build and push the image even when already up to date with upstream
+      force_app_build:
+        description: Build and release the app even when already up to date with upstream
         required: false
         default: false
         type: boolean
@@ -123,17 +123,37 @@ jobs:
         run: git push origin "${{ vars.TARGET_BRANCH }}"
       
       - name: Setup Gradle
+        if: >-
+          success() && (
+            steps.check.outputs.up_to_date != 'true' ||
+            inputs.force_app_build == true
+          )
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build with Gradle
+        if: >-
+          success() && (
+            steps.check.outputs.up_to_date != 'true' ||
+            inputs.force_app_build == true
+          )
         run: ./gradlew :androidApp:assembleSelfSignedRelease
       
       - name: Prepare release assets
+        if: >-
+          success() && (
+            steps.check.outputs.up_to_date != 'true' ||
+            inputs.force_app_build == true
+          )
         run: |
           mkdir -p release-assets
           cp androidApp/build/outputs/apk/selfSignedRelease/androidApp-arm64-v8a-selfSignedRelease.apk release-assets/
       
       - uses: actions/forgejo-release@v2.13.4
+        if: >-
+          success() && (
+            steps.check.outputs.up_to_date != 'true' ||
+            inputs.force_app_build == true
+          )
         with:
           direction: upload
           url: https://git.nilsc.org
