@@ -1,0 +1,162 @@
+---
+name: Auto-Merge Upstream with LLM Conflict Resolution
+"on":
+  schedule:
+    - cron: '0 * * * *'  # Runs hourly
+  workflow_dispatch:
+    inputs:
+      force_docker_build:
+        description: Build and push the image even when already up to date with upstream
+        required: false
+        default: false
+        type: boolean
+
+# Configure in Forgejo UI:
+#   Variables: UPSTREAM_REPO_URL, UPSTREAM_BRANCH, TARGET_BRANCH,
+#     IMAGE_REGISTRY, DOCKER_IMAGE_NAME, LLM_ENDPOINT, LLM_MODEL
+#   Secrets: IMAGE_REGISTRY_USER, IMAGE_REGISTRY_PASSWORD,
+#     LLM_API_KEY (optional)
+#   Auth: checkout/push use the job's github.token (same Forgejo repo).
+#   Upstream fetch is unauthenticated (public remote).
+#   Registry: IMAGE_REGISTRY_PASSWORD must be a user PAT with
+#     read:package + write:package (account password / github.token
+#     usually get unauthorized: reqPackageAccess on push).
+#
+# Docker: set container.docker_host: 'automount' on the runner (shares the
+# runner's /var/run/docker.sock into job containers). Do not also mount it
+# from the workflow — that causes "Duplicate mount point".
+
+jobs:
+  sync-upstream:
+    runs-on: ${{ vars.RUNNER_LABEL }}
+    container:
+      image: node:20-alpine
+    steps:
+      - name: Install tools
+        # buildx on the host is unused here — the job needs its own CLI plugin;
+        # the shared socket only exposes the daemon.
+        run: apk add --no-cache git curl jq docker-cli docker-cli-buildx
+
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream "${{ vars.UPSTREAM_REPO_URL }}"
+          git fetch upstream
+
+      - name: Check for upstream changes
+        id: check
+        run: |
+          git checkout "${{ vars.TARGET_BRANCH }}"
+          if git merge-base --is-ancestor \
+            "upstream/${{ vars.UPSTREAM_BRANCH }}" HEAD; then
+            echo "Already up to date with upstream — nothing to do."
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure git identity
+        if: steps.check.outputs.up_to_date != 'true'
+        run: |
+          git config --global user.name "forgejo-runner"
+          git config --global user.email "runner@forgejo.org"
+
+      - name: Attempt merge
+        id: merge
+        if: steps.check.outputs.up_to_date != 'true'
+        run: |
+          if ! git merge \
+            "upstream/${{ vars.UPSTREAM_BRANCH }}" --no-edit; then
+            echo "MERGE_CONFLICT=1" >> "$GITHUB_ENV"
+          fi
+        continue-on-error: true
+
+      - name: Resolve conflicts with LLM
+        if: steps.check.outputs.up_to_date != 'true' && env.MERGE_CONFLICT == '1'
+        run: |
+          CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
+          if [ -z "$CONFLICTED_FILES" ]; then
+            echo "No conflicts to resolve."
+            exit 0
+          fi
+          for file in $CONFLICTED_FILES; do
+            echo "Resolving conflicts in: $file"
+            # :2 = ours (HEAD), :3 = theirs (upstream)
+            OURS=$(git show :2:"$file")
+            THEIRS=$(git show :3:"$file")
+            cat > /tmp/conflict.txt << EOF
+          Resolve the following Git merge conflict in $file:
+          <<<<<<< HEAD
+          $OURS
+          =======
+          $THEIRS
+          >>>>>>> upstream/${{ vars.UPSTREAM_BRANCH }}
+          Return ONLY the resolved file content without conflict markers.
+          EOF
+            RESOLVED_CONTENT=$(curl -s \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${{ secrets.LLM_API_KEY }}" \
+              -d "{
+                \"model\": \"${{ vars.LLM_MODEL }}\",
+                \"messages\": [{
+                  \"role\": \"user\",
+                  \"content\": $(jq -Rs . < /tmp/conflict.txt)
+                }],
+                \"stream\": false
+              }" \
+              "${{ vars.LLM_ENDPOINT }}" \
+              | jq -r '.choices[0].message.content')
+            echo "$RESOLVED_CONTENT" > "$file"
+            git add "$file"
+          done
+          git commit -m "$(printf '%s\n' \
+            "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }}" \
+            "with LLM conflict resolution")"
+
+      - name: Push merged branch
+        if: success() && steps.check.outputs.up_to_date != 'true'
+        run: git push origin "${{ vars.TARGET_BRANCH }}"
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build with Gradle
+        run: ./gradlew :androidApp:assembleSelfSignedRelease
+      
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          cp androidApp/build/outputs/apk/selfSignedRelease/androidApp-arm64-v8a-selfSignedRelease.apk release-assets/
+      
+      - uses: actions/forgejo-release@v2.13.4
+        with:
+          direction: upload
+          url: https://git.nilsc.org
+          repo: nils/music-assistant-mobile-app
+          token: ${{ github.token }}
+          tag: v1.0.0
+          release-dir: release-assets
+          release-notes: "New update with upstream changes"
+
+      # - name: Build and Push Docker Image
+      #   if: >-
+      #     success() && (
+      #       steps.check.outputs.up_to_date != 'true' ||
+      #       inputs.force_docker_build == true
+      #     )
+      #   run: |
+      #     if ! docker info >/dev/null 2>&1; then
+      #       echo "::error::No Docker daemon in this job (need container.docker_host: automount)."
+      #       exit 1
+      #     fi
+      #     docker buildx version
+      #     echo "${{ secrets.IMAGE_REGISTRY_PASSWORD }}" | docker login \
+      #       -u "${{ secrets.IMAGE_REGISTRY_USER }}" \
+      #       --password-stdin "${{ vars.IMAGE_REGISTRY }}"
+      #     IMAGE="${{ vars.IMAGE_REGISTRY }}/${{ vars.DOCKER_IMAGE_NAME }}"
+      #     docker buildx build --push -t "${IMAGE}:latest" .
