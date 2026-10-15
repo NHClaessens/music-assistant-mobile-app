@@ -16,11 +16,16 @@ name: Auto-Merge Upstream with opencode Conflict Resolution
 # (Read, Edit, Grep, etc.), then a single compile check verifies the result.
 #
 # Configure in Forgejo UI:
-#   Variables: UPSTREAM_REPO_URL, UPSTREAM_BRANCH, TARGET_BRANCH,
-#     RUNNER_LABEL, LLM_ENDPOINT, LLM_MODEL
-#   Secrets: LLM_API_KEY
+#   Variables:
+#     UPSTREAM_REPO_URL  - upstream git URL (public, unauthenticated fetch)
+#     UPSTREAM_BRANCH    - branch to merge from upstream
+#     TARGET_BRANCH      - fork branch to merge into
+#     RUNNER_LABEL       - Forgejo runner label
+#     LLM_ENDPOINT       - OpenAI-compatible base URL (e.g. https://integrate.api.nvidia.com/v1)
+#     LLM_MODEL          - model ID served at that endpoint (e.g. nemotron-3.5-super-vl-free)
+#   Secrets:
+#     LLM_API_KEY        - API key for the LLM endpoint (optional if endpoint needs no auth)
 #   Auth: checkout/push use the job's github.token (same Forgejo repo).
-#   Upstream fetch is unauthenticated (public remote).
 
 jobs:
   sync-upstream:
@@ -78,6 +83,10 @@ jobs:
           echo "Installing opencode CLI v$OPENCODE_VERSION..."
           npm install -g "@opencode/cli@$OPENCODE_VERSION" --allow-scripts=@opencode/cli
 
+          # The custom provider config uses @ai-sdk/openai-compatible;
+          # opencode resolves npm provider packages at runtime
+          npm install -g @ai-sdk/openai-compatible
+
           INSTALLED_VERSION=$(opencode --version 2>/dev/null || echo "")
           if [[ -z "$INSTALLED_VERSION" ]]; then
             echo "::error::opencode CLI installation failed"
@@ -88,7 +97,33 @@ jobs:
       - name: Resolve conflicts with opencode
         if: steps.merge.outputs.has_conflicts == 'true'
         env:
-          OPENCODE_API_KEY: ${{ secrets.LLM_API_KEY }}
+          # Configure opencode provider inline via OPENCODE_CONFIG_CONTENT.
+          # This sets up a custom OpenAI-compatible provider pointing at the
+          # configured LLM endpoint (e.g. NVIDIA, Ollama, LM Studio, etc.)
+          # The model variable should be in "provider/model" format for --model,
+          # but since we define a custom provider, we set it as the default model.
+          OPENCODE_CONFIG_CONTENT: >-
+            {
+              "provider": {
+                "ci-llm": {
+                  "npm": "@ai-sdk/openai-compatible",
+                  "name": "CI LLM",
+                  "options": {
+                    "baseURL": "${{ vars.LLM_ENDPOINT }}",
+                    "apiKey": "${{ secrets.LLM_API_KEY }}"
+                  },
+                  "models": {
+                    "${{ vars.LLM_MODEL }}": {
+                      "name": "${{ vars.LLM_MODEL }}"
+                    }
+                  }
+                }
+              },
+              "model": "ci-llm/${{ vars.LLM_MODEL }}",
+              "permission": "allow",
+              "snapshot": false,
+              "autoupdate": false
+            }
         run: |
           ./scripts/opencode-resolve-merge \
             --base "upstream/${{ vars.UPSTREAM_BRANCH }}" \

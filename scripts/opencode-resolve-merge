@@ -93,8 +93,8 @@ while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
     echo "Resolution attempt $ATTEMPT of $MAX_ATTEMPTS"
     echo "========================================"
 
-    # Run opencode with full repo access; --dangerously-skip-permissions
-    # is needed in CI since there's no TTY to approve tool use
+    # Run opencode with full repo access; --auto auto-approves permissions
+    # that are not explicitly denied (required in CI, no TTY for prompts)
     opencode run "$PROMPT" \
         --dangerously-skip-permissions \
         2>&1 | tee /tmp/opencode-resolve.log || true
