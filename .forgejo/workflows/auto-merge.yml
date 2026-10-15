@@ -93,20 +93,16 @@ jobs:
         run: |
           set -e
           
-          # Install opencode CLI - REQUIRED, no fallback
+          # Install opencode CLI via npm - REQUIRED, no fallback
           if ! command -v opencode &> /dev/null; then
-            echo "Installing opencode CLI..."
-            curl -fsSL https://opencode.ai/install.sh | sh
-            export PATH="$HOME/.local/bin:$PATH"
+            echo "Installing opencode CLI via npm..."
+            npm install -g @opencode/cli
           fi
-          
-          # Ensure opencode is in PATH
-          export PATH="$HOME/.local/bin:$PATH"
           
           # Verify opencode is available - FAIL HARD if not
           if ! opencode --version &> /dev/null; then
             echo "::error::opencode CLI is REQUIRED but not available"
-            echo "Please ensure opencode CLI is installed or the install script works"
+            echo "npm install failed - check npm access and network"
             exit 1
           fi
           
