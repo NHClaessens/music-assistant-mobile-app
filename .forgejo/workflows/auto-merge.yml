@@ -96,7 +96,7 @@ jobs:
           # Install opencode CLI via npm - REQUIRED, no fallback
           if ! command -v opencode &> /dev/null; then
             echo "Installing opencode CLI via npm..."
-            npm install -g @opencode/cli
+            npm install -g @opencode/cli --allow-scripts
           fi
           
           # Verify opencode is available - FAIL HARD if not
