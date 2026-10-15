@@ -162,14 +162,7 @@ jobs:
                # Sanitize file path for temp output (replace / with _)
                SAFE_FILE=$(echo "$file" | tr '/' '_')
                RESOLVED_PATH="/tmp/resolved_$SAFE_FILE"
-               if ./scripts/opencode-resolve-merge \
-                 --file "$file" \
-                 --base "upstream/${{ vars.UPSTREAM_BRANCH }}" \
-                 --head "${{ vars.TARGET_BRANCH }}" \
-                 --verify-command "./gradlew :composeApp:compileAndroidMain --no-daemon --quiet" \
-                 --max-iterations 5 \
-                 --workdir "$OPECODE_WORKDIR" \
-                 --output "$RESOLVED_PATH"; then
+               if ./scripts/opencode-resolve-merge --file "$file" --base "upstream/${{ vars.UPSTREAM_BRANCH }}" --head "${{ vars.TARGET_BRANCH }}" --verify-command "./gradlew :composeApp:compileAndroidMain --no-daemon --quiet" --max-iterations 5 --workdir "$OPECODE_WORKDIR" --output "$RESOLVED_PATH"; then
                  
                  if [ -f "$RESOLVED_PATH" ]; then
                    cp "$RESOLVED_PATH" "$file"
