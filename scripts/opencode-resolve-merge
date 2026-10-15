@@ -1,0 +1,178 @@
+#!/bin/bash
+# opencode-resolve-merge: Resolve git merge conflicts using opencode CLI
+#
+# REQUIRES: opencode CLI must be installed and available in PATH
+#
+# Usage: ./opencode-resolve-merge \
+#   --file <path> \
+#   --base <branch> \
+#   --head <branch> \
+#   --verify-command <cmd> \
+#   --max-iterations <n> \
+#   --workdir <dir> \
+#   --output <path>
+
+set -euo pipefail
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --file)
+            FILE="$2"
+            shift 2
+            ;;
+        --base)
+            BASE_BRANCH="$2"
+            shift 2
+            ;;
+        --head)
+            HEAD_BRANCH="$2"
+            shift 2
+            ;;
+        --verify-command)
+            VERIFY_CMD="$2"
+            shift 2
+            ;;
+        --max-iterations)
+            MAX_ITERATIONS="$2"
+            shift 2
+            ;;
+        --workdir)
+            WORKDIR="$2"
+            shift 2
+            ;;
+        --output)
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate required arguments
+if [[ -z "${FILE:-}" || -z "${BASE_BRANCH:-}" || -z "${HEAD_BRANCH:-}" || -z "${VERIFY_CMD:-}" || -z "${MAX_ITERATIONS:-}" || -z "${WORKDIR:-}" || -z "${OUTPUT_FILE:-}" ]]; then
+    echo "Error: Missing required arguments"
+    echo "Usage: $0 --file <path> --base <branch> --head <branch> --verify-command <cmd> --max-iterations <n> --workdir <dir> --output <path>"
+    exit 1
+fi
+
+# Ensure workdir exists
+mkdir -p "$WORKDIR"
+
+# Get the current repository root
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Get both versions of the file
+OURS_CONTENT=$(git show "${HEAD_BRANCH}:${FILE}" 2>/dev/null || echo "")
+THEIRS_CONTENT=$(git show "${BASE_BRANCH}:${FILE}" 2>/dev/null || echo "")
+CURRENT_CONTENT=$(cat "$FILE" 2>/dev/null || echo "")
+
+# Check if file has conflict markers
+if ! grep -q '<<<<<<< \|=======\|>>>>>>>' "$FILE" 2>/dev/null; then
+    echo "No conflict markers found in $FILE"
+    cp "$FILE" "$OUTPUT_FILE"
+    exit 0
+fi
+
+echo "Resolving merge conflict in: $FILE"
+echo "Base: $BASE_BRANCH, Head: $HEAD_BRANCH"
+
+# Verify opencode CLI is available
+if ! command -v opencode &> /dev/null; then
+    echo "::error::opencode CLI is REQUIRED but not found in PATH"
+    exit 1
+fi
+
+# Prepare the prompt file for opencode
+PROMPT_FILE="$WORKDIR/prompt.txt"
+cat > "$PROMPT_FILE" << PROMPT_EOF
+You are resolving a Git merge conflict in the file: $FILE
+
+GOAL: Create a union of both versions. Integrate new features and fixes from THEIRS without removing custom logic from OURS.
+
+IMPORTANT RULES:
+1. Priority MUST be given to preserving custom features, new classes, and specialized logic from OURS.
+2. NEVER delete a class, function, or variable that exists in OURS but not in THEIRS.
+3. Only adopt changes from THEIRS if they are clear bug fixes, dependency updates, new features, or required for compatibility.
+4. If you cannot safely merge both versions, preserve OURS.
+5. REMOVE ALL conflict markers (<<<<<<<, =======, >>>>>>>) from the final output.
+
+CURRENT FILE (with conflicts):
+$CURRENT_CONTENT
+
+OURS (Current Branch - PRESERVE THIS):
+$OURS_CONTENT
+
+THEIRS (Upstream):
+$THEIRS_CONTENT
+
+Return ONLY the final resolved file content WITHOUT conflict markers.
+Do not include any explanation, markdown, or conflict markers.
+PROMPT_EOF
+
+# Use opencode CLI to resolve the conflict
+# opencode will read the prompt, understand the conflict, and generate a resolution
+ITERATION=1
+SUCCESS=false
+
+while [[ $ITERATION -le $MAX_ITERATIONS && "$SUCCESS" = false ]]; do
+    echo "Attempt $ITERATION of $MAX_ITERATIONS"
+    
+    # Pass the conflict to opencode
+    # opencode will use its tool-calling to read files, generate code, and verify
+    RESOLUTION=$(opencode --prompt "$PROMPT_FILE" --output-format text 2>&1) || true
+    
+    # Extract the resolved content (opencode outputs the resolution)
+    # Filter out any non-content lines (like status messages)
+    RESOLVED_CONTENT=$(echo "$RESOLUTION" | \
+        sed -n '/^```\|^```kotlin\|^```python\|^```java\|^```javascript\|^```typescript\|^```yaml\|^```json\|^```xml\|^```gradle\|^```bash\|^```sh$/!p' | \
+        sed '/^```$/q' | \
+        sed 's/^```.*$//' | \
+        sed 's/^`//' | \
+        sed 's/`$//')
+    
+    # If we got content, write it and verify
+    if [[ -n "$RESOLVED_CONTENT" ]]; then
+        # Remove any remaining conflict markers
+        RESOLVED_CONTENT=$(echo "$RESOLVED_CONTENT" | sed '/<<<<<<< /d; /=======/d; />>>>>>> /d')
+        
+        # Write to output file
+        echo "$RESOLVED_CONTENT" > "$OUTPUT_FILE"
+        
+        # Check for conflict markers
+        if grep -q '<<<<<<< \|=======\|>>>>>>>' "$OUTPUT_FILE"; then
+            echo "Conflict markers still present, retrying..."
+            rm -f "$OUTPUT_FILE"
+            ITERATION=$((ITERATION + 1))
+            continue
+        fi
+        
+        # Verify it compiles
+        echo "Verifying resolution compiles..."
+        if eval "$VERIFY_CMD" 2>&1 | grep -q "BUILD SUCCESSFUL\|UP-TO-DATE"; then
+            echo "✅ Resolution verified successfully"
+            SUCCESS=true
+            break
+        else
+            echo "❌ Verification failed"
+            rm -f "$OUTPUT_FILE"
+        fi
+    else
+        echo "No content received from opencode"
+    fi
+    
+    ITERATION=$((ITERATION + 1))
+done
+
+if [[ "$SUCCESS" = false ]]; then
+    echo "::error::Failed to resolve conflict in $FILE after $MAX_ITERATIONS iterations"
+    # Return the original conflicted file
+    cp "$FILE" "$OUTPUT_FILE"
+    exit 1
+fi
+
+echo "✅ Successfully resolved: $FILE"
+exit 0

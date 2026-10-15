@@ -1,8 +1,8 @@
 ---
-name: Auto-Merge Upstream with LLM Conflict Resolution
+name: Auto-Merge Upstream with opencode Conflict Resolution
 "on":
   schedule:
-    - cron: '0 * * * *'  # Runs hourly
+    - cron: '0 6 * * 6'  # 06:00 every saturday
   workflow_dispatch:
     inputs:
       force_app_build:
@@ -11,6 +11,18 @@ name: Auto-Merge Upstream with LLM Conflict Resolution
         default: false
         type: boolean
 
+# This workflow uses opencode CLI with tool-calling capabilities to iteratively
+# resolve merge conflicts. It can:
+# - Read both versions of conflicted files
+# - Generate merged versions
+# - Run gradle to verify the resolution compiles
+# - Iterate up to N times if verification fails
+#
+# Requirements:
+# - opencode CLI must be installed or installable via the install script
+# - OPENCODE_API_KEY secret must be configured for LLM access
+# - The scripts/opencode-resolve-merge helper must be present
+#
 # Configure in Forgejo UI:
 #   Variables: UPSTREAM_REPO_URL, UPSTREAM_BRANCH, TARGET_BRANCH,
 #     IMAGE_REGISTRY, DOCKER_IMAGE_NAME, LLM_ENDPOINT, LLM_MODEL
@@ -30,12 +42,12 @@ jobs:
   sync-upstream:
     runs-on: ${{ vars.RUNNER_LABEL }}
     container:
-      image: node:20-alpine
+      image: alvrme/alpine-android:android-37.1-jdk21
     steps:
       - name: Install tools
         # buildx on the host is unused here — the job needs its own CLI plugin;
         # the shared socket only exposes the daemon.
-        run: apk add --no-cache git curl jq docker-cli docker-cli-buildx
+        run: apk add --no-cache git curl jq docker-cli docker-cli-buildx nodejs npm
 
       - name: Checkout fork
         uses: actions/checkout@v4
@@ -76,47 +88,129 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Resolve conflicts with LLM
+      - name: Resolve conflicts with opencode CLI
         if: steps.check.outputs.up_to_date != 'true' && env.MERGE_CONFLICT == '1'
         run: |
+          set -e
+          
+          # Install opencode CLI - REQUIRED, no fallback
+          if ! command -v opencode &> /dev/null; then
+            echo "Installing opencode CLI..."
+            curl -fsSL https://opencode.ai/install.sh | sh
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          
+          # Ensure opencode is in PATH
+          export PATH="$HOME/.local/bin:$PATH"
+          
+          # Verify opencode is available - FAIL HARD if not
+          if ! opencode --version &> /dev/null; then
+            echo "::error::opencode CLI is REQUIRED but not available"
+            echo "Please ensure opencode CLI is installed or the install script works"
+            exit 1
+          fi
+          
+          echo "opencode CLI version: $(opencode --version)"
+          
           CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
           if [ -z "$CONFLICTED_FILES" ]; then
             echo "No conflicts to resolve."
             exit 0
           fi
+          
+          echo "Found conflicted files: $CONFLICTED_FILES"
+          
+          # Set up environment for opencode
+          export OPENCODE_API_KEY="${{ secrets.LLM_API_KEY }}"
+          export OPENCODE_MODEL="${{ vars.LLM_MODEL }}"
+          export OPENCODE_ENDPOINT="${{ vars.LLM_ENDPOINT }}"
+          
+          # Create a temporary directory for opencode session
+          OPENCODE_WORKDIR=$(mktemp -d)
+          chmod 777 "$OPENCODE_WORKDIR"
+          
+          # Track which files were successfully resolved
+          RESOLVED_FILES=()
+          FAILED_FILES=()
+          
           for file in $CONFLICTED_FILES; do
+            echo "========================================"
             echo "Resolving conflicts in: $file"
-            # :2 = ours (HEAD), :3 = theirs (upstream)
-            OURS=$(git show :2:"$file")
-            THEIRS=$(git show :3:"$file")
-            cat > /tmp/conflict.txt << EOF
-          Resolve the following Git merge conflict in $file:
-          <<<<<<< HEAD
-          $OURS
-          =======
-          $THEIRS
-          >>>>>>> upstream/${{ vars.UPSTREAM_BRANCH }}
-          Return ONLY the resolved file content without conflict markers.
-          EOF
-            RESOLVED_CONTENT=$(curl -s \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer ${{ secrets.LLM_API_KEY }}" \
-              -d "{
-                \"model\": \"${{ vars.LLM_MODEL }}\",
-                \"messages\": [{
-                  \"role\": \"user\",
-                  \"content\": $(jq -Rs . < /tmp/conflict.txt)
-                }],
-                \"stream\": false
-              }" \
-              "${{ vars.LLM_ENDPOINT }}" \
-              | jq -r '.choices[0].message.content')
-            echo "$RESOLVED_CONTENT" > "$file"
-            git add "$file"
+            echo "========================================"
+            
+            RESOLUTION_ATTEMPT=1
+            MAX_ATTEMPTS=3
+            RESOLVED=false
+            
+            while [ $RESOLUTION_ATTEMPT -le $MAX_ATTEMPTS ] && [ "$RESOLVED" = false ]; do
+              echo "Attempt $RESOLUTION_ATTEMPT of $MAX_ATTEMPTS for $file"
+              
+              # Use the opencode-resolve-merge script
+              if ./scripts/opencode-resolve-merge \
+                --file "$file" \
+                --base "upstream/${{ vars.UPSTREAM_BRANCH }}" \
+                --head "${{ vars.TARGET_BRANCH }}" \
+                --verify-command "./gradlew :composeApp:compileAndroidMain --no-daemon --quiet" \
+                --max-iterations 5 \
+                --workdir "$OPENCODE_WORKDIR" \
+                --output "/tmp/resolved_$file"; then
+                
+                if [ -f "/tmp/resolved_$file" ]; then
+                  cp "/tmp/resolved_$file" "$file"
+                  
+                  if grep -q '<<<<<<< \|=======\|>>>>>>>' "$file"; then
+                    echo "Conflict markers still present in $file"
+                  else
+                    if timeout 120 ./gradlew :composeApp:compileAndroidMain --no-daemon --quiet 2>&1 | \
+                      grep -q "BUILD SUCCESSFUL\|UP-TO-DATE"; then
+                      echo "Successfully resolved and verified: $file"
+                      git add "$file"
+                      RESOLVED_FILES+=("$file")
+                      RESOLVED=true
+                      break
+                    else
+                      echo "Resolution didn't compile, trying again..."
+                      git checkout -- "$file" 2>/dev/null || true
+                    fi
+                  fi
+                fi
+              fi
+              
+              RESOLUTION_ATTEMPT=$((RESOLUTION_ATTEMPT + 1))
+            done
+            
+            if [ "$RESOLVED" = false ]; then
+              echo "::error file=$file::Failed to resolve conflict after $MAX_ATTEMPTS attempts"
+              FAILED_FILES+=("$file")
+            fi
           done
-          git commit -m "$(printf '%s\n' \
-            "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }}" \
-            "with LLM conflict resolution")"
+          
+          if [ ${#FAILED_FILES[@]} -gt 0 ]; then
+            echo "::error::Some conflicts could not be resolved automatically"
+            echo "Failed files: ${FAILED_FILES[*]}"
+            
+            git commit -m "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }} (Partial opencode resolution - manual fix required)" || true
+            BRANCH_NAME="auto-merge-manual-fix-$(date +%s)"
+            git checkout -b "$BRANCH_NAME" 2>/dev/null || git switch -c "$BRANCH_NAME"
+            git push origin "$BRANCH_NAME" || true
+            
+            PR_RESPONSE=$(curl -s -X POST "${{ github.server_url }}/api/v1/repos/nils/music-assistant-mobile-app/pulls" \
+              -H "Authorization: token ${{ github.token }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"title\": \"Manual Resolution Required: Upstream Merge\", \"body\": \"The auto-merge process encountered conflicts that opencode could not resolve automatically. Files needing manual resolution: ${FAILED_FILES[*]}\", \"head\": \"$BRANCH_NAME\", \"base\": \"${{ vars.TARGET_BRANCH }}\"}")
+            
+            echo "PR response: $PR_RESPONSE"
+            git checkout "${{ vars.TARGET_BRANCH }}" 2>/dev/null || true
+            exit 1
+          fi
+          
+          if [ ${#RESOLVED_FILES[@]} -gt 0 ]; then
+            echo "Successfully resolved all conflicts with opencode"
+            echo "Resolved files: ${RESOLVED_FILES[*]}"
+          fi
+          
+          git commit -m "$(printf '%s\n' "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }}" "with opencode conflict resolution")"
+
 
       - name: Push merged branch
         if: success() && steps.check.outputs.up_to_date != 'true'
