@@ -96,7 +96,7 @@ jobs:
           # Install opencode CLI via npm - REQUIRED, no fallback
           # Pinned to specific version for supply chain security
           OPECODE_VERSION="2.0.29"
-          OPECODE_EXPECTED_SHA="REPLACE_WITH_ACTUAL_SHA256"  # TODO: Add actual SHA256 hash
+          OPECODE_EXPECTED_SHA="7e23471f4ebe2313d78baacc9ac96fe9e197ce26d808de4b0fcc37efbe473dad"  # TODO: Add actual SHA256 hash
           if ! command -v opencode &> /dev/null; then
             echo "Installing opencode CLI v$OPECODE_VERSION via npm..."
             npm install -g @opencode/cli@$OPECODE_VERSION --allow-scripts=@opencode/cli
