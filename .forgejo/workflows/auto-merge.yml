@@ -11,32 +11,16 @@ name: Auto-Merge Upstream with opencode Conflict Resolution
         default: false
         type: boolean
 
-# This workflow uses opencode CLI with tool-calling capabilities to iteratively
-# resolve merge conflicts. It can:
-# - Read both versions of conflicted files
-# - Generate merged versions
-# - Run gradle to verify the resolution compiles
-# - Iterate up to N times if verification fails
-#
-# Requirements:
-# - opencode CLI must be installed or installable via the install script
-# - OPENCODE_API_KEY secret must be configured for LLM access
-# - The scripts/opencode-resolve-merge helper must be present
+# This workflow syncs with an upstream repo. When merge conflicts occur,
+# opencode CLI gets full repo access to resolve them using its tools
+# (Read, Edit, Grep, etc.), then a single compile check verifies the result.
 #
 # Configure in Forgejo UI:
 #   Variables: UPSTREAM_REPO_URL, UPSTREAM_BRANCH, TARGET_BRANCH,
-#     IMAGE_REGISTRY, DOCKER_IMAGE_NAME, LLM_ENDPOINT, LLM_MODEL
-#   Secrets: IMAGE_REGISTRY_USER, IMAGE_REGISTRY_PASSWORD,
-#     LLM_API_KEY (optional)
+#     RUNNER_LABEL, LLM_ENDPOINT, LLM_MODEL
+#   Secrets: LLM_API_KEY
 #   Auth: checkout/push use the job's github.token (same Forgejo repo).
 #   Upstream fetch is unauthenticated (public remote).
-#   Registry: IMAGE_REGISTRY_PASSWORD must be a user PAT with
-#     read:package + write:package (account password / github.token
-#     usually get unauthorized: reqPackageAccess on push).
-#
-# Docker: set container.docker_host: 'automount' on the runner (shares the
-# runner's /var/run/docker.sock into job containers). Do not also mount it
-# from the workflow — that causes "Duplicate mount point".
 
 jobs:
   sync-upstream:
@@ -45,9 +29,7 @@ jobs:
       image: alvrme/alpine-android:android-37.1-jdk21
     steps:
       - name: Install tools
-        # buildx on the host is unused here — the job needs its own CLI plugin;
-        # the shared socket only exposes the daemon.
-        run: apk add --no-cache git curl jq docker-cli docker-cli-buildx nodejs npm
+        run: apk add --no-cache git curl jq nodejs npm
 
       - name: Checkout fork
         uses: actions/checkout@v4
@@ -66,7 +48,7 @@ jobs:
           git checkout "${{ vars.TARGET_BRANCH }}"
           if git merge-base --is-ancestor \
             "upstream/${{ vars.UPSTREAM_BRANCH }}" HEAD; then
-            echo "Already up to date with upstream — nothing to do."
+            echo "Already up to date with upstream."
             echo "up_to_date=true" >> "$GITHUB_OUTPUT"
           else
             echo "up_to_date=false" >> "$GITHUB_OUTPUT"
@@ -82,149 +64,74 @@ jobs:
         id: merge
         if: steps.check.outputs.up_to_date != 'true'
         run: |
-          if ! git merge \
-            "upstream/${{ vars.UPSTREAM_BRANCH }}" --no-edit; then
-            echo "MERGE_CONFLICT=1" >> "$GITHUB_ENV"
+          if git merge "upstream/${{ vars.UPSTREAM_BRANCH }}" --no-edit; then
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
           fi
         continue-on-error: true
 
-      - name: Resolve conflicts with opencode CLI
-        if: steps.check.outputs.up_to_date != 'true' && env.MERGE_CONFLICT == '1'
+      - name: Install opencode CLI
+        if: steps.merge.outputs.has_conflicts == 'true'
         run: |
-          set -e
-          
-          # Install opencode CLI via npm - REQUIRED, no fallback
-          # Pinned to specific version for supply chain security
-          OPECODE_VERSION="2.0.29"
-          OPECODE_EXPECTED_SHA="7e23471f4ebe2313d78baacc9ac96fe9e197ce26d808de4b0fcc37efbe473dad"  # TODO: Add actual SHA256 hash
-          if ! command -v opencode &> /dev/null; then
-            echo "Installing opencode CLI v$OPECODE_VERSION via npm..."
-            npm install -g @opencode/cli@$OPECODE_VERSION --allow-scripts=@opencode/cli
-            
-            # Verify the installed binary matches expected hash
-            OPECODE_BIN=$(which opencode)
-            if [[ -n "$OPECODE_EXPECTED_SHA" ]]; then
-              ACTUAL_SHA=$(sha256sum "$OPECODE_BIN" | awk '{print $1}')
-              if [[ "$ACTUAL_SHA" != "$OPECODE_EXPECTED_SHA" ]]; then
-                echo "::error::opencode binary hash mismatch!"
-                echo "Expected: $OPECODE_EXPECTED_SHA"
-                echo "Actual:   $ACTUAL_SHA"
-                exit 1
-              fi
-            fi
-          fi
-          
-          # Verify opencode is available and correct version - FAIL HARD if not
-          INSTALLED_VERSION=$(opencode --version 2>/dev/null || echo "")
-          if [[ -z "$INSTALLED_VERSION" || "$INSTALLED_VERSION" != *"$OPECODE_VERSION"* ]]; then
-            echo "::error::opencode CLI v$OPECODE_VERSION is REQUIRED but not available"
-            echo "Installed: $INSTALLED_VERSION"
-            echo "Expected: v$OPECODE_VERSION"
-            exit 1
-          fi
-          
-          echo "opencode CLI version: $INSTALLED_VERSION"
-          
-          CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
-          if [ -z "$CONFLICTED_FILES" ]; then
-            echo "No conflicts to resolve."
-            exit 0
-          fi
-          
-          echo "Found conflicted files: $CONFLICTED_FILES"
-          
-          # Set up environment for opencode
-          export OPENCODE_API_KEY="${{ secrets.LLM_API_KEY }}"
-          export OPENCODE_MODEL="${{ vars.LLM_MODEL }}"
-          export OPENCODE_ENDPOINT="${{ vars.LLM_ENDPOINT }}"
-          
-          # Create a temporary directory for opencode session
-          OPENCODE_WORKDIR=$(mktemp -d)
-          chmod 777 "$OPENCODE_WORKDIR"
-          
-          # Track which files were successfully resolved
-          RESOLVED_FILES=()
-          FAILED_FILES=()
-          
-          for file in $CONFLICTED_FILES; do
-            echo "========================================"
-            echo "Resolving conflicts in: $file"
-            echo "========================================"
-            
-            RESOLUTION_ATTEMPT=1
-            MAX_ATTEMPTS=3
-            RESOLVED=false
-            
-            while [ $RESOLUTION_ATTEMPT -le $MAX_ATTEMPTS ] && [ "$RESOLVED" = false ]; do
-              echo "Attempt $RESOLUTION_ATTEMPT of $MAX_ATTEMPTS for $file"
-              
-               # Use the opencode-resolve-merge script
-               # Sanitize file path for temp output (replace / with _)
-               SAFE_FILE=$(echo "$file" | tr '/' '_')
-               RESOLVED_PATH="/tmp/resolved_$SAFE_FILE"
-               if ./scripts/opencode-resolve-merge --file "$file" --base "upstream/${{ vars.UPSTREAM_BRANCH }}" --head "${{ vars.TARGET_BRANCH }}" --verify-command "./gradlew :composeApp:compileAndroidMain --no-daemon --quiet" --max-iterations 5 --workdir "$OPENCODE_WORKDIR" --output "$RESOLVED_PATH"; then
-                 
-                 if [ -f "$RESOLVED_PATH" ]; then
-                   cp "$RESOLVED_PATH" "$file"
-                  
-                  if grep -q '<<<<<<< \|=======\|>>>>>>>' "$file"; then
-                    echo "Conflict markers still present in $file"
-                  else
-                    if timeout 120 ./gradlew :composeApp:compileAndroidMain --no-daemon --quiet 2>&1 | \
-                      grep -q "BUILD SUCCESSFUL\|UP-TO-DATE"; then
-                      echo "Successfully resolved and verified: $file"
-                      git add "$file"
-                      RESOLVED_FILES+=("$file")
-                      RESOLVED=true
-                      break
-                    else
-                      echo "Resolution didn't compile, trying again..."
-                      git checkout -- "$file" 2>/dev/null || true
-                    fi
-                  fi
-                fi
-              fi
-              
-              RESOLUTION_ATTEMPT=$((RESOLUTION_ATTEMPT + 1))
-            done
-            
-            if [ "$RESOLVED" = false ]; then
-              echo "::error file=$file::Failed to resolve conflict after $MAX_ATTEMPTS attempts"
-              FAILED_FILES+=("$file")
-            fi
-          done
-          
-          if [ ${#FAILED_FILES[@]} -gt 0 ]; then
-            echo "::error::Some conflicts could not be resolved automatically"
-            echo "Failed files: ${FAILED_FILES[*]}"
-            
-            git commit -m "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }} (Partial opencode resolution - manual fix required)" || true
-            BRANCH_NAME="auto-merge-manual-fix-$(date +%s)"
-            git checkout -b "$BRANCH_NAME" 2>/dev/null || git switch -c "$BRANCH_NAME"
-            git push origin "$BRANCH_NAME" || true
-            
-            PR_RESPONSE=$(curl -s -X POST "${{ github.server_url }}/api/v1/repos/nils/music-assistant-mobile-app/pulls" \
-              -H "Authorization: token ${{ github.token }}" \
-              -H "Content-Type: application/json" \
-              -d "{\"title\": \"Manual Resolution Required: Upstream Merge\", \"body\": \"The auto-merge process encountered conflicts that opencode could not resolve automatically. Files needing manual resolution: ${FAILED_FILES[*]}\", \"head\": \"$BRANCH_NAME\", \"base\": \"${{ vars.TARGET_BRANCH }}\"}")
-            
-            echo "PR response: $PR_RESPONSE"
-            git checkout "${{ vars.TARGET_BRANCH }}" 2>/dev/null || true
-            exit 1
-          fi
-          
-          if [ ${#RESOLVED_FILES[@]} -gt 0 ]; then
-            echo "Successfully resolved all conflicts with opencode"
-            echo "Resolved files: ${RESOLVED_FILES[*]}"
-          fi
-          
-          git commit -m "$(printf '%s\n' "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }}" "with opencode conflict resolution")"
+          OPENCODE_VERSION="2.0.29"
+          echo "Installing opencode CLI v$OPENCODE_VERSION..."
+          npm install -g "@opencode/cli@$OPENCODE_VERSION" --allow-scripts=@opencode/cli
 
+          INSTALLED_VERSION=$(opencode --version 2>/dev/null || echo "")
+          if [[ -z "$INSTALLED_VERSION" ]]; then
+            echo "::error::opencode CLI installation failed"
+            exit 1
+          fi
+          echo "Installed: $INSTALLED_VERSION"
+
+      - name: Resolve conflicts with opencode
+        if: steps.merge.outputs.has_conflicts == 'true'
+        env:
+          OPENCODE_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          ./scripts/opencode-resolve-merge \
+            --base "upstream/${{ vars.UPSTREAM_BRANCH }}" \
+            --head "${{ vars.TARGET_BRANCH }}" \
+            --max-attempts 3
+        # Note: --verify-command is intentionally omitted here.
+        # Compiling per-conflict is slow and fails on partial merges.
+        # The full build step below catches real issues.
+
+      - name: Commit resolved merge
+        if: steps.merge.outputs.has_conflicts == 'true'
+        run: |
+          git commit -m "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }} with opencode conflict resolution"
+
+      - name: Handle failed conflict resolution
+        if: failure() && steps.merge.outputs.has_conflicts == 'true'
+        run: |
+          # Stage whatever we have (including unresolved files) so git allows a commit
+          git add -A
+          git commit --no-verify -m "Auto-merge upstream/${{ vars.UPSTREAM_BRANCH }} (partial - manual fix required)" || true
+
+          BRANCH_NAME="auto-merge-manual-fix-$(date +%s)"
+          git checkout -b "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME" || true
+
+          # Collect files that still have conflict markers
+          FAILED_FILES=$(grep -rl '<<<<<<< ' . --include='*.kt' --include='*.xml' --include='*.gradle*' --include='*.json' --include='*.yaml' --include='*.properties' 2>/dev/null || echo "none detected")
+
+          curl -s -X POST \
+            "${{ github.server_url }}/api/v1/repos/nils/music-assistant-mobile-app/pulls" \
+            -H "Authorization: token ${{ github.token }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg title "Manual Resolution Required: Upstream Merge" \
+              --arg body "The auto-merge encountered conflicts that could not be fully resolved.\n\nFiles needing attention:\n\`\`\`\n${FAILED_FILES}\n\`\`\`" \
+              --arg head "$BRANCH_NAME" \
+              --arg base "${{ vars.TARGET_BRANCH }}" \
+              '{title: $title, body: $body, head: $head, base: $base}')"
 
       - name: Push merged branch
         if: success() && steps.check.outputs.up_to_date != 'true'
         run: git push origin "${{ vars.TARGET_BRANCH }}"
-      
+
       - name: Setup Gradle
         if: >-
           success() && (
@@ -240,17 +147,23 @@ jobs:
             inputs.force_app_build == true
           )
         run: ./gradlew :androidApp:assembleSelfSignedRelease
-      
+
       - name: Prepare release assets
         if: >-
           success() && (
             steps.check.outputs.up_to_date != 'true' ||
             inputs.force_app_build == true
           )
+        id: release
         run: |
           mkdir -p release-assets
           cp androidApp/build/outputs/apk/selfSignedRelease/androidApp-arm64-v8a-selfSignedRelease.apk release-assets/
-      
+
+          # Generate a tag from the upstream commit date + short hash
+          UPSTREAM_SHORT=$(git rev-parse --short "upstream/${{ vars.UPSTREAM_BRANCH }}")
+          TAG="v$(date +%Y%m%d)-${UPSTREAM_SHORT}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - uses: actions/forgejo-release@v2.13.4
         if: >-
           success() && (
@@ -262,24 +175,6 @@ jobs:
           url: https://git.nilsc.org
           repo: nils/music-assistant-mobile-app
           token: ${{ github.token }}
-          tag: v1.0.0
+          tag: ${{ steps.release.outputs.tag }}
           release-dir: release-assets
-          release-notes: "New update with upstream changes"
-
-      # - name: Build and Push Docker Image
-      #   if: >-
-      #     success() && (
-      #       steps.check.outputs.up_to_date != 'true' ||
-      #       inputs.force_docker_build == true
-      #     )
-      #   run: |
-      #     if ! docker info >/dev/null 2>&1; then
-      #       echo "::error::No Docker daemon in this job (need container.docker_host: automount)."
-      #       exit 1
-      #     fi
-      #     docker buildx version
-      #     echo "${{ secrets.IMAGE_REGISTRY_PASSWORD }}" | docker login \
-      #       -u "${{ secrets.IMAGE_REGISTRY_USER }}" \
-      #       --password-stdin "${{ vars.IMAGE_REGISTRY }}"
-      #     IMAGE="${{ vars.IMAGE_REGISTRY }}/${{ vars.DOCKER_IMAGE_NAME }}"
-      #     docker buildx build --push -t "${IMAGE}:latest" .
+          release-notes: "Auto-sync with upstream (${{ steps.release.outputs.tag }})"

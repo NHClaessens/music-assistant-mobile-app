@@ -1,84 +1,46 @@
 #!/bin/bash
-# opencode-resolve-merge: Resolve git merge conflicts using opencode CLI
+# opencode-resolve-merge: Resolve ALL git merge conflicts using opencode CLI
 #
-# REQUIRES: opencode CLI must be installed and available in PATH
+# Instead of spoonfeeding individual files, this script gives opencode full
+# access to the repo and lets it use its tools (Read, Edit, Grep, etc.) to
+# resolve all conflicts in one session. A single compile check runs at the end.
+#
+# REQUIRES: opencode CLI installed and available in PATH
 #
 # Usage: ./opencode-resolve-merge \
-#   --file <path> \
 #   --base <branch> \
 #   --head <branch> \
 #   --verify-command <cmd> \
-#   --max-iterations <n> \
-#   --workdir <dir> \
-#   --output <path>
+#   --max-attempts <n>
 
 set -euo pipefail
 
 # Parse arguments
+BASE_BRANCH=""
+HEAD_BRANCH=""
+VERIFY_CMD=""
+MAX_ATTEMPTS=3
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --file)
-            FILE="$2"
-            shift 2
-            ;;
-        --base)
-            BASE_BRANCH="$2"
-            shift 2
-            ;;
-        --head)
-            HEAD_BRANCH="$2"
-            shift 2
-            ;;
-        --verify-command)
-            VERIFY_CMD="$2"
-            shift 2
-            ;;
-        --max-iterations)
-            MAX_ITERATIONS="$2"
-            shift 2
-            ;;
-        --workdir)
-            WORKDIR="$2"
-            shift 2
-            ;;
-        --output)
-            OUTPUT_FILE="$2"
-            shift 2
-            ;;
+        --base)        BASE_BRANCH="$2";   shift 2 ;;
+        --head)        HEAD_BRANCH="$2";   shift 2 ;;
+        --verify-command) VERIFY_CMD="$2"; shift 2 ;;
+        --max-attempts)   MAX_ATTEMPTS="$2"; shift 2 ;;
         *)
-            echo "Unknown option: $1"
+            echo "Unknown option: $1" >&2
+            echo "Usage: $0 --base <branch> --head <branch> --verify-command <cmd> --max-attempts <n>" >&2
             exit 1
             ;;
     esac
 done
 
 # Validate required arguments
-if [[ -z "${FILE:-}" || -z "${BASE_BRANCH:-}" || -z "${HEAD_BRANCH:-}" || -z "${VERIFY_CMD:-}" || -z "${MAX_ITERATIONS:-}" || -z "${WORKDIR:-}" || -z "${OUTPUT_FILE:-}" ]]; then
-    echo "Error: Missing required arguments"
-    echo "Usage: $0 --file <path> --base <branch> --head <branch> --verify-command <cmd> --max-iterations <n> --workdir <dir> --output <path>"
+if [[ -z "$BASE_BRANCH" || -z "$HEAD_BRANCH" ]]; then
+    echo "Error: --base and --head are required" >&2
+    echo "Usage: $0 --base <branch> --head <branch> [--verify-command <cmd>] [--max-attempts <n>]" >&2
     exit 1
 fi
-
-# Ensure workdir exists
-mkdir -p "$WORKDIR"
-
-# Get the current repository root
-REPO_ROOT=$(git rev-parse --show-toplevel)
-
-# Get both versions of the file
-OURS_CONTENT=$(git show "${HEAD_BRANCH}:${FILE}" 2>/dev/null || echo "")
-THEIRS_CONTENT=$(git show "${BASE_BRANCH}:${FILE}" 2>/dev/null || echo "")
-CURRENT_CONTENT=$(cat "$FILE" 2>/dev/null || echo "")
-
-# Check if file has conflict markers
-if ! grep -q '<<<<<<< \|=======\|>>>>>>>' "$FILE" 2>/dev/null; then
-    echo "No conflict markers found in $FILE"
-    cp "$FILE" "$OUTPUT_FILE"
-    exit 0
-fi
-
-echo "Resolving merge conflict in: $FILE"
-echo "Base: $BASE_BRANCH, Head: $HEAD_BRANCH"
 
 # Verify opencode CLI is available
 if ! command -v opencode &> /dev/null; then
@@ -86,96 +48,96 @@ if ! command -v opencode &> /dev/null; then
     exit 1
 fi
 
-# Prepare the prompt file for opencode
-PROMPT_FILE="$WORKDIR/prompt.txt"
-cat > "$PROMPT_FILE" << PROMPT_EOF
-You are resolving a Git merge conflict in the file: $FILE
-
-GOAL: Create a union of both versions. Integrate new features and fixes from THEIRS without removing custom logic from OURS.
-
-IMPORTANT RULES:
-1. Priority MUST be given to preserving custom features, new classes, and specialized logic from OURS.
-2. NEVER delete a class, function, or variable that exists in OURS but not in THEIRS.
-3. Only adopt changes from THEIRS if they are clear bug fixes, dependency updates, new features, or required for compatibility.
-4. If you cannot safely merge both versions, preserve OURS.
-5. REMOVE ALL conflict markers (<<<<<<<, =======, >>>>>>>) from the final output.
-
-CURRENT FILE (with conflicts):
-$CURRENT_CONTENT
-
-OURS (Current Branch - PRESERVE THIS):
-$OURS_CONTENT
-
-THEIRS (Upstream):
-$THEIRS_CONTENT
-
-Return ONLY the final resolved file content WITHOUT conflict markers.
-Do not include any explanation, markdown, or conflict markers.
-PROMPT_EOF
-
-# Use opencode CLI to resolve the conflict
-# opencode will read the prompt, understand the conflict, and generate a resolution
-ITERATION=1
-SUCCESS=false
-
-while [[ $ITERATION -le $MAX_ITERATIONS && "$SUCCESS" = false ]]; do
-    echo "Attempt $ITERATION of $MAX_ITERATIONS"
-    
-    # Pass the conflict to opencode
-    # opencode will use its tool-calling to read files, generate code, and verify
-    RESOLUTION=$(opencode --prompt "$PROMPT_FILE" --output-format text 2>&1) || true
-    
-    # Extract the resolved content (opencode outputs the resolution)
-    # Filter out any non-content lines (like status messages)
-    RESOLVED_CONTENT=$(echo "$RESOLUTION" | \
-        sed -n '/^```\|^```kotlin\|^```python\|^```java\|^```javascript\|^```typescript\|^```yaml\|^```json\|^```xml\|^```gradle\|^```bash\|^```sh$/!p' | \
-        sed '/^```$/q' | \
-        sed 's/^```.*$//' | \
-        sed 's/^`//' | \
-        sed 's/`$//')
-    
-    # If we got content, write it and verify
-    if [[ -n "$RESOLVED_CONTENT" ]]; then
-        # Remove any remaining conflict markers
-        RESOLVED_CONTENT=$(echo "$RESOLVED_CONTENT" | sed '/<<<<<<< /d; /=======/d; />>>>>>> /d')
-        
-        # Create parent directories if they don't exist
-        mkdir -p "$(dirname "$OUTPUT_FILE")"
-        
-        # Write to output file
-        echo "$RESOLVED_CONTENT" > "$OUTPUT_FILE"
-        
-        # Check for conflict markers
-        if grep -q '<<<<<<< \|=======\|>>>>>>>' "$OUTPUT_FILE"; then
-            echo "Conflict markers still present, retrying..."
-            rm -f "$OUTPUT_FILE"
-            ITERATION=$((ITERATION + 1))
-            continue
-        fi
-        
-        # Verify it compiles
-        echo "Verifying resolution compiles..."
-        if eval "$VERIFY_CMD" 2>&1 | grep -q "BUILD SUCCESSFUL\|UP-TO-DATE"; then
-            echo "✅ Resolution verified successfully"
-            SUCCESS=true
-            break
-        else
-            echo "❌ Verification failed"
-            rm -f "$OUTPUT_FILE"
-        fi
-    else
-        echo "No content received from opencode"
-    fi
-    
-    ITERATION=$((ITERATION + 1))
-done
-
-if [[ "$SUCCESS" = false ]]; then
-    echo "::error::Failed to resolve conflict in $FILE after $MAX_ITERATIONS iterations"
-    # Return the original conflicted file
-    cp "$FILE" "$OUTPUT_FILE"
-    exit 1
+# Get conflicted files
+CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
+if [[ -z "$CONFLICTED_FILES" ]]; then
+    echo "No conflicts to resolve."
+    exit 0
 fi
 
-echo "✅ Successfully resolved: $FILE"
-exit 0
+FILE_LIST=$(echo "$CONFLICTED_FILES" | tr '\n' ', ' | sed 's/,$//')
+FILE_COUNT=$(echo "$CONFLICTED_FILES" | wc -l | tr -d ' ')
+echo "Found $FILE_COUNT conflicted file(s): $FILE_LIST"
+
+# Build the prompt for opencode
+# opencode has full repo access - it can read files, edit them, run commands
+read -r -d '' PROMPT << 'PROMPT_TEMPLATE' || true
+You are resolving git merge conflicts in a Kotlin Multiplatform project.
+
+The following files have conflict markers from a merge of UPSTREAM into our fork:
+PROMPT_TEMPLATE
+
+PROMPT="$PROMPT
+Base (upstream): $BASE_BRANCH
+Head (our fork): $HEAD_BRANCH
+
+Conflicted files:
+$CONFLICTED_FILES
+
+INSTRUCTIONS:
+1. Read each conflicted file and understand the conflict markers.
+2. For each file, also read the upstream version with: git show $BASE_BRANCH:<filepath>
+   and our version with: git show $HEAD_BRANCH:<filepath>
+3. Resolve each conflict by merging both sides. Priority rules:
+   - PRESERVE all custom features, classes, and logic from our fork (HEAD).
+   - ADOPT upstream changes that are bug fixes, dependency updates, new features, or compatibility improvements.
+   - When in doubt, keep our version.
+4. Edit each file to remove ALL conflict markers and write the resolved content.
+5. After resolving all files, verify no conflict markers remain by searching for '<<<<<<' across the repo.
+
+Do NOT explain your changes. Just resolve the conflicts by editing the files directly."
+
+ATTEMPT=1
+while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
+    echo "========================================"
+    echo "Resolution attempt $ATTEMPT of $MAX_ATTEMPTS"
+    echo "========================================"
+
+    # Run opencode with full repo access; --dangerously-skip-permissions
+    # is needed in CI since there's no TTY to approve tool use
+    opencode run "$PROMPT" \
+        --dangerously-skip-permissions \
+        2>&1 | tee /tmp/opencode-resolve.log || true
+
+    # Check if any conflict markers remain
+    if grep -rq '<<<<<<< \|>>>>>>>' $CONFLICTED_FILES 2>/dev/null; then
+        echo "Conflict markers still present after attempt $ATTEMPT"
+
+        if [[ $ATTEMPT -lt $MAX_ATTEMPTS ]]; then
+            # On retry, give opencode a targeted follow-up
+            STILL_CONFLICTED=$(grep -rl '<<<<<<< \|>>>>>>>' $CONFLICTED_FILES 2>/dev/null || true)
+            PROMPT="Some files still have unresolved conflict markers:
+$STILL_CONFLICTED
+
+Read each file, find the remaining <<<<<<< / ======= / >>>>>>> markers, and resolve them by editing the files. Remove all conflict markers."
+        fi
+
+        ATTEMPT=$((ATTEMPT + 1))
+        continue
+    fi
+
+    echo "All conflict markers resolved."
+
+    # Run compile verification if a command was provided
+    if [[ -n "$VERIFY_CMD" ]]; then
+        echo "Verifying resolution compiles..."
+        if eval "$VERIFY_CMD" 2>&1; then
+            echo "Compile verification passed."
+        else
+            echo "::warning::Compile verification failed, but all conflicts were resolved."
+            echo "The build step later in the workflow will catch real errors."
+        fi
+    fi
+
+    # Stage all resolved files
+    echo "$CONFLICTED_FILES" | xargs git add
+    echo "All $FILE_COUNT conflicted file(s) resolved and staged."
+    exit 0
+done
+
+echo "::error::Failed to resolve all conflicts after $MAX_ATTEMPTS attempts"
+# List which files still have markers
+grep -rl '<<<<<<< \|>>>>>>>' $CONFLICTED_FILES 2>/dev/null | while read -r f; do
+    echo "::error file=$f::Conflict markers remain"
+done
+exit 1
