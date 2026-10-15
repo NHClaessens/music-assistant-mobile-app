@@ -94,19 +94,36 @@ jobs:
           set -e
           
           # Install opencode CLI via npm - REQUIRED, no fallback
+          # Pinned to specific version for supply chain security
+          OPECODE_VERSION="2.0.29"
+          OPECODE_EXPECTED_SHA="REPLACE_WITH_ACTUAL_SHA256"  # TODO: Add actual SHA256 hash
           if ! command -v opencode &> /dev/null; then
-            echo "Installing opencode CLI via npm..."
-            npm install -g @opencode/cli --allow-scripts
+            echo "Installing opencode CLI v$OPECODE_VERSION via npm..."
+            npm install -g @opencode/cli@$OPECODE_VERSION --allow-scripts=@opencode/cli
+            
+            # Verify the installed binary matches expected hash
+            OPECODE_BIN=$(which opencode)
+            if [[ -n "$OPECODE_EXPECTED_SHA" ]]; then
+              ACTUAL_SHA=$(sha256sum "$OPECODE_BIN" | awk '{print $1}')
+              if [[ "$ACTUAL_SHA" != "$OPECODE_EXPECTED_SHA" ]]; then
+                echo "::error::opencode binary hash mismatch!"
+                echo "Expected: $OPECODE_EXPECTED_SHA"
+                echo "Actual:   $ACTUAL_SHA"
+                exit 1
+              fi
+            fi
           fi
           
-          # Verify opencode is available - FAIL HARD if not
-          if ! opencode --version &> /dev/null; then
-            echo "::error::opencode CLI is REQUIRED but not available"
-            echo "npm install failed - check npm access and network"
+          # Verify opencode is available and correct version - FAIL HARD if not
+          INSTALLED_VERSION=$(opencode --version 2>/dev/null || echo "")
+          if [[ -z "$INSTALLED_VERSION" || "$INSTALLED_VERSION" != *"$OPECODE_VERSION"* ]]; then
+            echo "::error::opencode CLI v$OPECODE_VERSION is REQUIRED but not available"
+            echo "Installed: $INSTALLED_VERSION"
+            echo "Expected: v$OPECODE_VERSION"
             exit 1
           fi
           
-          echo "opencode CLI version: $(opencode --version)"
+          echo "opencode CLI version: $INSTALLED_VERSION"
           
           CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
           if [ -z "$CONFLICTED_FILES" ]; then
