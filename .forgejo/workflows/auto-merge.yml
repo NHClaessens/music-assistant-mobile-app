@@ -158,18 +158,21 @@ jobs:
             while [ $RESOLUTION_ATTEMPT -le $MAX_ATTEMPTS ] && [ "$RESOLVED" = false ]; do
               echo "Attempt $RESOLUTION_ATTEMPT of $MAX_ATTEMPTS for $file"
               
-              # Use the opencode-resolve-merge script
-              if ./scripts/opencode-resolve-merge \
-                --file "$file" \
-                --base "upstream/${{ vars.UPSTREAM_BRANCH }}" \
-                --head "${{ vars.TARGET_BRANCH }}" \
-                --verify-command "./gradlew :composeApp:compileAndroidMain --no-daemon --quiet" \
-                --max-iterations 5 \
-                --workdir "$OPENCODE_WORKDIR" \
-                --output "/tmp/resolved_$file"; then
-                
-                if [ -f "/tmp/resolved_$file" ]; then
-                  cp "/tmp/resolved_$file" "$file"
+               # Use the opencode-resolve-merge script
+               # Sanitize file path for temp output (replace / with _)
+               SAFE_FILE=$(echo "$file" | tr '/' '_')
+               RESOLVED_PATH="/tmp/resolved_$SAFE_FILE"
+               if ./scripts/opencode-resolve-merge \
+                 --file "$file" \
+                 --base "upstream/${{ vars.UPSTREAM_BRANCH }}" \
+                 --head "${{ vars.TARGET_BRANCH }}" \
+                 --verify-command "./gradlew :composeApp:compileAndroidMain --no-daemon --quiet" \
+                 --max-iterations 5 \
+                 --workdir "$OPECODE_WORKDIR" \
+                 --output "$RESOLVED_PATH"; then
+                 
+                 if [ -f "$RESOLVED_PATH" ]; then
+                   cp "$RESOLVED_PATH" "$file"
                   
                   if grep -q '<<<<<<< \|=======\|>>>>>>>' "$file"; then
                     echo "Conflict markers still present in $file"

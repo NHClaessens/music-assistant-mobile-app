@@ -139,6 +139,9 @@ while [[ $ITERATION -le $MAX_ITERATIONS && "$SUCCESS" = false ]]; do
         # Remove any remaining conflict markers
         RESOLVED_CONTENT=$(echo "$RESOLVED_CONTENT" | sed '/<<<<<<< /d; /=======/d; />>>>>>> /d')
         
+        # Create parent directories if they don't exist
+        mkdir -p "$(dirname "$OUTPUT_FILE")"
+        
         # Write to output file
         echo "$RESOLVED_CONTENT" > "$OUTPUT_FILE"
         
